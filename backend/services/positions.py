@@ -1,8 +1,9 @@
 """FIFO position accounting derived from an append-only buy/sell transaction log.
 
-The transaction log (backend/database/storage.py's ``state["positions"]``) is the only persisted
-state — open lots, cost basis, and realized P&L are all recomputed from it here on
-every read, so there's never a separately-mutated position to get out of sync.
+The transaction log (the SQLite ``transaction`` table, via backend/database/db.py) is
+the only persisted state — open lots, cost basis, and realized P&L are all recomputed
+from it here on every read, so there's never a separately-mutated position to get out
+of sync.
 """
 import datetime
 from dataclasses import dataclass

@@ -13,9 +13,8 @@ import logging
 
 logger = logging.getLogger("database_engine")
 
-# Same relative-path resolution backend/database/storage.py uses: lands on
-# /app/data/trading.db in the container (the persisted trading_bot_data
-# volume) and data/trading.db for local/venv runs.
+# Lands on /app/data/trading.db in the container (the persisted
+# trading_bot_data volume) and data/trading.db for local/venv runs.
 _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "trading.db")
 sqlite_url = f"sqlite:///{_DB_PATH}"
 engine = create_engine(

@@ -91,8 +91,7 @@ def add_transaction(
     *,
     _session: Session = None,
 ) -> None:
-    """``date`` defaults to today; the legacy-import path passes the original
-    transaction date through instead so migrated history isn't rewritten."""
+    """``date`` defaults to today; pass an explicit date to backdate a transaction."""
     _session.add(
         Transaction(
             ticker=ticker,
