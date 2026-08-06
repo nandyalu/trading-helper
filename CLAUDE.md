@@ -56,8 +56,22 @@ $0.02–0.08/analysis. If revisiting Gemini, start with `flash-lite`, not
 
 ## Vendored TradingAgents repo
 
-It's a real nested git repo, but it no longer tracks upstream directly.
-Remotes:
+It's a real nested git repo, registered as a **git submodule** of this repo
+(`.gitmodules`, pinned to a commit via a `160000` gitlink) — this repo tracks
+which TradingAgents commit is checked out without flattening its history.
+`git clone` needs `--recurse-submodules` (or `git submodule update --init`
+afterward) to populate it.
+
+**Remote-naming gotcha**: a fresh submodule checkout only gets one remote,
+named `origin`, pointing at whatever URL is in `.gitmodules` — that's the
+`fork` (nandyalu/TradingAgentsUI), not upstream. The two-remote setup
+described below (`origin` = TauricResearch upstream, `fork` = our fork) is
+this particular working copy's local addition, done once when the branch was
+first built; it does not survive a fresh clone. To restore it after a fresh
+clone: `cd TradingAgents && git remote rename origin fork && git remote add
+origin https://github.com/TauricResearch/TradingAgents.git && git fetch origin`.
+
+Remotes (in a working copy that's had the above applied):
 
 - `origin` = `https://github.com/TauricResearch/TradingAgents.git` — kept
   only as a reference point for diffing; do not push here.
@@ -95,6 +109,12 @@ non-editable from `./TradingAgents` — see root `pyproject.toml`'s
 `[tool.uv.sources]`) are managed with `uv`: to pick up new commits made here
 in trading-helper's own venv, just `uv sync` — it re-resolves the local path
 dependency automatically, no manual reinstall needed.
+
+After committing inside `TradingAgents/` (new cherry-picks, a rebase onto a
+moved `fork/main`, etc.), the parent repo still points at the old commit
+until you also commit the updated gitlink here: `git add TradingAgents && git
+commit -m "..."` from the trading-helper root. `git status` at the root shows
+`TradingAgents` as dirty/ahead whenever the two are out of sync.
 
 ## Reddit/social-sentiment data source
 
