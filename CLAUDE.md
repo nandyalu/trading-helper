@@ -7,6 +7,13 @@ remote/branch details). See [README.md](README.md) and
 [docs/overview.md](docs/overview.md) for architecture/commands — this file
 only covers what those don't.
 
+## Markdown conventions
+
+Don't hard-wrap prose — write each sentence (or paragraph) on one line, no
+matter how long. Zensical (the `docs/` site generator) sometimes mis-renders
+a sentence that's been split across multiple source lines. Applies to every
+`.md` file in the repo, not just `docs/`.
+
 ## Deployment topology (important, non-obvious)
 
 Two copies of the compose config exist and are **not synced automatically**:
