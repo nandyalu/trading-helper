@@ -1,0 +1,66 @@
+<section class="page">
+  <h1>Settings</h1>
+
+  @if (message()) {
+    <p class="notice">{{ message() }}</p>
+  }
+
+  <form class="settings-form" (submit)="$event.preventDefault(); save()">
+    <fieldset>
+      <legend>Paper trading</legend>
+      <label>
+        Notional per paper buy ($)
+        <input type="number" min="1" max="1000000" [value]="paperNotional()" (input)="onPaperNotionalInput($event)" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Position sizing</legend>
+      <label>
+        Account equity ($, optional)
+        <input type="number" min="0" [value]="riskEquity() ?? ''" (input)="onRiskEquityInput($event)" placeholder="not set" />
+      </label>
+      <label>
+        Risk per trade (%)
+        <input type="number" min="0.1" max="10" step="0.1" [value]="riskPct()" (input)="onRiskPctInput($event)" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Intraday alerts</legend>
+      <label>
+        <input type="checkbox" [checked]="alertsEnabled()" (change)="onAlertsEnabledChange($event)" />
+        Watchdog enabled
+      </label>
+      <label>
+        Move % that triggers an alert
+        <input type="number" min="0.1" step="0.1" [value]="alertMovePct()" (input)="onAlertMovePctInput($event)" />
+      </label>
+      <label>
+        Stop-loss % below avg cost
+        <input type="number" min="0.1" step="0.1" [value]="alertStopPct()" (input)="onAlertStopPctInput($event)" />
+      </label>
+      <label>
+        Volume multiple (vs 20-day avg)
+        <input type="number" min="0.1" step="0.1" [value]="alertVolumeMult()" (input)="onAlertVolumeMultInput($event)" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Daily sweep</legend>
+      <label>
+        <input type="checkbox" [checked]="dailySweepEnabled()" (change)="onDailySweepChange($event)" />
+        Analyze the full watchlist every weekday at 21:30 UTC
+      </label>
+    </fieldset>
+
+    <button type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save settings' }}</button>
+  </form>
+
+  <fieldset>
+    <legend>Webull</legend>
+    <button type="button" (click)="syncWebull()" [disabled]="syncing()">
+      {{ syncing() ? 'Syncing…' : 'Sync now' }}
+    </button>
+  </fieldset>
+</section>

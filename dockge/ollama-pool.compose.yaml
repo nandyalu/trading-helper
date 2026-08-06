@@ -1,0 +1,92 @@
+services:
+  # Single GPU per instance only: tensor-splitting a model across these 4 RX
+  # 6600s crashes the ROCm/ggml compute path every time (verified with two
+  # different models, two different crash signatures) — consumer RDNA2 cards
+  # don't reliably support the peer-to-peer access multi-GPU splitting depends
+  # on. Two independent single-GPU instances (card0 + card1, both
+  # motherboard-attached, not PCIe risers) fronted by a load balancer instead —
+  # gives TradingAgents' single OLLAMA_BASE_URL access to both GPUs for
+  # concurrent requests without any TradingAgents code changes.
+  ollama-pool:
+    image: ollama/ollama:rocm
+    container_name: ollama-pool
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card0:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      # gemma4:e2b fully fits on GPU at 8192 context (verified: 36/36 layers,
+      # 7.2 GiB total). Bigger models (qwen3.5:9b) needed 4096 to fully
+      # offload, which truncated real TradingAgents prompts — a correctness
+      # problem, not just perf. Re-check the offload log after any model
+      # change: `docker logs ollama-pool | grep -E "offloading|truncating"`.
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-8192}
+    group_add:
+      - video
+    volumes:
+      # Reuses the same model blob store as the existing ollama-gpus stack, so
+      # gemma-e4b isn't re-downloaded and any model pulled here is visible to
+      # those containers too.
+      - /opt/stacks/ollama-gpus/ollama/models:/root/.ollama/models
+    # No published host port: only reachable from ollama-lb over the compose
+    # network. Use `docker exec ollama-pool ...` for direct diagnostics.
+
+  ollama-pool-b:
+    image: ollama/ollama:rocm
+    container_name: ollama-pool-b
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card1
+      - /dev/dri/renderD129:/dev/dri/renderD129
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-8192}
+    group_add:
+      - video
+    volumes:
+      - /opt/stacks/ollama-gpus/ollama/models:/root/.ollama/models
+
+  # Round-robins requests across both instances. TradingAgents only supports
+  # one shared OLLAMA_BASE_URL for both deep- and quick-thinking models (no
+  # per-role endpoint config), so this is how a second GPU gets used at all —
+  # transparently, with zero TradingAgents changes. nginx.conf is generated
+  # inline at container start (no separate file to place in dockge's
+  # root-owned stack directory). Long generation times need generous
+  # timeouts — default 60s would cut off slower completions.
+  ollama-lb:
+    image: nginx:alpine
+    container_name: ollama-lb
+    restart: unless-stopped
+    depends_on:
+      - ollama-pool
+      - ollama-pool-b
+    ports:
+      - "${OLLAMA_POOL_PORT:-11435}:80"
+    command:
+      - sh
+      - -c
+      - |
+        cat > /etc/nginx/nginx.conf << 'EOF'
+        events {}
+        http {
+          upstream ollama_backends {
+            server ollama-pool:11434;
+            server ollama-pool-b:11434;
+          }
+          server {
+            listen 80;
+            proxy_connect_timeout 600s;
+            proxy_read_timeout 600s;
+            proxy_send_timeout 600s;
+            location / {
+              proxy_pass http://ollama_backends;
+            }
+          }
+        }
+        EOF
+        exec nginx -g 'daemon off;'

@@ -1,0 +1,88 @@
+<section class="page">
+  <a routerLink="/tickers">&larr; Back to tickers</a>
+  <header class="page-header">
+    <h1>{{ ticker() }}</h1>
+    <div class="actions">
+      <button type="button" (click)="analyze()" [disabled]="analyzing()">
+        {{ analyzing() ? 'Queuing…' : 'Run analysis' }}
+      </button>
+      <button type="button" (click)="untrack()">Remove from watchlist</button>
+    </div>
+  </header>
+
+  @if (message()) {
+    <p class="notice">{{ message() }}</p>
+  }
+
+  @if (detail(); as d) {
+    <p class="price">{{ d.current_price !== null ? '$' + d.current_price.toFixed(2) : 'price unavailable' }}</p>
+
+    <app-price-chart [bars]="bars()" />
+
+    <div class="positions">
+      @if (d.real_position; as p) {
+        <div class="position-card">
+          <h3>Real position</h3>
+          <p>{{ p.quantity }} @ avg ${{ p.avg_cost.toFixed(2) }}</p>
+          @if (p.unrealized !== null) {
+            <p>Unrealized: {{ p.unrealized >= 0 ? '+' : '' }}{{ p.unrealized.toFixed(2) }} ({{ p.unrealized_pct?.toFixed(1) }}%)</p>
+          }
+        </div>
+      }
+      @if (d.paper_position; as p) {
+        <div class="position-card">
+          <h3>Paper position</h3>
+          <p>{{ p.quantity }} @ avg ${{ p.avg_cost.toFixed(2) }}</p>
+          @if (p.unrealized !== null) {
+            <p>Unrealized: {{ p.unrealized >= 0 ? '+' : '' }}{{ p.unrealized.toFixed(2) }} ({{ p.unrealized_pct?.toFixed(1) }}%)</p>
+          }
+        </div>
+      }
+    </div>
+
+    <h2>Recent signals</h2>
+    @if (signals().length === 0) {
+      <p class="muted">No signals yet.</p>
+    } @else {
+      <ul class="signal-list">
+        @for (s of signals(); track s.id) {
+          <li>
+            <a [routerLink]="['/signals', s.id]">
+              <app-decision-badge [decision]="s.decision" />
+              {{ s.signal_date }}
+              @if (s.outcome) {
+                <span class="outcome" [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">{{ s.outcome }}</span>
+              }
+            </a>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2>Record a transaction</h2>
+    @if (tradeMessage()) {
+      <p class="notice">{{ tradeMessage() }}</p>
+    }
+    <form class="trade-form" (submit)="$event.preventDefault()">
+      <div class="row">
+        <input type="number" min="0" step="0.01" placeholder="Price" [value]="tradePrice() || ''" (input)="onTradePriceInput($event)" />
+        <input type="number" min="0" step="0.0001" placeholder="Quantity" [value]="tradeQuantity() || ''" (input)="onTradeQuantityInput($event)" />
+      </div>
+      <div class="row">
+        <button type="button" (click)="trade('buy')" [disabled]="trading()">{{ trading() ? 'Working…' : 'Buy' }}</button>
+        <button type="button" (click)="trade('sell')" [disabled]="trading()">{{ trading() ? 'Working…' : 'Sell' }}</button>
+      </div>
+    </form>
+
+    <h2>Ask about the latest analysis</h2>
+    @if (answer()) {
+      <p class="notice">{{ answer() }}</p>
+    }
+    <form class="ask-widget" (submit)="$event.preventDefault(); ask()">
+      <input type="text" placeholder="e.g. What did the bear case say?" [value]="question()" (input)="onQuestionInput($event)" />
+      <button type="submit" [disabled]="asking()">{{ asking() ? 'Asking…' : 'Ask' }}</button>
+    </form>
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

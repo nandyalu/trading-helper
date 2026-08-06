@@ -1,0 +1,260 @@
+:root {
+  --bg: #ffffff;
+  --bg-elevated: #f6f7f9;
+  --text: #1a1d21;
+  --text-muted: #6b7280;
+  --border: #e2e5e9;
+  --accent: #2563eb;
+  --pass: #1a7f37;
+  --fail: #cf222e;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --bg-elevated: #1c1f24;
+    --text: #e7e9ec;
+    --text-muted: #9aa1ab;
+    --border: #2b2f36;
+    --accent: #5b8cff;
+    --pass: #3fb950;
+    --fail: #f85149;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--fail);
+}
+
+.notice {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+}
+
+.pass {
+  color: var(--pass);
+  font-weight: 600;
+}
+
+.fail {
+  color: var(--fail);
+  font-weight: 600;
+}
+
+.warning {
+  color: #9a6700;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+input[type='text'],
+input[type='number'] {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 480px;
+}
+.settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+.settings-form label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ask-widget,
+.trade-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 480px;
+}
+.trade-form .row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.add-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.totals .label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.positions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.position-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  min-width: 200px;
+}
+
+.signal-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.signal-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1rem;
+}
+.signal-meta dt {
+  color: var(--text-muted);
+}
+.signal-meta dd {
+  margin: 0;
+}
+
+.rationale {
+  white-space: pre-wrap;
+}
+
+.report {
+  white-space: pre-wrap;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}

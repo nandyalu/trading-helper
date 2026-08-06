@@ -1,0 +1,59 @@
+<section class="page">
+  <h1>Portfolio</h1>
+
+  @if (portfolio(); as p) {
+    <div class="totals">
+      <div><span class="label">Open value</span><span>${{ p.total_value.toFixed(2) }}</span></div>
+      <div><span class="label">Cost</span><span>${{ p.total_cost.toFixed(2) }}</span></div>
+      <div><span class="label">Realized</span><span>{{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}</span></div>
+    </div>
+
+    @if (p.comparison; as c) {
+      <p class="comparison">
+        Open book {{ c.book_return_pct.toFixed(1) }}% vs SPY {{ c.benchmark_return_pct.toFixed(1) }}%
+        (alpha {{ c.alpha_pct >= 0 ? '+' : '' }}{{ c.alpha_pct.toFixed(1) }}%)
+      </p>
+    }
+
+    @for (warning of p.concentration; track warning) {
+      <p class="warning">{{ warning }}</p>
+    }
+
+    @if (p.positions.length === 0) {
+      <p class="muted">No open positions.</p>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Qty</th>
+            <th>Avg cost</th>
+            <th>Price</th>
+            <th>Weight</th>
+            <th>Unrealized</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (pos of p.positions; track pos.ticker) {
+            <tr>
+              <td>{{ pos.ticker }}</td>
+              <td>{{ pos.quantity }}</td>
+              <td>${{ pos.avg_cost.toFixed(2) }}</td>
+              <td>{{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}</td>
+              <td>{{ pos.weight_pct !== null ? pos.weight_pct.toFixed(0) + '%' : 'n/a' }}</td>
+              <td>
+                @if (pos.unrealized !== null) {
+                  {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{ pos.unrealized_pct?.toFixed(1) }}%)
+                } @else {
+                  n/a
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

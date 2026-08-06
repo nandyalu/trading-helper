@@ -1,0 +1,35 @@
+<section class="page">
+  <h1>Market Regime</h1>
+
+  @if (regime(); as r) {
+    <p class="regime-label">
+      <span>{{ r.emoji }}</span>
+      <strong [class.pass]="r.label === 'Risk-on'" [class.warning]="r.label === 'Mixed'" [class.fail]="r.label === 'Risk-off'">
+        {{ r.label }}
+      </strong>
+    </p>
+
+    <div class="totals">
+      <div>
+        <span class="label">VIX</span>
+        <span>{{ r.vix !== null ? r.vix.toFixed(1) : 'n/a' }}</span>
+      </div>
+      <div>
+        <span class="label">SPY</span>
+        <span>{{ r.spy_price !== null ? '$' + r.spy_price.toFixed(2) : 'n/a' }}</span>
+      </div>
+      <div>
+        <span class="label">SPY vs 200-day</span>
+        <span>{{ r.spy_vs_ma_pct !== null ? (r.spy_vs_ma_pct >= 0 ? '+' : '') + r.spy_vs_ma_pct.toFixed(1) + '%' : 'n/a' }}</span>
+      </div>
+      <div>
+        <span class="label">10Y-3M spread</span>
+        <span>{{ r.curve_spread_pct !== null ? r.curve_spread_pct.toFixed(2) + 'pp' : 'n/a' }}</span>
+      </div>
+    </div>
+
+    <p class="muted">As of {{ r.as_of }}</p>
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

@@ -1,0 +1,36 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.nav .brand {
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+
+.nav a {
+  color: var(--text-muted);
+}
+
+.nav a.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav .docs-link {
+  margin-left: auto;
+}
+
+.content {
+  flex: 1;
+}

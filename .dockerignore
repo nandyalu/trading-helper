@@ -1,0 +1,10 @@
+.venv/
+.git/
+TradingAgents/.git/
+frontend/node_modules/
+frontend/dist/
+site/
+data/
+**/__pycache__/
+*.pyc
+.pytest_cache/

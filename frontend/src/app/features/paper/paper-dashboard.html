@@ -1,0 +1,58 @@
+<section class="page">
+  <h1>Paper Portfolio</h1>
+
+  @if (message()) {
+    <p class="notice">{{ message() }}</p>
+  }
+
+  @if (portfolio(); as p) {
+    <div class="totals">
+      <div><span class="label">Open value</span><span>${{ p.total_value.toFixed(2) }}</span></div>
+      <div><span class="label">Unrealized</span><span>{{ p.total_unrealized >= 0 ? '+' : '' }}{{ p.total_unrealized.toFixed(2) }}</span></div>
+      <div><span class="label">Realized</span><span>{{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}</span></div>
+    </div>
+
+    <app-line-chart [points]="equityCurve()" />
+
+    @if (p.positions.length === 0) {
+      <p class="muted">No open paper positions.</p>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Qty</th>
+            <th>Avg cost</th>
+            <th>Price</th>
+            <th>Unrealized</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (pos of p.positions; track pos.ticker) {
+            <tr>
+              <td>{{ pos.ticker }}</td>
+              <td>{{ pos.quantity }}</td>
+              <td>${{ pos.avg_cost.toFixed(2) }}</td>
+              <td>{{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}</td>
+              <td>
+                @if (pos.unrealized !== null) {
+                  {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{ pos.unrealized_pct?.toFixed(1) }}%)
+                } @else {
+                  n/a
+                }
+              </td>
+              <td>
+                <button type="button" (click)="closePosition(pos.ticker)" [disabled]="closingTicker() === pos.ticker">
+                  {{ closingTicker() === pos.ticker ? 'Closing…' : 'Close' }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

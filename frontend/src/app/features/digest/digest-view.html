@@ -1,0 +1,70 @@
+<section class="page">
+  <h1>Weekly Digest</h1>
+
+  @if (digest(); as d) {
+    <p class="muted">Week of {{ d.week_start }}</p>
+
+    <div class="totals">
+      <div><span class="label">Win rate (30d)</span><span>{{ rate(d.win_rate_30d) }}</span></div>
+      <div><span class="label">Win rate (all-time)</span><span>{{ rate(d.win_rate_all) }}</span></div>
+    </div>
+
+    @if (d.real_book_line) {
+      <p>{{ d.real_book_line }}</p>
+    }
+    @if (d.paper_lines.length > 0) {
+      <h2>Paper book</h2>
+      <ul>
+        @for (line of d.paper_lines; track line) {
+          <li>{{ line }}</li>
+        }
+      </ul>
+    }
+
+    <h2>New signals this week</h2>
+    @if (d.new_signals.length === 0) {
+      <p class="muted">None.</p>
+    } @else {
+      <ul class="signal-list">
+        @for (s of d.new_signals; track s.id) {
+          <li>
+            <a [routerLink]="['/signals', s.id]">
+              <app-decision-badge [decision]="s.decision" />
+              {{ s.ticker }} — {{ s.signal_date }}
+            </a>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2>Resolved this week</h2>
+    @if (d.resolved.length === 0) {
+      <p class="muted">None.</p>
+    } @else {
+      <ul class="signal-list">
+        @for (s of d.resolved; track s.id) {
+          <li>
+            <a [routerLink]="['/signals', s.id]">
+              <app-decision-badge [decision]="s.decision" />
+              {{ s.ticker }} —
+              <span [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">{{ s.outcome }}</span>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2>Alerts this week</h2>
+    @if (d.alerts.length === 0) {
+      <p class="muted">None.</p>
+    } @else {
+      <ul>
+        @for (a of d.alerts; track a.id) {
+          <li>{{ a.ticker }} — {{ a.alert_type }}: {{ a.message }}</li>
+        }
+      </ul>
+    }
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

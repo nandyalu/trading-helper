@@ -1,0 +1,54 @@
+<section class="page">
+  <header class="page-header">
+    <h1>Tickers</h1>
+    <div class="actions">
+      <form class="add-form" (submit)="$event.preventDefault(); addTicker()">
+        <input type="text" placeholder="Add ticker, e.g. NVDA" [value]="newTicker()" (input)="onTickerInput($event)" />
+        <button type="submit">Track</button>
+      </form>
+      <button type="button" (click)="analyzeAll()" [disabled]="analyzingAll() || tickers().length === 0">
+        {{ analyzingAll() ? 'Queuing…' : 'Analyze all' }}
+      </button>
+    </div>
+  </header>
+
+  @if (message()) {
+    <p class="notice">{{ message() }}</p>
+  }
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (tickers().length === 0) {
+    <p class="muted">Watchlist is empty — add a ticker above.</p>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Price</th>
+          <th>Latest signal</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of tickers(); track t.ticker) {
+          <tr>
+            <td><a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a></td>
+            <td>{{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}</td>
+            <td>
+              @if (t.latest_signal) {
+                <app-decision-badge [decision]="t.latest_signal.decision" />
+              } @else {
+                <span class="muted">no signals</span>
+              }
+            </td>
+            <td><button type="button" (click)="removeTicker(t.ticker)">Remove</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

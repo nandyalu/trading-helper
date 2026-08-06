@@ -1,0 +1,30 @@
+[project]
+name = "trading-helper"
+version = "0.1.0"
+description = "Discord bot + web dashboard delegating stock analysis to TradingAgents"
+requires-python = ">=3.14"
+dependencies = [
+    "tradingagents",
+    "discord.py>=2.7.0",
+    "python-dotenv>=1.0.0",
+    "sqlmodel>=0.0.24",
+    "alembic>=1.15.0",
+    "webull-openapi-python-sdk>=2.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "quiv>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+tradingagents = { path = "TradingAgents", editable = false }
+
+[tool.pytest.ini_options]
+testpaths = ["bot/tests"]

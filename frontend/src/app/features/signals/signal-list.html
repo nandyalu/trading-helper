@@ -1,0 +1,41 @@
+<section class="page">
+  <header class="page-header">
+    <h1>Signals</h1>
+    <div class="filter-tabs">
+      <button type="button" [class.active]="statusFilter() === ''" (click)="setFilter('')">All</button>
+      <button type="button" [class.active]="statusFilter() === 'pending'" (click)="setFilter('pending')">Pending</button>
+      <button type="button" [class.active]="statusFilter() === 'resolved'" (click)="setFilter('resolved')">Resolved</button>
+    </div>
+  </header>
+
+  @if (signals().length === 0) {
+    <p class="muted">No signals.</p>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Date</th>
+          <th>Decision</th>
+          <th>Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of signals(); track s.id) {
+          <tr>
+            <td><a [routerLink]="['/signals', s.id]">{{ s.ticker }}</a></td>
+            <td>{{ s.signal_date }}</td>
+            <td><app-decision-badge [decision]="s.decision" /></td>
+            <td>
+              @if (s.outcome) {
+                <span [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">{{ s.outcome }}</span>
+              } @else {
+                <span class="muted">pending</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

@@ -1,0 +1,54 @@
+<section class="page">
+  <a routerLink="/signals">&larr; Back to signals</a>
+
+  @if (signalDetail(); as s) {
+    <header class="page-header">
+      <h1>{{ s.ticker }} <app-decision-badge [decision]="s.decision" /></h1>
+      <button type="button" (click)="follow()" [disabled]="following()">
+        {{ following() ? 'Following…' : '✅ Follow as paper trade' }}
+      </button>
+    </header>
+
+    @if (message()) {
+      <p class="notice">{{ message() }}</p>
+    }
+
+    <dl class="signal-meta">
+      <dt>Signal date</dt>
+      <dd>{{ s.signal_date }}</dd>
+      <dt>Price at signal</dt>
+      <dd>${{ s.price_at_signal.toFixed(2) }}</dd>
+      @if (s.price_target) {
+        <dt>Price target</dt>
+        <dd>${{ s.price_target.toFixed(2) }}</dd>
+      }
+      @if (s.time_horizon_text) {
+        <dt>Time horizon</dt>
+        <dd>{{ s.time_horizon_text }}</dd>
+      }
+      <dt>Evaluation date</dt>
+      <dd>{{ s.evaluation_date }}</dd>
+      @if (s.outcome) {
+        <dt>Outcome</dt>
+        <dd [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">
+          {{ s.outcome }} @if (s.price_at_evaluation !== null) { (${{ s.price_at_evaluation.toFixed(2) }}) }
+        </dd>
+      }
+    </dl>
+
+    <h2>Rationale</h2>
+    <p class="rationale">{{ s.rationale }}</p>
+
+    @if (reportKeys(s.reports).length > 0) {
+      <h2>Analyst reports</h2>
+      @for (key of reportKeys(s.reports); track key) {
+        <details>
+          <summary>{{ key }}</summary>
+          <pre class="report">{{ s.reports[key] }}</pre>
+        </details>
+      }
+    }
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

@@ -1,0 +1,58 @@
+<section class="page">
+  <h1>Scorecard</h1>
+
+  @if (scorecard(); as s) {
+    <div class="totals">
+      <div><span class="label">Resolved</span><span>{{ s.resolved }}</span></div>
+      <div><span class="label">Pending</span><span>{{ s.pending }}</span></div>
+      <div><span class="label">Win rate</span><span>{{ rate(s.passes, s.resolved) }}</span></div>
+      <div><span class="label">vs SPY</span><span>{{ rate(s.vs_benchmark_passes, s.vs_benchmark_total) }}</span></div>
+      @if (s.avg_alpha_pct !== null) {
+        <div><span class="label">Avg alpha</span><span>{{ s.avg_alpha_pct >= 0 ? '+' : '' }}{{ s.avg_alpha_pct.toFixed(1) }}%</span></div>
+      }
+      <div><span class="label">Targets hit</span><span>{{ rate(s.target_hits, s.target_total) }}</span></div>
+    </div>
+
+    <h2>By decision</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Decision</th>
+          <th>Win rate</th>
+          <th>Avg move</th>
+          <th>vs SPY</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of decisionEntries(s.by_decision); track entry[0]) {
+          <tr>
+            <td>{{ entry[0] }}</td>
+            <td>{{ rate(entry[1].passes, entry[1].total) }}</td>
+            <td>{{ entry[1].avg_move_pct !== null ? entry[1].avg_move_pct.toFixed(1) + '%' : 'n/a' }}</td>
+            <td>{{ rate(entry[1].vs_benchmark_passes, entry[1].vs_benchmark_total) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <h2>By ticker (top 10)</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Win rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of tickerEntries(s.by_ticker); track entry[0]) {
+          <tr>
+            <td>{{ entry[0] }}</td>
+            <td>{{ rate(entry[1][0], entry[1][1]) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p>Loading…</p>
+  }
+</section>

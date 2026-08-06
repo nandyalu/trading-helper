@@ -1,0 +1,4 @@
+[submodule "TradingAgents"]
+	path = TradingAgents
+	url = https://github.com/nandyalu/TradingAgentsUI.git
+	branch = trading-helper-custom

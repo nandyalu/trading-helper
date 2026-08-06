@@ -1,0 +1,45 @@
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  { path: '', redirectTo: 'tickers', pathMatch: 'full' },
+  {
+    path: 'tickers',
+    loadComponent: () => import('./features/tickers/ticker-list').then((m) => m.TickerList),
+  },
+  {
+    path: 'tickers/:ticker',
+    loadComponent: () => import('./features/tickers/ticker-detail').then((m) => m.TickerDetailPage),
+  },
+  {
+    path: 'signals',
+    loadComponent: () => import('./features/signals/signal-list').then((m) => m.SignalList),
+  },
+  {
+    path: 'signals/:id',
+    loadComponent: () => import('./features/signals/signal-detail').then((m) => m.SignalDetailPage),
+  },
+  {
+    path: 'paper',
+    loadComponent: () => import('./features/paper/paper-dashboard').then((m) => m.PaperDashboard),
+  },
+  {
+    path: 'portfolio',
+    loadComponent: () => import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),
+  },
+  {
+    path: 'scorecard',
+    loadComponent: () => import('./features/scorecard/scorecard-view').then((m) => m.ScorecardView),
+  },
+  {
+    path: 'digest',
+    loadComponent: () => import('./features/digest/digest-view').then((m) => m.DigestView),
+  },
+  {
+    path: 'regime',
+    loadComponent: () => import('./features/regime/regime-view').then((m) => m.RegimeView),
+  },
+  {
+    path: 'settings',
+    loadComponent: () => import('./features/settings/settings-view').then((m) => m.SettingsView),
+  },
+];

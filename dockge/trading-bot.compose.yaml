@@ -1,0 +1,49 @@
+services:
+  trading-bot:
+    image: trading-bot:local
+    container_name: trading-bot
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      # Serves the whole web app now: the Angular dashboard at the root, the
+      # JSON API under /api, and the Zensical docs build under /docs (var
+      # name kept as DOCS_HOST_PORT to avoid an extra manual Dockge .env edit).
+      - "${DOCS_HOST_PORT:-8080}:8080"
+    environment:
+      # Defaults to the local Ollama pool; set LLM_PROVIDER=google (+ GOOGLE_API_KEY
+      # and LLM_MODEL=gemini-3.5-flash) in the stack .env to switch to Gemini, or
+      # back to LLM_PROVIDER=ollama (+ LLM_MODEL=qwen3:latest) to revert.
+      - TRADINGAGENTS_LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11435/v1}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      # qwen3:latest (8B), not gemma4:e2b — gemma hit a GraphRecursionError
+      # (never terminated its reasoning loop) on ZBH, while qwen3:latest ran
+      # the full pipeline cleanly on the same ticker. Slower per call, but
+      # reliable tool-calling matters more than speed for an unattended run.
+      - TRADINGAGENTS_DEEP_THINK_LLM=${LLM_MODEL:-qwen3:latest}
+      - TRADINGAGENTS_QUICK_THINK_LLM=${LLM_MODEL:-qwen3:latest}
+      - TRADINGAGENTS_MAX_DEBATE_ROUNDS=${MAX_DEBATE_ROUNDS:-1}
+      - TRADINGAGENTS_MAX_RISK_ROUNDS=${MAX_RISK_ROUNDS:-1}
+      # Caps concurrent analysis runs (graph.propagate() calls) — matches the
+      # Ollama pool's GPU count. Raise this once more backends exist; no code
+      # change needed, each run always uses a fresh graph instance.
+      - TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=${MAX_CONCURRENT_ANALYSES:-2}
+      # Both optional — Discord is now just an optional notifier, not the
+      # process owner. Leave unset for a Discord-free deployment; the
+      # dashboard (this same port) works identically either way.
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-}
+      # Webull real-time quotes (optional — falls back to yfinance when unset).
+      # WEBULL_SANDBOX=1 points at api.sandbox.webull.com for test keys.
+      - WEBULL_APP_KEY=${WEBULL_APP_KEY:-}
+      - WEBULL_APP_SECRET=${WEBULL_APP_SECRET:-}
+      - WEBULL_SANDBOX=${WEBULL_SANDBOX:-}
+      # Keep the exchanged access token on the volume so redeploys reuse it
+      # instead of minting (and possibly re-verifying) a new one.
+      - WEBULL_OPENAPI_TOKEN_DIR=/app/data/webull
+    volumes:
+      - trading_bot_data:/app/data
+
+volumes:
+  trading_bot_data:
