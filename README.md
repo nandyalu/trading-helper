@@ -43,8 +43,10 @@ your real Webull holdings sync in automatically each morning.
    Reddit OAuth2 credentials.
 2. Build the image — VSCode: **Ctrl+Shift+B**, or
    `docker build -t trading-bot:local .`
-3. Deploy with [dockge/trading-bot.compose.yaml](dockge/trading-bot.compose.yaml).
-   Database migrations apply themselves at container start.
+3. Deploy with a Docker Compose file (e.g. via [Dockge](https://github.com/louislam/dockge))
+   pointing `image:` at `trading-bot:local` and passing the `.env` values above
+   plus a persistent volume mounted at `/app/data`. Database migrations apply
+   themselves at container start.
 4. In Discord: `/setchannel` in the channel you want posts, then `/track` a
    ticker or `/webullsync` to pull in your real holdings.
 

@@ -11,8 +11,8 @@ only covers what those don't.
 
 Two copies of the compose config exist and are **not synced automatically**:
 
-- [dockge/trading-bot.compose.yaml](dockge/trading-bot.compose.yaml) — tracked
-  in this repo, the source-of-truth template. Edit this one.
+- `dockge/trading-bot.compose.yaml` — local-only working template
+  (`dockge/` is gitignored, not tracked in this repo). Edit this one.
 - `/opt/stacks/trading-bot/compose.yaml` + `.env` — the actually-deployed
   copy, managed via the Dockge UI. **Root-owned**, outside this repo, and
   already drifted from the template (Discord/Webull secrets are pasted in

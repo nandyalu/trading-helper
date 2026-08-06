@@ -29,3 +29,6 @@ frontend/.angular/
 
 # OS/editor
 .DS_Store
+
+# Deployed-stack compose files — local only, not tracked.
+dockge/
