@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Discord bot (bot/main.py)                                       │
+│ FastAPI app (backend/app.py)                                    │
 │                                                                 │
 │  Slash commands · ✅ reactions · scheduled tasks                │
 └──────┬──────────────┬───────────────┬───────────────────────────┘

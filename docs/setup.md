@@ -9,7 +9,7 @@ degrade gracefully when unset.
 ## Discord bot token + channel ID
 
 Required for slash commands and scheduled posts. If you skip this, the app
-still runs as a pure web dashboard (`bot/app.py` starts Discord only when
+still runs as a pure web dashboard (`backend/app.py` starts Discord only when
 `DISCORD_BOT_TOKEN` is set).
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
@@ -38,7 +38,7 @@ DISCORD_CHANNEL_ID=...
 Upgrades real-time quotes from yfinance's delayed feed to Webull's snapshot
 endpoint, and enables `/webullsync` to pull in your real holdings. Read-only
 — the bot never places orders through this. Unset, everything falls back to
-yfinance automatically (`bot/quotes.py`).
+yfinance automatically (`backend/services/quotes.py`).
 
 1. Sign in at the [Webull OpenAPI developer portal](https://developer.webull.com/)
    with your regular Webull account.

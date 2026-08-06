@@ -91,13 +91,13 @@ rationale; /ask says so when answering about them.
 
 ### 4.2 `/ask <ticker> <question>`
 Q&A over the latest signal's stored reports using the graph's own quick-think Ollama
-client (bot/ask.py). Holds the analysis lock (same GPU), strips `<think>` blocks, and
+client (backend/services/ask.py). Holds the analysis lock (same GPU), strips `<think>` blocks, and
 budgets the context (~4k chars per report, 24k total) for the small local model.
 
 ### 4.3 Position sizing & risk levels in the embed
 Buy/Overweight embeds now carry a "Suggested sizing" field: a 2×ATR(14) stop, and — once
 `/risk equity:… risk_pct:…` is configured — a share count that puts that % of equity at
-risk between entry and stop, capped at 100% of equity (bot/sizing.py).
+risk between entry and stop, capped at 100% of equity (backend/services/sizing.py).
 
 ### 4.4 Paper equity curve vs SPY
 The daily task snapshots the paper book into `papersnapshot` (upsert per day). /paper
@@ -107,7 +107,7 @@ with /portfolio.
 
 ## Broker sync — track what you actually hold *(implemented)*
 
-bot/broker.py mirrors the Webull account (read-only Trade API, same credentials) into
+backend/services/broker.py mirrors the Webull account (read-only Trade API, same credentials) into
 the bot: every held equity is auto-watchlisted so the daily sweep, watchdog, and
 earnings triggers generate signals for it, and the transaction log is reconciled
 *additively* — unknown holdings imported as a synthetic buy at broker avg cost (noted
@@ -119,7 +119,7 @@ The bot still never places orders.
 
 ## Data sources — Webull real-time quotes *(implemented, awaiting API keys)*
 
-bot/quotes.py wraps the official `webull-openapi-python-sdk` snapshot endpoint. Set
+backend/services/quotes.py wraps the official `webull-openapi-python-sdk` snapshot endpoint. Set
 `WEBULL_APP_KEY` / `WEBULL_APP_SECRET` in `.env` (plus `WEBULL_SANDBOX=1` to target
 `api.sandbox.webull.com` with test keys) and every `get_current_price` call — paper
 fills, alerts, portfolio views — upgrades from yfinance's delayed close to Webull's
@@ -133,7 +133,7 @@ compose file passes the env vars through.
 Markdown docs in `docs/` (overview, command reference, daily workflow, finding-your-edge
 guide) built into a static site with [Zensical](https://zensical.org) (`zensical.toml`,
 own Docker build stage — the generator never reaches the runtime image) and served by
-the bot itself at the container's web root (bot/docs_server.py, port 8080, host port via
+the bot itself at the container's web root (backend/app.py, port 8080, host port via
 `DOCS_HOST_PORT`). Rebuild the image to republish; `python -m zensical serve` for local
 preview.
 

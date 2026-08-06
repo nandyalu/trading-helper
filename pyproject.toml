@@ -27,4 +27,4 @@ package = false
 tradingagents = { path = "TradingAgents", editable = false }
 
 [tool.pytest.ini_options]
-testpaths = ["bot/tests"]
+testpaths = ["backend/tests"]

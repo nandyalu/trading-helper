@@ -50,11 +50,11 @@ RUN useradd --create-home appuser \
  && install -d -m 0755 -o appuser -g appuser /home/appuser/.tradingagents
 WORKDIR /app
 
-COPY --chown=appuser:appuser bot/ ./bot/
-# Static docs site, served at /docs by bot/app.py.
+COPY --chown=appuser:appuser backend/ ./backend/
+# Static docs site, served at /docs by backend/app.py.
 COPY --from=docsbuilder --chown=appuser:appuser /docs-build/site ./site/
 # Angular production build, served at the container's web root by
-# bot/app.py (with an index.html fallback for client-side routes).
+# backend/app.py (with an index.html fallback for client-side routes).
 COPY --from=frontendbuilder --chown=appuser:appuser /frontend-build/dist/frontend/browser ./web/
 # Owned by appuser *before* the VOLUME instruction so a freshly created named
 # volume inherits appuser ownership instead of defaulting to root.
@@ -64,4 +64,4 @@ VOLUME ["/app/data"]
 USER appuser
 
 # Idempotent: every start/redeploy just confirms the DB is already at head.
-ENTRYPOINT ["sh", "-c", "python -m alembic -c bot/alembic.ini upgrade head && python -m bot.main"]
+ENTRYPOINT ["sh", "-c", "python -m alembic -c backend/alembic.ini upgrade head && python -m backend.main"]

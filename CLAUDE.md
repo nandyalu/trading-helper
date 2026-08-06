@@ -1,11 +1,11 @@
 # trading-helper — Claude Code context
 
-Discord bot (`bot/`) delegating analysis to a vendored multi-agent framework
-(`TradingAgents/`, its own git repo cloned from
-`https://github.com/TauricResearch/TradingAgents.git`, currently pinned to
-v0.3.1). This top-level directory itself is **not** a git repo. See
-[README.md](README.md) and [docs/overview.md](docs/overview.md) for
-architecture/commands — this file only covers what those don't.
+Discord bot + FastAPI/Angular dashboard (`backend/`) delegating analysis to a
+vendored multi-agent framework (`TradingAgents/`, registered as a git
+submodule of this repo — see "Vendored TradingAgents repo" below for the
+remote/branch details). See [README.md](README.md) and
+[docs/overview.md](docs/overview.md) for architecture/commands — this file
+only covers what those don't.
 
 ## Deployment topology (important, non-obvious)
 
@@ -96,7 +96,7 @@ Remotes (in a working copy that's had the above applied):
     in #1134's own diff, plus two test fixtures)
 
   Full upstream test suite (606 passed, 2 pre-existing skips) and
-  trading-helper's own `bot/tests/` (80 passed) were both green against this
+  trading-helper's own `backend/tests/` (80 passed) were both green against this
   branch before it was pushed.
 
 To check whether `fork/main` has moved (new commits merged upstream into the
@@ -125,7 +125,7 @@ found" for that subreddit) — not a bug unless it fails on *every* run.
 `stocktwits.py` exists in the same directory as an unused alternative if
 Reddit ever becomes unreliable enough to matter.
 
-The Webull OpenAPI SDK (`bot/quotes.py`, `bot/broker.py`) is market-data +
+The Webull OpenAPI SDK (`backend/services/quotes.py`, `backend/services/broker.py`) is market-data +
 brokerage only (quotes, fundamentals, financials, trading) — it has no
 news-article or social-sentiment endpoints, so it can't replace
 `get_news`/`reddit.py`.
