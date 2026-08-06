@@ -27,6 +27,7 @@ export class TickerDetailPage {
   protected readonly signals = signal<Signal[]>([]);
   protected readonly analyzing = signal(false);
   protected readonly message = signal<string | null>(null);
+  protected readonly refreshingPrice = signal(false);
 
   protected readonly tradePrice = signal(0);
   protected readonly tradeQuantity = signal(0);
@@ -51,6 +52,27 @@ export class TickerDetailPage {
     this.detail.set(detail);
     this.bars.set(bars);
     this.signals.set(this.signalsService.signals());
+  }
+
+  protected async refreshPrice(): Promise<void> {
+    this.refreshingPrice.set(true);
+    try {
+      this.detail.set(await this.tickersService.refreshPrice(this.ticker()));
+    } catch {
+      this.message.set("Couldn't fetch a live price.");
+    } finally {
+      this.refreshingPrice.set(false);
+    }
+  }
+
+  protected priceAge(updatedAt: string | null): string {
+    if (!updatedAt) return 'never fetched';
+    const minutes = Math.round((Date.now() - new Date(updatedAt).getTime()) / 60_000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.round(hours / 24)}d ago`;
   }
 
   protected async analyze(): Promise<void> {

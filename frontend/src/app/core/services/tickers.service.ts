@@ -37,6 +37,12 @@ export class TickersService {
     return firstValueFrom(this.http.get<TickerDetail>(`/api/tickers/${ticker}`));
   }
 
+  /** Fetches a live quote and updates the price cache — for when the cached
+   * price (kept warm by scheduled jobs) is too stale to act on. */
+  refreshPrice(ticker: string): Promise<TickerDetail> {
+    return firstValueFrom(this.http.post<TickerDetail>(`/api/tickers/${ticker}/refresh`, {}));
+  }
+
   getChart(ticker: string, days = 90): Promise<OhlcBar[]> {
     return firstValueFrom(
       this.http.get<OhlcBar[]>(`/api/tickers/${ticker}/chart`, { params: { days } })

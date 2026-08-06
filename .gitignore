@@ -7,6 +7,11 @@
 # data/webull holds an actual exchanged access token.
 data/
 
+# Webull SDK's default token-cache location when WEBULL_OPENAPI_TOKEN_DIR
+# isn't set (e.g. running locally outside the container) — holds a live
+# exchanged auth token, same reason as data/webull/ above.
+conf/
+
 # Python
 .venv/
 __pycache__/

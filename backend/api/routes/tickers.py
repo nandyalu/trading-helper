@@ -10,6 +10,10 @@ return 202 immediately and the frontend polls GET /api/signals?ticker=...
 to see the result land. Discord posting (if configured) happens
 transparently inside backend.services.analysis.run_analysis_and_notify — this route
 never checks whether Discord is set up, since it isn't required either way.
+
+Current price for these routes comes from the ticker price cache
+(backend/database/db.py's TickerPrice table), not a live quote call — see
+POST /{ticker}/refresh for the one route here that still fetches live.
 """
 import asyncio
 import logging
@@ -17,6 +21,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
+from backend.database.models import TickerPrice
 from backend.services import analysis
 from backend.api.schemas import (
     ActionResultOut,
@@ -43,7 +48,7 @@ def _latest_signal(ticker: str) -> SignalOut | None:
     return SignalOut.model_validate(rows[0]) if rows else None
 
 
-def _real_position(ticker: str) -> PortfolioPositionOut | None:
+def _real_position(ticker: str, price: float | None) -> PortfolioPositionOut | None:
     """Single-ticker equivalent of backend.services.portfolio.get_portfolio_positions() —
     duplicated rather than filtering that function's output, since it prices
     every held ticker to answer a lookup for just one."""
@@ -53,7 +58,6 @@ def _real_position(ticker: str) -> PortfolioPositionOut | None:
     position = compute_position(transactions)
     if position.quantity <= 0:
         return None
-    price = get_current_price(ticker)
     value = price * position.quantity if price is not None else None
     unrealized = (value - position.avg_cost * position.quantity) if value is not None else None
     unrealized_pct = (
@@ -65,7 +69,7 @@ def _real_position(ticker: str) -> PortfolioPositionOut | None:
     )
 
 
-def _paper_position(ticker: str) -> PaperPositionOut | None:
+def _paper_position(ticker: str, price: float | None) -> PaperPositionOut | None:
     """Single-ticker equivalent of backend.services.paper.get_paper_positions() — see
     _real_position for why this isn't a filter over that function instead."""
     transactions = db.get_paper_transactions(ticker)
@@ -74,7 +78,6 @@ def _paper_position(ticker: str) -> PaperPositionOut | None:
     position = compute_position(transactions)
     if position.quantity <= 0:
         return None
-    price = get_current_price(ticker)
     cost_basis = position.avg_cost * position.quantity
     value = price * position.quantity if price is not None else None
     unrealized = (value - cost_basis) if value is not None else None
@@ -87,26 +90,50 @@ def _paper_position(ticker: str) -> PaperPositionOut | None:
     )
 
 
+def _ticker_detail(ticker: str, cached: TickerPrice | None) -> TickerDetailOut:
+    price = cached.price if cached else None
+    return TickerDetailOut(
+        ticker=ticker,
+        current_price=price,
+        price_updated_at=cached.fetched_at if cached else None,
+        real_position=_real_position(ticker, price),
+        paper_position=_paper_position(ticker, price),
+        latest_signal=_latest_signal(ticker),
+    )
+
+
 @router.get("", response_model=list[TickerSummaryOut])
 def list_tickers():
+    watchlist = db.get_watchlist()
+    cached = db.get_cached_prices(watchlist)
     return [
         TickerSummaryOut(
-            ticker=ticker, current_price=get_current_price(ticker), latest_signal=_latest_signal(ticker)
+            ticker=ticker,
+            current_price=cached[ticker].price if ticker in cached else None,
+            price_updated_at=cached[ticker].fetched_at if ticker in cached else None,
+            latest_signal=_latest_signal(ticker),
         )
-        for ticker in db.get_watchlist()
+        for ticker in watchlist
     ]
 
 
 @router.get("/{ticker}", response_model=TickerDetailOut)
 def get_ticker(ticker: str):
     ticker = ticker.upper().strip()
-    return TickerDetailOut(
-        ticker=ticker,
-        current_price=get_current_price(ticker),
-        real_position=_real_position(ticker),
-        paper_position=_paper_position(ticker),
-        latest_signal=_latest_signal(ticker),
-    )
+    return _ticker_detail(ticker, db.get_cached_price(ticker))
+
+
+@router.post("/{ticker}/refresh", response_model=TickerDetailOut)
+def refresh_ticker(ticker: str):
+    """The one route here that still fetches a live quote — for when the
+    cached price (kept warm by scheduled jobs, not by this page being open)
+    is too stale to act on. get_current_price() writes the fresh value into
+    the cache as a side effect, so this doubles as a manual cache warm-up."""
+    ticker = ticker.upper().strip()
+    price = get_current_price(ticker)
+    if price is None:
+        raise HTTPException(status_code=502, detail=f"Couldn't fetch a live price for {ticker}.")
+    return _ticker_detail(ticker, db.get_cached_price(ticker))
 
 
 @router.get("/{ticker}/chart", response_model=list[OhlcBarOut])

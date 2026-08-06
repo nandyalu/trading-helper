@@ -128,12 +128,14 @@ class ScorecardOut(OrmModel):
 class TickerSummaryOut(BaseModel):
     ticker: str
     current_price: float | None
+    price_updated_at: datetime | None
     latest_signal: SignalOut | None
 
 
 class TickerDetailOut(BaseModel):
     ticker: str
     current_price: float | None
+    price_updated_at: datetime | None
     real_position: PortfolioPositionOut | None
     paper_position: PaperPositionOut | None
     latest_signal: SignalOut | None

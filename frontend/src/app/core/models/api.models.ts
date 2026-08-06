@@ -115,12 +115,14 @@ export interface Scorecard {
 export interface TickerSummary {
   ticker: string;
   current_price: number | null;
+  price_updated_at: string | null;
   latest_signal: Signal | null;
 }
 
 export interface TickerDetail {
   ticker: string;
   current_price: number | null;
+  price_updated_at: string | null;
   real_position: PortfolioPosition | null;
   paper_position: PaperPosition | null;
   latest_signal: Signal | null;

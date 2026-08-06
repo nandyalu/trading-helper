@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import yfinance as yf
 from tradingagents.dataflows.stockstats_utils import yf_retry
 
+from backend.database import db
+
 _EPSILON = 1e-9
 
 
@@ -55,17 +57,22 @@ def compute_position(transactions: list[dict]) -> Position:
 def get_current_price(ticker: str) -> float | None:
     """Best-effort quote lookup — callers must handle None (e.g. rate-limited).
     Prefers Webull's real-time snapshot when configured (backend/services/quotes.py) and
-    falls back to yfinance's delayed close."""
+    falls back to yfinance's delayed close. Every successful fetch writes through
+    to the ticker price cache (backend/database/db.py's TickerPrice table), which
+    is what the dashboard's list/detail routes read from instead of fetching live."""
     from backend.services.quotes import get_realtime_price  # lazy: keeps positions import-light
 
     price = get_realtime_price(ticker)
     if price is not None:
+        db.set_cached_price(ticker, price, source="webull")
         return price
     try:
         history = yf_retry(lambda: yf.Ticker(ticker).history(period="1d"))
         if history.empty:
             return None
-        return float(history["Close"].iloc[-1])
+        price = float(history["Close"].iloc[-1])
+        db.set_cached_price(ticker, price, source="yfinance")
+        return price
     except Exception:
         return None
 

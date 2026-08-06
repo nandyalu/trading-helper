@@ -13,6 +13,7 @@ from backend.database.models import (
     PaperTransaction,
     Signal,
     SignalReport,
+    TickerPrice,
     Transaction,
     WatchlistTicker,
 )
@@ -324,6 +325,37 @@ def get_paper_snapshots(limit: int = 90, *, _session: Session = None) -> list[Pa
         select(PaperSnapshot).order_by(PaperSnapshot.snapshot_date.desc()).limit(limit)
     ).all()
     return list(reversed(rows))
+
+
+# --- Ticker price cache (dashboard reads; written by every live quote fetch) --
+
+
+@read_session
+def get_cached_price(ticker: str, *, _session: Session = None) -> TickerPrice | None:
+    return _session.get(TickerPrice, ticker)
+
+
+@read_session
+def get_cached_prices(tickers: list[str], *, _session: Session = None) -> dict[str, TickerPrice]:
+    rows = _session.exec(select(TickerPrice).where(TickerPrice.ticker.in_(tickers))).all()
+    return {row.ticker: row for row in rows}
+
+
+@write_session
+def set_cached_price(
+    ticker: str, price: float, source: str | None = None, *, _session: Session = None
+) -> None:
+    """Upsert on ticker — called by every live quote fetch, not just the
+    frontend's manual refresh, so the cache builds up passively over time."""
+    row = _session.get(TickerPrice, ticker)
+    if row is None:
+        row = TickerPrice(ticker=ticker, price=price, fetched_at=datetime.datetime.now(datetime.timezone.utc), source=source)
+    else:
+        row.price = price
+        row.fetched_at = datetime.datetime.now(datetime.timezone.utc)
+        row.source = source
+    _session.add(row)
+    _session.commit()
 
 
 # --- Watchdog alerts + trigger dedupe ------------------------------------------

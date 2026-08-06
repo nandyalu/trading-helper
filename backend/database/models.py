@@ -97,6 +97,19 @@ class Alert(SQLModel, table=True):
     created_at: datetime.datetime
 
 
+class TickerPrice(SQLModel, table=True):
+    """Last-known price cache, one row per ticker. Dashboard reads (the
+    ticker list/detail routes) serve from this table instead of a live quote
+    call. Every live fetch anywhere in the app (get_current_price, the
+    watchdog's daily snapshot, the frontend's manual refresh) writes its
+    result here, so the cache builds up passively over time."""
+
+    ticker: str = Field(primary_key=True)
+    price: float
+    fetched_at: datetime.datetime
+    source: str | None = None  # "webull" | "yfinance", for debugging
+
+
 class PaperTransaction(SQLModel, table=True):
     """Virtual buy/sell log for signals the user chose to follow (via ✅
     reaction or /paperclose). Same shape as ``Transaction`` so the FIFO math

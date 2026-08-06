@@ -80,13 +80,18 @@ class DailySnapshot:
 
 
 def get_daily_snapshot(ticker: str) -> DailySnapshot | None:
-    """Best-effort like get_current_price — None on empty/failed fetch."""
+    """Best-effort like get_current_price — None on empty/failed fetch. Also
+    writes the price through to the ticker price cache, same as
+    get_current_price — this runs every 15 minutes across the whole
+    watchlist during market hours, so it's the main thing that keeps the
+    dashboard cache warm."""
     try:
         history = yf_retry(lambda: yf.Ticker(ticker).history(period="1mo"))
         if len(history) < 2:
             return None
         price = float(history["Close"].iloc[-1])
         prev_close = float(history["Close"].iloc[-2])
+        db.set_cached_price(ticker, price, source="yfinance")
         return DailySnapshot(
             price=price,
             prev_close=prev_close,

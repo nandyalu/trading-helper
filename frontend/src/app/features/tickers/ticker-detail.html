@@ -15,7 +15,13 @@
   }
 
   @if (detail(); as d) {
-    <p class="price">{{ d.current_price !== null ? '$' + d.current_price.toFixed(2) : 'price unavailable' }}</p>
+    <p class="price">
+      {{ d.current_price !== null ? '$' + d.current_price.toFixed(2) : 'price unavailable' }}
+      <span class="muted">(as of {{ priceAge(d.price_updated_at) }})</span>
+      <button type="button" (click)="refreshPrice()" [disabled]="refreshingPrice()">
+        {{ refreshingPrice() ? 'Fetching…' : 'Refresh price' }}
+      </button>
+    </p>
 
     <app-price-chart [bars]="bars()" />
 
