@@ -1,90 +1,48 @@
 # The daily workflow
 
-A practical routine for working with the bot. The theme: **let the automation
-do the watching, and spend your own attention only where a decision is
-actually needed.**
+A practical routine for using the bot.
+**The idea: let the automation do the watching. Spend your own attention only where you must actually decide something.**
 
 ## Morning (pre-market)
 
-Three posts arrive before the US open, in order:
+Three posts arrive before the US market opens, in this order:
 
-1. **Webull sync** (12:35 UTC) — only appears if something changed. If you
-   bought or sold in the Webull app yesterday, this is where the bot catches
-   up; new holdings are tracked and analyzed from today onward.
-2. **Regime snapshot** (12:45 UTC) — one line of context:
-   `🟢 Market regime: Risk-on · VIX 16.7 (normal) · SPY 8.3% above its
-   200-day avg · 10Y–3M spread +0.87% (normal)`.
-   Use it as a *filter*, not a signal: on 🔴 days, demand more from Buy
-   signals (see [Finding your edge](finding-your-edge.md)); on 🟢 days a Buy
-   with a strong rationale deserves more benefit of the doubt.
-3. **Earnings-triggered analyses** (13:00 UTC) — anything you track that
-   reports within two days gets a fresh look while you can still act on it.
-   Earnings are when positions move most; read these rationales properly
-   rather than skimming the decision line.
+1. **Webull sync** (12:35 UTC) — This post appears only if something changed. If you bought or sold in the Webull app yesterday, this is where the bot catches up. The bot tracks and analyzes new holdings starting today.
+2. **Regime snapshot** (12:45 UTC) — One line of context: `🟢 Market regime: Risk-on · VIX 16.7 (normal) · SPY 8.3% above its 200-day avg · 10Y–3M spread +0.87% (normal)`. Use this line as a *filter*, not as a signal. On a 🔴 day, demand more from Buy signals (see [Finding your edge](finding-your-edge.md)). On a 🟢 day, give a Buy with a strong rationale more benefit of the doubt.
+3. **Earnings-triggered analyses** (13:00 UTC) — Any ticker you track that reports within two days gets a fresh look, while you can still act on it. Positions move the most around earnings, so read these rationales in full — do not just skim the decision line.
 
-**Your morning decision:** did anything arrive that changes what you own or
-want to own? If yes, size it with the embed's stop/share suggestion before
-the open, or take it as a paper trade (✅) if you're not convinced yet.
+**Your morning decision:** Did anything arrive that changes what you own or want to own? If yes, size it with the embed's stop-and-share suggestion before the market opens. Or take it as a paper trade (✅) if you are not convinced yet.
 
 ## During market hours
 
-The watchdog posts only when something crosses a threshold, so treat every
-alert as worth ten seconds of attention:
+The watchdog posts only when something crosses a threshold.
+Treat every alert as worth ten seconds of your attention.
 
-- **📊 big move / unusual volume** — something happened. An ⚡ analysis
-  usually follows automatically; wait for it before reacting to the price
-  alone.
-- **🛑 stop breach** — a held position (real or paper) is more than 10%
-  (configurable) below your average cost. The bot will *never* sell for you;
-  this is the prompt to decide whether your thesis is broken or the price is
-  just noisy. Deciding this *before* the alert — when you enter — is exactly
-  what the sizing suggestion's stop level is for.
-- **🎯 target touch** — a signal's price target was reached while you hold
-  the position. The default action is to take at least partial profit or
-  tighten your stop; "it'll keep going" is how winners become round trips.
+- **📊 big move / unusual volume** — Something happened. An ⚡ analysis usually follows automatically. Wait for that analysis before you react to the price alone.
+- **🛑 stop breach** — A held position (real or paper) has dropped more than 10% (you can configure this) below your average cost. The bot will *never* sell for you. This alert is your prompt to decide: is your thesis broken, or is the price just noisy? The best time to make this decision is *before* the alert — when you enter the position. That is exactly what the sizing suggestion's stop level is for.
+- **🎯 target touch** — A signal's price target was reached while you hold the position. The default action is to take at least partial profit, or to tighten your stop. "It will keep going" is how winners become round trips.
 
 ## Evening (after close)
 
 The 21:30 UTC run posts two kinds of message:
 
-- **Graded signals** — e.g.
-  `NVDA Buy from 2026-06-17: PASS ($450.12 → $470.30, +4.5%) · vs SPY +2.1%:
-  PASS (alpha +2.4%) · target $480.00: not hit`.
-  These deserve more attention than fresh signals: they're the only messages
-  that tell you whether the bot is any good. A FAIL on a signal you followed
-  is a prompt to `/ask` what the original reasoning was and see what it
-  missed.
-- **The nightly sweep** — fresh analyses for the whole watchlist. Skim the
-  decision lines; read the full rationale only where the decision *changed*
-  since yesterday (a Hold→Sell flip matters; the fifth consecutive Hold
-  doesn't).
+- **Graded signals** — for example: `NVDA Buy from 2026-06-17: PASS ($450.12 → $470.30, +4.5%) · vs SPY +2.1%: PASS (alpha +2.4%) · target $480.00: not hit`. These messages deserve more attention than fresh signals — they are the only messages that tell you whether the bot is any good. If a signal you followed gets a FAIL, use `/ask` to see the original reasoning and find out what it missed.
+- **The nightly sweep** — fresh analyses for the whole watchlist. Skim the decision lines. Read the full rationale only where the decision *changed* since yesterday — a Hold-to-Sell flip matters; a fifth straight Hold does not.
 
-React ✅ on anything you'd like to track as if you'd traded it. It costs
-nothing and builds the dataset that tells you whether following the bot
-would actually make money.
+React with ✅ on anything you would like to track as if you had traded it.
+This costs nothing, and it builds the dataset that tells you whether following the bot actually makes money.
 
-## Weekly (Friday evening / weekend)
+## Weekly (Friday evening or the weekend)
 
 The 🗞️ digest is your review loop:
 
-- **Win rate trend** — is the last 30 days better or worse than all-time?
-  A deteriorating trend in a changed market regime is a reason to lighten
-  how much weight you give new signals.
-- **Resolved signals** — read the failures. `/ask` the original analysis
-  what its thesis was; over time you'll learn *which kinds* of calls this
-  model gets wrong (that pattern recognition is yours to build, and
-  `/scorecard`'s by-decision and by-ticker breakdowns are the raw material).
-- **Paper vs real** — compare `/paper`'s performance section against
-  `/portfolio`'s vs-SPY line. If the paper book (which follows signals
-  mechanically) beats your real book, you're overriding the bot at the wrong
-  times — or vice versa. Either answer is valuable.
+- **Win rate trend** — Is the last 30 days better or worse than all-time? A trend that gets worse, in a market regime that has changed, is a reason to give new signals less weight.
+- **Resolved signals** — Read the failures. Ask `/ask` what the original analysis's thesis was. Over time, you will learn which kinds of calls this model gets wrong. You build that pattern recognition yourself; `/scorecard`'s breakdowns by decision and by ticker are the raw material for it.
+- **Paper vs real** — Compare `/paper`'s performance section against `/portfolio`'s vs-SPY line. The paper book follows signals mechanically. If the paper book beats your real book, you are overriding the bot at the wrong times. If your real book beats the paper book, the opposite is true. Either answer is useful to know.
 
 ## When to run things manually
 
-- `/analyze` — before you add to or trim a real position, get a fresh read
-  rather than acting on a days-old signal.
-- `/webullsync` — right after trading in the Webull app, so alerts and
-  dashboards reflect reality immediately.
-- `/scorecard ticker:X` — before following a new signal on X: how has the
-  bot done *on this specific name*?
-- `/digest`, `/regime`, `/portfolio` — any time you want the current picture.
+- `/analyze` — Before you add to or trim a real position, get a fresh read. Do not act on a signal that is days old.
+- `/webullsync` — Run this right after you trade in the Webull app, so your alerts and dashboards reflect reality right away.
+- `/scorecard ticker:X` — Before you follow a new signal on ticker X, check how the bot has done *on this specific name*.
+- `/digest`, `/regime`, `/portfolio` — Run any of these any time you want the current picture.

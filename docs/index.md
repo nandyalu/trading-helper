@@ -1,46 +1,35 @@
 # Trading Helper
 
-A self-hosted Discord bot that runs a multi-agent AI analysis
-(TradingAgents on a local LLM) over the stocks you hold and watch, tracks
-every call it makes, grades those calls against reality — and against just
-buying SPY — and gives you the tools to act on the ones that earn trust.
+Trading Helper is a self-hosted Discord bot.
+It runs a multi-agent AI analysis (TradingAgents, on a local LLM) on the stocks you hold and watch.
+It tracks every call it makes, and it grades each call against reality and against a simple SPY buy-and-hold.
+It gives you tools to act on the calls with intent.
 
-The core idea: **an AI signal is worthless until you know its track record.**
-Everything in this bot exists either to generate signals, to measure them,
-or to help you act on them deliberately.
+**Core idea: an AI signal has no value until you know its track record.**
+Every part of this bot does one of three jobs: it generates signals, it measures signals, or it helps you act on signals that have earned your trust.
 
 ## What it does
 
-Every weekday the bot analyzes your watchlist and holdings: four analysts
-(market, news, sentiment, fundamentals) feed a bull-vs-bear debate, a trader
-drafts a plan, and a risk team settles on **Buy / Overweight / Hold /
-Underweight / Sell**. Each decision is recorded with its price and time
-horizon, then automatically graded when the horizon arrives. You can follow
-any signal with one ✅ reaction (paper trading), interrogate it with `/ask`,
-size it with an ATR-based stop via `/risk`, and watch the aggregate win rate
-build in `/scorecard`. Between analyses, a rule-based watchdog monitors
-prices, volume, stops, and targets; your real Webull holdings sync in
-automatically each morning.
+Every weekday, the bot analyzes your watchlist and holdings.
+Four analysts — market, news, sentiment, and fundamentals — feed a bull-vs-bear debate.
+A trader drafts a plan, and a risk team picks one decision: **Buy, Overweight, Hold, Underweight, or Sell**.
+The bot records each decision with its price and time horizon, then grades the decision automatically once the time horizon arrives.
+You can follow any signal with one ✅ reaction to start paper trading, ask a question about it with `/ask`, size it with an ATR-based stop through `/risk`, and watch your win rate build in `/scorecard`.
+Between analyses, a rule-based watchdog checks prices, volume, stops, and targets, and each morning the bot syncs your real Webull holdings in automatically.
 
 ## Where to go
 
 <div class="grid cards" markdown>
 
-- **[How it works](overview.md)** — architecture, the signal lifecycle, the
-  daily schedule, and data sources.
-- **[Command reference](commands.md)** — every slash command, the ✅
-  reaction, and what posts automatically.
-- **[The daily workflow](trading-workflow.md)** — a practical routine:
-  morning context, intraday alerts, evening grades, weekly review.
-- **[Finding your edge](finding-your-edge.md)** — the method: measure first,
-  paper trade the strategy, size like every trade can fail.
+- **[How it works](overview.md)** — architecture, the signal lifecycle, the daily schedule, and data sources.
+- **[Command reference](commands.md)** — every slash command, the ✅ reaction, and what posts automatically.
+- **[The daily workflow](trading-workflow.md)** — a practical routine: morning context, intraday alerts, evening grades, weekly review.
+- **[Finding your edge](finding-your-edge.md)** — the method: measure first, paper trade the strategy, and size each trade so it can fail.
 
 </div>
 
 ## Ground rules
 
 - The bot **never places real orders** — Webull access is read-only.
-- Signals come from a small local model. They are a structured second
-  opinion, not an oracle; the scorecard exists to tell you how much trust
-  they've earned.
+- Signals come from a small local model. Treat each signal as a structured second opinion, not as a fact. The scorecard exists to show you how much trust it has earned.
 - Nothing here is financial advice.
