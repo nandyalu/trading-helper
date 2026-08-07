@@ -51,14 +51,14 @@ def test_position_cap_binds_when_volatility_is_low():
 
 
 def test_position_cap_on_a_small_account():
-    # $2,800 account, 1% risk = $28. A $50 stock with a $0.50 ATR sizes to
-    # 28 shares ($1,400, half the account) on risk alone; the 20% cap cuts it
-    # to $560.
+    # $5,000 account, 1% risk = $50. A $50 stock with a $0.50 ATR sizes to
+    # 50 shares ($2,500, half the account) on risk alone; the 20% cap cuts it
+    # to $1,000.
     suggestion = suggest_position(
-        price=50.0, atr=0.5, equity=2_800.0, risk_pct=1.0, max_position_pct=20.0
+        price=50.0, atr=0.5, equity=5_000.0, risk_pct=1.0, max_position_pct=20.0
     )
     assert suggestion.capped is True
-    assert suggestion.shares * suggestion.price == pytest.approx(560.0)
+    assert suggestion.shares * suggestion.price == pytest.approx(1_000.0)
 
 
 def test_default_cap_is_twenty_percent():

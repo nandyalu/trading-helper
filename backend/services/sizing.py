@@ -18,8 +18,8 @@ _DEFAULT_RISK_PCT = 1.0
 # Ceiling on a single position, as a share of account equity. Risk-based
 # sizing alone does not bound this: shares = risk_dollars / (2 × ATR), so a
 # low-volatility stock produces a large share count from a small risk budget.
-# On a $2,800 account at 1% risk, a stock with a $0.50 ATR sizes to about
-# $1,400 — half the account in one name, from a $28 risk budget. The old
+# On a $5,000 account at 1% risk, a $50 stock with a $0.50 ATR sizes to about
+# $2,500 — half the account in one name, from a $50 risk budget. The old
 # behavior capped only at 100% of equity, which is no cap at all for anyone
 # holding more than one position.
 _DEFAULT_MAX_POSITION_PCT = 20.0

@@ -71,7 +71,7 @@ def paper_buy_quantity(ticker: str, price: float) -> tuple[float, str]:
     Paper trades use the same ATR risk sizing as the real book whenever
     account equity is configured. They used to use a flat notional, which made
     the paper equity curve unusable as evidence: a flat $1,000 per trade is
-    36% of a $2,800 account, so the paper book was running a concentration the
+    20% of a $5,000 account, so the paper book was running a concentration the
     real book never would, and its returns predicted nothing about the real
     one. The flat notional survives only as the fallback for an unconfigured
     account.

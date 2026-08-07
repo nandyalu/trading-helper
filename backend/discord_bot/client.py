@@ -261,7 +261,7 @@ async def ask_cmd(interaction: discord.Interaction, ticker: str, question: str):
 
 @bot.tree.command(description="View or set account equity and the limits used for sizing suggestions")
 @app_commands.describe(
-    equity="Account equity in dollars, e.g. 2800",
+    equity="Account equity in dollars, e.g. 5000",
     risk_pct="Percent of equity to risk per trade (default 1)",
     max_position_pct="Ceiling on one position, as a percent of equity (default 20)",
     max_positions="How many names may be open at once (default 5)",
@@ -293,7 +293,7 @@ async def risk(
         await interaction.response.send_message(
             f"Risk per trade: {current_pct:g}% · at most {cap_pct:g}% per position · "
             f"up to {slots} positions.\nNo account equity set yet, so Buy embeds show only "
-            "the ATR stop. Set it with /risk equity:2800."
+            "the ATR stop. Set it with /risk equity:5000."
         )
     else:
         await interaction.response.send_message(
