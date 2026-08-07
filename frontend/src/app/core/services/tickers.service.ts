@@ -9,6 +9,7 @@ import {
   AskRequest,
   OhlcBar,
   TickerDetail,
+  TickerEvents,
   TickerSummary,
 } from '../models/api.models';
 
@@ -45,7 +46,16 @@ export class TickersService {
 
   getChart(ticker: string, days = 90): Promise<OhlcBar[]> {
     return firstValueFrom(
-      this.http.get<OhlcBar[]>(`/api/tickers/${ticker}/chart`, { params: { days } })
+      this.http.get<OhlcBar[]>(`/api/tickers/${ticker}/chart`, { params: { days } }),
+    );
+  }
+
+  /** Bars, signals, alerts, and trades in one call — the chart overlays and
+   * the timeline are the same events, so they must not be fetched separately
+   * or they can disagree mid-flight. */
+  getEvents(ticker: string, days = 180): Promise<TickerEvents> {
+    return firstValueFrom(
+      this.http.get<TickerEvents>(`/api/tickers/${ticker}/events`, { params: { days } }),
     );
   }
 

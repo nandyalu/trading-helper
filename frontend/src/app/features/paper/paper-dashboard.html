@@ -1,58 +1,137 @@
 <section class="page">
-  <h1>Paper Portfolio</h1>
+  <header class="page-head">
+    <div>
+      <h1>Paper book</h1>
+      <p class="subtitle">
+        Signals followed without real money, so the equity curve shows what the bot would have done.
+      </p>
+    </div>
+  </header>
 
   @if (message()) {
-    <p class="notice">{{ message() }}</p>
+    <p class="notice notice-info">{{ message() }}</p>
   }
 
   @if (portfolio(); as p) {
-    <div class="totals">
-      <div><span class="label">Open value</span><span>${{ p.total_value.toFixed(2) }}</span></div>
-      <div><span class="label">Unrealized</span><span>{{ p.total_unrealized >= 0 ? '+' : '' }}{{ p.total_unrealized.toFixed(2) }}</span></div>
-      <div><span class="label">Realized</span><span>{{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}</span></div>
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-label">Open value</span>
+        <span class="stat-value">${{ p.total_value.toFixed(2) }}</span>
+        <span class="stat-note">{{ p.positions.length }} position(s)</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Unrealized</span>
+        <span
+          class="stat-value"
+          [class.pass]="p.total_unrealized >= 0"
+          [class.fail]="p.total_unrealized < 0"
+        >
+          {{ p.total_unrealized >= 0 ? '+' : '' }}{{ p.total_unrealized.toFixed(2) }}
+        </span>
+        <span class="stat-note">on open positions</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Realized</span>
+        <span
+          class="stat-value"
+          [class.pass]="p.total_realized >= 0"
+          [class.fail]="p.total_realized < 0"
+        >
+          {{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}
+        </span>
+        <span class="stat-note">from closed trades</span>
+      </div>
     </div>
 
-    <app-line-chart [points]="equityCurve()" />
+    <section class="card">
+      <div class="card-head">
+        <h2>Equity curve</h2>
+        <p class="hint">Open profit plus realized profit, one point per daily snapshot.</p>
+      </div>
+      <div class="card-body">
+        @if (equityCurve().length === 0) {
+          <div class="empty">
+            <span class="empty-icon" aria-hidden="true">📉</span>
+            <strong>No snapshots yet</strong>
+            <span>The curve starts once the first daily snapshot is written.</span>
+          </div>
+        } @else {
+          <app-line-chart [points]="equityCurve()" />
+        }
+      </div>
+    </section>
 
-    @if (p.positions.length === 0) {
-      <p class="muted">No open paper positions.</p>
-    } @else {
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Ticker</th>
-            <th>Qty</th>
-            <th>Avg cost</th>
-            <th>Price</th>
-            <th>Unrealized</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (pos of p.positions; track pos.ticker) {
-            <tr>
-              <td>{{ pos.ticker }}</td>
-              <td>{{ pos.quantity }}</td>
-              <td>${{ pos.avg_cost.toFixed(2) }}</td>
-              <td>{{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}</td>
-              <td>
-                @if (pos.unrealized !== null) {
-                  {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{ pos.unrealized_pct?.toFixed(1) }}%)
-                } @else {
-                  n/a
-                }
-              </td>
-              <td>
-                <button type="button" (click)="closePosition(pos.ticker)" [disabled]="closingTicker() === pos.ticker">
-                  {{ closingTicker() === pos.ticker ? 'Closing…' : 'Close' }}
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
+    <section class="card">
+      <div class="card-head">
+        <h2>Open positions</h2>
+      </div>
+      @if (p.positions.length === 0) {
+        <div class="empty">
+          <span class="empty-icon" aria-hidden="true">📄</span>
+          <strong>No open paper positions</strong>
+          <span>Open a signal and choose "Follow as paper trade" to start one.</span>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th class="num">Qty</th>
+                <th class="num">Avg cost</th>
+                <th class="num">Price</th>
+                <th class="num">Unrealized</th>
+                <th class="actions-cell"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (pos of p.positions; track pos.ticker) {
+                <tr>
+                  <td class="ticker-cell" data-label="">
+                    <a [routerLink]="['/tickers', pos.ticker]">{{ pos.ticker }}</a>
+                  </td>
+                  <td class="num" data-label="Qty">{{ pos.quantity }}</td>
+                  <td class="num" data-label="Avg cost">${{ pos.avg_cost.toFixed(2) }}</td>
+                  <td class="num" data-label="Price">
+                    {{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}
+                  </td>
+                  <td
+                    class="num"
+                    data-label="Unrealized"
+                    [class.pass]="(pos.unrealized ?? 0) >= 0"
+                    [class.fail]="(pos.unrealized ?? 0) < 0"
+                  >
+                    @if (pos.unrealized !== null) {
+                      {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{
+                        pos.unrealized_pct?.toFixed(1)
+                      }}%)
+                    } @else {
+                      n/a
+                    }
+                  </td>
+                  <td class="actions-cell" data-label="">
+                    <button
+                      class="btn btn-sm"
+                      type="button"
+                      (click)="closePosition(pos.ticker)"
+                      [disabled]="closingTicker() === pos.ticker"
+                    >
+                      {{ closingTicker() === pos.ticker ? 'Closing…' : 'Close' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
   } @else {
-    <p>Loading…</p>
+    <div class="stat-grid" aria-hidden="true">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+    <p class="muted">Loading…</p>
   }
 </section>

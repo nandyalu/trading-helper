@@ -1,66 +1,206 @@
 <section class="page">
-  <h1>Settings</h1>
+  <header class="page-head">
+    <div>
+      <h1>Settings</h1>
+      <p class="subtitle">How the bot analyzes, sizes, and watches your positions.</p>
+    </div>
+  </header>
 
   @if (message()) {
-    <p class="notice">{{ message() }}</p>
+    <p class="notice notice-info">{{ message() }}</p>
   }
 
-  <form class="settings-form" (submit)="$event.preventDefault(); save()">
-    <fieldset>
-      <legend>Paper trading</legend>
-      <label>
-        Notional per paper buy ($)
-        <input type="number" min="1" max="1000000" [value]="paperNotional()" (input)="onPaperNotionalInput($event)" />
-      </label>
-    </fieldset>
+  <form class="stack" (submit)="$event.preventDefault(); save()">
+    <section class="card">
+      <div class="card-head">
+        <h2>Trade horizon</h2>
+        <p class="hint">
+          Sets what the analysis aims for, how long to wait before grading a signal, and how far
+          price may drift before a Hold counts as wrong. Signals already recorded keep the horizon
+          they were made under.
+        </p>
+      </div>
+      <div class="card-body">
+        <label class="field narrow">
+          How long a signal is meant to be held
+          <select [value]="horizon()" (change)="onHorizonChange($event)">
+            <option value="swing">Swing — 1 to 2 weeks</option>
+            <option value="position">Position — multi-month</option>
+          </select>
+        </label>
+      </div>
+    </section>
 
-    <fieldset>
-      <legend>Position sizing</legend>
-      <label>
-        Account equity ($, optional)
-        <input type="number" min="0" [value]="riskEquity() ?? ''" (input)="onRiskEquityInput($event)" placeholder="not set" />
-      </label>
-      <label>
-        Risk per trade (%)
-        <input type="number" min="0.1" max="10" step="0.1" [value]="riskPct()" (input)="onRiskPctInput($event)" />
-      </label>
-    </fieldset>
+    <section class="card">
+      <div class="card-head">
+        <h2>Position sizing</h2>
+        <p class="hint">
+          Risk % bounds the loss if a stop is hit. The position cap bounds concentration: a
+          low-volatility stock produces a large share count from a small risk budget, so without a
+          cap one name can take half the account.
+        </p>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+          <label class="field">
+            Account equity ($, optional)
+            <input
+              type="number"
+              inputmode="decimal"
+              min="0"
+              [value]="riskEquity() ?? ''"
+              (input)="onRiskEquityInput($event)"
+              placeholder="not set"
+            />
+          </label>
+          <label class="field">
+            Risk per trade (%)
+            <input
+              type="number"
+              inputmode="decimal"
+              min="0.1"
+              max="10"
+              step="0.1"
+              [value]="riskPct()"
+              (input)="onRiskPctInput($event)"
+            />
+          </label>
+          <label class="field">
+            Most of equity in one position (%)
+            <input
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="100"
+              step="1"
+              [value]="maxPositionPct()"
+              (input)="onMaxPositionPctInput($event)"
+            />
+          </label>
+          <label class="field">
+            Most positions open at once
+            <input
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="50"
+              step="1"
+              [value]="maxPositions()"
+              (input)="onMaxPositionsInput($event)"
+            />
+          </label>
+        </div>
+      </div>
+    </section>
 
-    <fieldset>
-      <legend>Intraday alerts</legend>
-      <label>
-        <input type="checkbox" [checked]="alertsEnabled()" (change)="onAlertsEnabledChange($event)" />
-        Watchdog enabled
-      </label>
-      <label>
-        Move % that triggers an alert
-        <input type="number" min="0.1" step="0.1" [value]="alertMovePct()" (input)="onAlertMovePctInput($event)" />
-      </label>
-      <label>
-        Stop-loss % below avg cost
-        <input type="number" min="0.1" step="0.1" [value]="alertStopPct()" (input)="onAlertStopPctInput($event)" />
-      </label>
-      <label>
-        Volume multiple (vs 20-day avg)
-        <input type="number" min="0.1" step="0.1" [value]="alertVolumeMult()" (input)="onAlertVolumeMultInput($event)" />
-      </label>
-    </fieldset>
+    <section class="card">
+      <div class="card-head">
+        <h2>Paper trading</h2>
+        <p class="hint">
+          Only used when no account equity is set. With equity configured, paper buys use the same
+          risk sizing as the real book, so the paper equity curve reflects what your account would
+          have done.
+        </p>
+      </div>
+      <div class="card-body">
+        <label class="field narrow">
+          Notional per paper buy ($)
+          <input
+            type="number"
+            inputmode="decimal"
+            min="1"
+            max="1000000"
+            [value]="paperNotional()"
+            (input)="onPaperNotionalInput($event)"
+          />
+        </label>
+      </div>
+    </section>
 
-    <fieldset>
-      <legend>Daily sweep</legend>
-      <label>
-        <input type="checkbox" [checked]="dailySweepEnabled()" (change)="onDailySweepChange($event)" />
-        Analyze the full watchlist every weekday at 21:30 UTC
-      </label>
-    </fieldset>
+    <section class="card">
+      <div class="card-head">
+        <h2>Intraday alerts</h2>
+        <p class="hint">The watchdog scans every 15 minutes during US market hours.</p>
+      </div>
+      <div class="card-body stack">
+        <label class="field-row">
+          <input
+            type="checkbox"
+            [checked]="alertsEnabled()"
+            (change)="onAlertsEnabledChange($event)"
+          />
+          Watchdog enabled
+        </label>
+        <div class="field-grid">
+          <label class="field">
+            Move % that triggers an alert
+            <input
+              type="number"
+              inputmode="decimal"
+              min="0.1"
+              step="0.1"
+              [value]="alertMovePct()"
+              (input)="onAlertMovePctInput($event)"
+            />
+          </label>
+          <label class="field">
+            Stop-loss % below avg cost
+            <input
+              type="number"
+              inputmode="decimal"
+              min="0.1"
+              step="0.1"
+              [value]="alertStopPct()"
+              (input)="onAlertStopPctInput($event)"
+            />
+          </label>
+          <label class="field">
+            Volume multiple (vs 20-day avg)
+            <input
+              type="number"
+              inputmode="decimal"
+              min="0.1"
+              step="0.1"
+              [value]="alertVolumeMult()"
+              (input)="onAlertVolumeMultInput($event)"
+            />
+          </label>
+        </div>
+      </div>
+    </section>
 
-    <button type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save settings' }}</button>
+    <section class="card">
+      <div class="card-head">
+        <h2>Daily sweep</h2>
+      </div>
+      <div class="card-body">
+        <label class="field-row">
+          <input
+            type="checkbox"
+            [checked]="dailySweepEnabled()"
+            (change)="onDailySweepChange($event)"
+          />
+          Analyze the full watchlist every weekday at 21:30 UTC
+        </label>
+      </div>
+    </section>
+
+    <div class="row">
+      <button class="btn btn-primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save settings' }}
+      </button>
+    </div>
   </form>
 
-  <fieldset>
-    <legend>Webull</legend>
-    <button type="button" (click)="syncWebull()" [disabled]="syncing()">
-      {{ syncing() ? 'Syncing…' : 'Sync now' }}
-    </button>
-  </fieldset>
+  <section class="card">
+    <div class="card-head">
+      <h2>Webull</h2>
+      <p class="hint">Pulls your real positions from the broker into the portfolio book.</p>
+    </div>
+    <div class="card-body">
+      <button class="btn" type="button" (click)="syncWebull()" [disabled]="syncing()">
+        {{ syncing() ? 'Syncing…' : 'Sync now' }}
+      </button>
+    </div>
+  </section>
 </section>

@@ -1,59 +1,114 @@
 <section class="page">
-  <h1>Portfolio</h1>
+  <header class="page-head">
+    <div>
+      <h1>Portfolio</h1>
+      <p class="subtitle">The real book: what you actually hold, and how it compares with SPY.</p>
+    </div>
+  </header>
 
   @if (portfolio(); as p) {
-    <div class="totals">
-      <div><span class="label">Open value</span><span>${{ p.total_value.toFixed(2) }}</span></div>
-      <div><span class="label">Cost</span><span>${{ p.total_cost.toFixed(2) }}</span></div>
-      <div><span class="label">Realized</span><span>{{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}</span></div>
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-label">Open value</span>
+        <span class="stat-value">${{ p.total_value.toFixed(2) }}</span>
+        <span class="stat-note">{{ p.positions.length }} position(s)</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Cost</span>
+        <span class="stat-value">${{ p.total_cost.toFixed(2) }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Realized</span>
+        <span
+          class="stat-value"
+          [class.pass]="p.total_realized >= 0"
+          [class.fail]="p.total_realized < 0"
+        >
+          {{ p.total_realized >= 0 ? '+' : '' }}{{ p.total_realized.toFixed(2) }}
+        </span>
+        <span class="stat-note">from closed trades</span>
+      </div>
+      @if (p.comparison; as c) {
+        <div class="stat">
+          <span class="stat-label">Alpha vs SPY</span>
+          <span class="stat-value" [class.pass]="c.alpha_pct >= 0" [class.fail]="c.alpha_pct < 0">
+            {{ c.alpha_pct >= 0 ? '+' : '' }}{{ c.alpha_pct.toFixed(1) }}%
+          </span>
+          <span class="stat-note">
+            book {{ c.book_return_pct.toFixed(1) }}% · SPY {{ c.benchmark_return_pct.toFixed(1) }}%
+          </span>
+        </div>
+      }
     </div>
 
-    @if (p.comparison; as c) {
-      <p class="comparison">
-        Open book {{ c.book_return_pct.toFixed(1) }}% vs SPY {{ c.benchmark_return_pct.toFixed(1) }}%
-        (alpha {{ c.alpha_pct >= 0 ? '+' : '' }}{{ c.alpha_pct.toFixed(1) }}%)
-      </p>
-    }
-
     @for (warning of p.concentration; track warning) {
-      <p class="warning">{{ warning }}</p>
+      <p class="notice notice-warn"><span aria-hidden="true">⚠️</span> {{ warning }}</p>
     }
 
-    @if (p.positions.length === 0) {
-      <p class="muted">No open positions.</p>
-    } @else {
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Ticker</th>
-            <th>Qty</th>
-            <th>Avg cost</th>
-            <th>Price</th>
-            <th>Weight</th>
-            <th>Unrealized</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (pos of p.positions; track pos.ticker) {
-            <tr>
-              <td>{{ pos.ticker }}</td>
-              <td>{{ pos.quantity }}</td>
-              <td>${{ pos.avg_cost.toFixed(2) }}</td>
-              <td>{{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}</td>
-              <td>{{ pos.weight_pct !== null ? pos.weight_pct.toFixed(0) + '%' : 'n/a' }}</td>
-              <td>
-                @if (pos.unrealized !== null) {
-                  {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{ pos.unrealized_pct?.toFixed(1) }}%)
-                } @else {
-                  n/a
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
+    <section class="card">
+      <div class="card-head">
+        <h2>Open positions</h2>
+      </div>
+      @if (p.positions.length === 0) {
+        <div class="empty">
+          <span class="empty-icon" aria-hidden="true">📁</span>
+          <strong>No open positions</strong>
+          <span>Record a buy from a ticker page, or sync Webull from Settings.</span>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th class="num">Qty</th>
+                <th class="num">Avg cost</th>
+                <th class="num">Price</th>
+                <th class="num">Weight</th>
+                <th class="num">Unrealized</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (pos of p.positions; track pos.ticker) {
+                <tr>
+                  <td class="ticker-cell" data-label="">
+                    <a [routerLink]="['/tickers', pos.ticker]">{{ pos.ticker }}</a>
+                  </td>
+                  <td class="num" data-label="Qty">{{ pos.quantity }}</td>
+                  <td class="num" data-label="Avg cost">${{ pos.avg_cost.toFixed(2) }}</td>
+                  <td class="num" data-label="Price">
+                    {{ pos.price !== null ? '$' + pos.price.toFixed(2) : 'n/a' }}
+                  </td>
+                  <td class="num" data-label="Weight">
+                    {{ pos.weight_pct !== null ? pos.weight_pct.toFixed(0) + '%' : 'n/a' }}
+                  </td>
+                  <td
+                    class="num"
+                    data-label="Unrealized"
+                    [class.pass]="(pos.unrealized ?? 0) >= 0"
+                    [class.fail]="(pos.unrealized ?? 0) < 0"
+                  >
+                    @if (pos.unrealized !== null) {
+                      {{ pos.unrealized >= 0 ? '+' : '' }}{{ pos.unrealized.toFixed(2) }} ({{
+                        pos.unrealized_pct?.toFixed(1)
+                      }}%)
+                    } @else {
+                      n/a
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
   } @else {
-    <p>Loading…</p>
+    <div class="stat-grid" aria-hidden="true">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+    <p class="muted">Loading…</p>
   }
 </section>

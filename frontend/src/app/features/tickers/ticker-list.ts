@@ -30,7 +30,9 @@ export class TickerList implements OnInit {
     this.message.set(null);
     try {
       const result = await this.tickersService.analyzeAll();
-      this.message.set(`Queued analysis for ${result.count} ticker(s) — check back shortly, or watch Discord.`);
+      this.message.set(
+        `Queued analysis for ${result.count} ticker(s) — check back shortly, or watch Discord.`,
+      );
     } catch {
       this.message.set("Couldn't queue analyze-all.");
     } finally {

@@ -42,4 +42,23 @@ export class SignalDetailPage {
   protected reportKeys(reports: Record<string, string>): string[] {
     return Object.keys(reports);
   }
+
+  /** Whether the trader stated any of the trade plan. Every field is optional
+   * on its schema, so an older signal or a vague proposal can have none. */
+  protected hasTradePlan(s: SignalDetail): boolean {
+    return (
+      s.entry_price !== null ||
+      s.stop_loss !== null ||
+      s.win_probability !== null ||
+      s.risk_reward !== null ||
+      s.expected_value_r !== null
+    );
+  }
+
+  /** How far the stop sits below the proposed entry, as a percentage — the
+   * planned loss if the thesis fails. */
+  protected stopDistance(s: SignalDetail): string {
+    if (!s.entry_price || s.stop_loss === null) return '';
+    return `${((s.stop_loss / s.entry_price - 1) * 100).toFixed(1)}%`;
+  }
 }

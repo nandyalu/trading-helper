@@ -1,54 +1,175 @@
 <section class="page">
-  <a routerLink="/signals">&larr; Back to signals</a>
+  <a class="back-link" routerLink="/signals">← All signals</a>
 
   @if (signalDetail(); as s) {
-    <header class="page-header">
-      <h1>{{ s.ticker }} <app-decision-badge [decision]="s.decision" /></h1>
-      <button type="button" (click)="follow()" [disabled]="following()">
-        {{ following() ? 'Following…' : '✅ Follow as paper trade' }}
+    <header class="page-head">
+      <div class="ticker-identity">
+        <h1>{{ s.ticker }}</h1>
+        <app-decision-badge [decision]="s.decision" />
+        <a class="chip" [routerLink]="['/tickers', s.ticker]">Ticker page</a>
+      </div>
+      <button class="btn btn-primary" type="button" (click)="follow()" [disabled]="following()">
+        {{ following() ? 'Following…' : 'Follow as paper trade' }}
       </button>
     </header>
 
     @if (message()) {
-      <p class="notice">{{ message() }}</p>
+      <p class="notice notice-info">{{ message() }}</p>
     }
 
-    <dl class="signal-meta">
-      <dt>Signal date</dt>
-      <dd>{{ s.signal_date }}</dd>
-      <dt>Price at signal</dt>
-      <dd>${{ s.price_at_signal.toFixed(2) }}</dd>
-      @if (s.price_target) {
-        <dt>Price target</dt>
-        <dd>${{ s.price_target.toFixed(2) }}</dd>
-      }
-      @if (s.time_horizon_text) {
-        <dt>Time horizon</dt>
-        <dd>{{ s.time_horizon_text }}</dd>
-      }
-      <dt>Evaluation date</dt>
-      <dd>{{ s.evaluation_date }}</dd>
-      @if (s.outcome) {
-        <dt>Outcome</dt>
-        <dd [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">
-          {{ s.outcome }} @if (s.price_at_evaluation !== null) { (${{ s.price_at_evaluation.toFixed(2) }}) }
-        </dd>
-      }
-    </dl>
+    <section class="card">
+      <div class="card-head">
+        <h2>The call</h2>
+      </div>
+      <div class="card-body">
+        <dl class="meta-grid">
+          <div>
+            <dt>Signal date</dt>
+            <dd>{{ s.signal_date }}</dd>
+          </div>
+          <div>
+            <dt>Price at signal</dt>
+            <dd>${{ s.price_at_signal.toFixed(2) }}</dd>
+          </div>
+          @if (s.price_target) {
+            <div>
+              <dt>Price target</dt>
+              <dd>${{ s.price_target.toFixed(2) }}</dd>
+            </div>
+          }
+          @if (s.time_horizon_text) {
+            <div>
+              <dt>Time horizon</dt>
+              <dd>{{ s.time_horizon_text }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Evaluation date</dt>
+            <dd>{{ s.evaluation_date }}</dd>
+          </div>
+          @if (s.horizon) {
+            <div>
+              <dt>Horizon</dt>
+              <dd>{{ s.horizon }}</dd>
+            </div>
+          }
+          @if (s.outcome) {
+            <div>
+              <dt>Outcome</dt>
+              <dd [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">
+                {{ s.outcome }}
+                @if (s.price_at_evaluation !== null) {
+                  (${{ s.price_at_evaluation.toFixed(2) }})
+                }
+              </dd>
+            </div>
+          }
+          @if (s.alpha_pct !== null) {
+            <div>
+              <dt>vs SPY</dt>
+              <dd
+                [class.pass]="s.outcome_vs_benchmark === 'pass'"
+                [class.fail]="s.outcome_vs_benchmark === 'fail'"
+              >
+                {{ s.outcome_vs_benchmark ?? 'n/a' }} ({{ s.alpha_pct >= 0 ? '+' : ''
+                }}{{ s.alpha_pct.toFixed(1) }}% alpha)
+              </dd>
+            </div>
+          }
+          @if (s.price_target_hit !== null) {
+            <div>
+              <dt>Target</dt>
+              <dd>{{ s.price_target_hit ? 'hit' : 'not hit' }}</dd>
+            </div>
+          }
+        </dl>
+      </div>
+    </section>
 
-    <h2>Rationale</h2>
-    <p class="rationale">{{ s.rationale }}</p>
+    @if (hasTradePlan(s)) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Trade plan</h2>
+          <p class="hint">
+            Where to get out, and whether the odds justified getting in. The risk/reward and
+            expected value are computed from the entry, stop, and target levels rather than asserted
+            by the model, so they agree with the levels beside them.
+          </p>
+        </div>
+        <div class="card-body">
+          <dl class="meta-grid">
+            @if (s.entry_price !== null) {
+              <div>
+                <dt>Proposed entry</dt>
+                <dd>${{ s.entry_price.toFixed(2) }}</dd>
+              </div>
+            }
+            @if (s.stop_loss !== null) {
+              <div>
+                <dt>Stop loss</dt>
+                <dd>
+                  ${{ s.stop_loss.toFixed(2) }}
+                  @if (s.entry_price) {
+                    <span class="muted">({{ stopDistance(s) }} from entry)</span>
+                  }
+                </dd>
+              </div>
+            }
+            @if (s.win_probability !== null) {
+              <div>
+                <dt>Win probability</dt>
+                <dd>
+                  {{ s.win_probability.toFixed(0) }}% <span class="muted">(model estimate)</span>
+                </dd>
+              </div>
+            }
+            @if (s.risk_reward !== null) {
+              <div>
+                <dt>Risk / reward</dt>
+                <dd>{{ s.risk_reward.toFixed(2) }} : 1</dd>
+              </div>
+            }
+            @if (s.expected_value_r !== null) {
+              <div>
+                <dt>Expected value</dt>
+                <dd [class.pass]="s.expected_value_r > 0" [class.fail]="s.expected_value_r <= 0">
+                  {{ s.expected_value_r >= 0 ? '+' : '' }}{{ s.expected_value_r.toFixed(2) }}R
+                  <span class="muted"
+                    >({{ s.expected_value_r > 0 ? 'favorable' : 'unfavorable' }})</span
+                  >
+                </dd>
+              </div>
+            }
+          </dl>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Rationale</h2>
+      </div>
+      <div class="card-body">
+        <p class="prose">{{ s.rationale }}</p>
+      </div>
+    </section>
 
     @if (reportKeys(s.reports).length > 0) {
-      <h2>Analyst reports</h2>
-      @for (key of reportKeys(s.reports); track key) {
-        <details>
-          <summary>{{ key }}</summary>
-          <pre class="report">{{ s.reports[key] }}</pre>
-        </details>
-      }
+      <section class="card">
+        <div class="card-head">
+          <h2>Analyst reports</h2>
+          <p class="hint">The raw output of each stage. Open one to read what the model wrote.</p>
+        </div>
+        @for (key of reportKeys(s.reports); track key) {
+          <details class="report">
+            <summary>{{ key }}</summary>
+            <pre class="report-body">{{ s.reports[key] }}</pre>
+          </details>
+        }
+      </section>
     }
   } @else {
-    <p>Loading…</p>
+    <div class="skeleton skeleton-card"></div>
+    <p class="muted">Loading…</p>
   }
 </section>

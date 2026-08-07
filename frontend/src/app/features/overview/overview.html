@@ -1,0 +1,225 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Overview</h1>
+      <p class="subtitle">What is open, what the bot found, and what needs a decision today.</p>
+    </div>
+    @if (regime(); as r) {
+      <a
+        class="regime-pill"
+        routerLink="/regime"
+        [attr.title]="'VIX ' + (r.vix?.toFixed(1) ?? 'n/a')"
+      >
+        <span aria-hidden="true">{{ r.emoji }}</span> {{ r.label }}
+      </a>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="stat-grid" aria-hidden="true">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+    <p class="muted">Loading…</p>
+  } @else {
+    <!-- Anything requiring a decision comes first. Everything below this block
+         is context; this block is the reason to open the app. -->
+    @if (needsAttention().length > 0 || exitSignals().length > 0) {
+      <div class="attention">
+        <div class="card-head">
+          <h2>Needs a decision</h2>
+          <span class="badge badge-neg">{{ needsAttention().length + exitSignals().length }}</span>
+        </div>
+        @for (s of exitSignals(); track s.id) {
+          <a class="attention-row" [routerLink]="['/tickers', s.ticker]">
+            <span class="attention-icon" aria-hidden="true">🔻</span>
+            <span class="attention-body">
+              <strong>{{ s.ticker }}</strong> — the latest analysis says
+              <app-decision-badge [decision]="s.decision" /> and you are holding it.
+            </span>
+            <span class="attention-when">{{ s.signal_date }}</span>
+          </a>
+        }
+        @for (a of needsAttention(); track trackAlert($index, a)) {
+          <a class="attention-row" [routerLink]="['/tickers', a.ticker]">
+            <span class="attention-icon" aria-hidden="true">{{ icon(a.alert_type) }}</span>
+            <span class="attention-body">
+              <strong>{{ a.ticker }}</strong> — {{ label(a.alert_type) }}. {{ a.message }}
+            </span>
+            <span class="attention-when">{{ when(a.created_at) }}</span>
+          </a>
+        }
+      </div>
+    } @else {
+      <p class="all-clear">
+        <span aria-hidden="true">✅</span> Nothing needs a decision right now.
+      </p>
+    }
+
+    <div class="stat-grid">
+      @if (portfolio(); as p) {
+        <div class="stat">
+          <span class="stat-label">Real book</span>
+          <span class="stat-value">${{ p.total_value.toFixed(0) }}</span>
+          @if (p.comparison; as c) {
+            <span class="stat-note" [class.pass]="c.alpha_pct >= 0" [class.fail]="c.alpha_pct < 0">
+              {{ signed(c.alpha_pct) }}% vs SPY
+            </span>
+          }
+        </div>
+      }
+      @if (paper(); as p) {
+        <div class="stat">
+          <span class="stat-label">Paper book</span>
+          <span class="stat-value">${{ p.total_value.toFixed(0) }}</span>
+          <span
+            class="stat-note"
+            [class.pass]="p.total_unrealized >= 0"
+            [class.fail]="p.total_unrealized < 0"
+          >
+            {{ signed(p.total_unrealized, 0) }} unrealized
+          </span>
+        </div>
+      }
+      <div class="stat">
+        <span class="stat-label">Signal win rate</span>
+        @if (winRate(); as w) {
+          <span class="stat-value">{{
+            enoughData() ? w.pct + '%' : w.passes + '/' + w.total
+          }}</span>
+          <span class="stat-note">
+            @if (enoughData()) {
+              {{ w.passes }}/{{ w.total }} resolved
+            } @else {
+              not enough data yet
+            }
+          </span>
+        } @else {
+          <span class="stat-value">—</span>
+          <span class="stat-note">no resolved signals yet</span>
+        }
+      </div>
+      @if (scorecard(); as s) {
+        <div class="stat">
+          <span class="stat-label">Pending signals</span>
+          <span class="stat-value">{{ s.pending }}</span>
+          <span class="stat-note">still maturing</span>
+        </div>
+      }
+    </div>
+
+    <div class="grid-2">
+      <div class="stack">
+        <section class="card">
+          <div class="card-head">
+            <h2>Your positions</h2>
+            <a class="btn btn-ghost btn-sm" routerLink="/portfolio">Open book</a>
+          </div>
+          @if (positions().length === 0) {
+            <div class="empty">
+              <span class="empty-icon" aria-hidden="true">📁</span>
+              <strong>Nothing held</strong>
+              <span>Positions appear here once you record a buy or sync Webull.</span>
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="data-table data-table--stack">
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th class="num">Value</th>
+                    <th class="num">P&amp;L</th>
+                    <th class="num">Weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of positions(); track p.ticker) {
+                    <tr>
+                      <td class="ticker-cell" data-label="">
+                        <a [routerLink]="['/tickers', p.ticker]">{{ p.ticker }}</a>
+                      </td>
+                      <td class="num" data-label="Value">
+                        {{ p.value !== null ? '$' + p.value.toFixed(0) : '—' }}
+                      </td>
+                      <td
+                        class="num"
+                        data-label="P&L"
+                        [class.pass]="(p.unrealized_pct ?? 0) >= 0"
+                        [class.fail]="(p.unrealized_pct ?? 0) < 0"
+                      >
+                        {{ p.unrealized_pct !== null ? signed(p.unrealized_pct) + '%' : '—' }}
+                      </td>
+                      <td class="num" data-label="Weight">
+                        {{ p.weight_pct !== null ? p.weight_pct.toFixed(0) + '%' : '—' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        @if (portfolio()?.concentration?.length) {
+          @for (warning of portfolio()!.concentration; track warning) {
+            <p class="notice notice-warn"><span aria-hidden="true">⚠️</span> {{ warning }}</p>
+          }
+        }
+      </div>
+
+      <div class="stack">
+        <section class="card">
+          <div class="card-head">
+            <h2>New opportunities</h2>
+            <p class="hint">Buy signals from the last week on tickers you do not already hold.</p>
+          </div>
+          @if (newOpportunities().length === 0) {
+            <div class="empty">
+              <span class="empty-icon" aria-hidden="true">🔍</span>
+              <strong>None right now</strong>
+              <span>A new buy signal on an unheld ticker shows up here.</span>
+            </div>
+          } @else {
+            @for (s of newOpportunities(); track s.id) {
+              <div class="opportunity">
+                <a class="ticker" [routerLink]="['/tickers', s.ticker]">{{ s.ticker }}</a>
+                <app-decision-badge [decision]="s.decision" />
+                @if (s.win_probability !== null) {
+                  <span class="muted num">{{ s.win_probability.toFixed(0) }}% confidence</span>
+                }
+                @if (s.expected_value_r !== null) {
+                  <span
+                    class="num"
+                    [class.pass]="s.expected_value_r > 0"
+                    [class.fail]="s.expected_value_r <= 0"
+                  >
+                    {{ signed(s.expected_value_r, 2) }}R
+                  </span>
+                }
+                <a class="spacer btn btn-ghost btn-sm" [routerLink]="['/signals', s.id]">Why?</a>
+              </div>
+            }
+          }
+        </section>
+
+        @if (staleTickers().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <h2>Never analyzed</h2>
+              <p class="hint">Watchlisted, but with no signal yet.</p>
+            </div>
+            <div class="card-body">
+              <div class="chip-list">
+                @for (t of staleTickers(); track trackTicker($index, t)) {
+                  <a class="chip" [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a>
+                }
+              </div>
+            </div>
+          </section>
+        }
+      </div>
+    </div>
+  }
+</section>

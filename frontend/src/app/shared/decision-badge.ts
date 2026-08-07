@@ -1,34 +1,22 @@
 import { Component, computed, input } from '@angular/core';
 
+/** Decisions that read as "get in" versus "get out". Anything else — Hold, or
+ * the REVIEW the model emits when its own rating did not parse — is amber:
+ * neither a reason to buy nor a reason to sell. */
+const BUYISH = new Set(['buy', 'overweight']);
+const SELLISH = new Set(['sell', 'underweight']);
+
 @Component({
   selector: 'app-decision-badge',
-  template: `<span class="badge" [class]="cssClass()">{{ decision() }}</span>`,
-  styles: `
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.6rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-      white-space: nowrap;
-    }
-    .buy, .overweight {
-      background: color-mix(in srgb, #1a7f37 18%, transparent);
-      color: #1a7f37;
-    }
-    .hold {
-      background: color-mix(in srgb, #9a6700 18%, transparent);
-      color: #9a6700;
-    }
-    .sell, .underweight {
-      background: color-mix(in srgb, #cf222e 18%, transparent);
-      color: #cf222e;
-    }
-  `,
+  template: `<span class="badge" [class]="tone()">{{ decision() }}</span>`,
 })
 export class DecisionBadge {
   readonly decision = input.required<string>();
-  protected readonly cssClass = computed(() => this.decision().toLowerCase());
+
+  protected readonly tone = computed(() => {
+    const decision = this.decision().toLowerCase();
+    if (BUYISH.has(decision)) return 'badge-pos';
+    if (SELLISH.has(decision)) return 'badge-neg';
+    return 'badge-warn';
+  });
 }

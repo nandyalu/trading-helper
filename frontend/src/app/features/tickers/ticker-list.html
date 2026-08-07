@@ -1,54 +1,95 @@
 <section class="page">
-  <header class="page-header">
-    <h1>Tickers</h1>
-    <div class="actions">
-      <form class="add-form" (submit)="$event.preventDefault(); addTicker()">
-        <input type="text" placeholder="Add ticker, e.g. NVDA" [value]="newTicker()" (input)="onTickerInput($event)" />
-        <button type="submit">Track</button>
+  <header class="page-head">
+    <div>
+      <h1>Tickers</h1>
+      <p class="subtitle">The watchlist. The bot analyzes every ticker here on the daily sweep.</p>
+    </div>
+    <div class="row">
+      <form class="inline-form" (submit)="$event.preventDefault(); addTicker()">
+        <input
+          type="text"
+          aria-label="Ticker to track"
+          placeholder="Add ticker, e.g. NVDA"
+          autocapitalize="characters"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="newTicker()"
+          (input)="onTickerInput($event)"
+        />
+        <button class="btn btn-primary" type="submit">Track</button>
       </form>
-      <button type="button" (click)="analyzeAll()" [disabled]="analyzingAll() || tickers().length === 0">
+      <button
+        class="btn"
+        type="button"
+        (click)="analyzeAll()"
+        [disabled]="analyzingAll() || tickers().length === 0"
+      >
         {{ analyzingAll() ? 'Queuing…' : 'Analyze all' }}
       </button>
     </div>
   </header>
 
   @if (message()) {
-    <p class="notice">{{ message() }}</p>
+    <p class="notice notice-info">{{ message() }}</p>
   }
   @if (error()) {
-    <p class="error">{{ error() }}</p>
+    <p class="notice notice-error">{{ error() }}</p>
   }
 
-  @if (loading()) {
-    <p>Loading…</p>
-  } @else if (tickers().length === 0) {
-    <p class="muted">Watchlist is empty — add a ticker above.</p>
-  } @else {
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          <th>Price</th>
-          <th>Latest signal</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (t of tickers(); track t.ticker) {
-          <tr>
-            <td><a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a></td>
-            <td>{{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}</td>
-            <td>
-              @if (t.latest_signal) {
-                <app-decision-badge [decision]="t.latest_signal.decision" />
-              } @else {
-                <span class="muted">no signals</span>
-              }
-            </td>
-            <td><button type="button" (click)="removeTicker(t.ticker)">Remove</button></td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  }
+  <section class="card">
+    @if (loading()) {
+      <div class="card-body stack" aria-hidden="true">
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+      </div>
+    } @else if (tickers().length === 0) {
+      <div class="empty">
+        <span class="empty-icon" aria-hidden="true">📈</span>
+        <strong>The watchlist is empty</strong>
+        <span>Add a ticker above to have the bot follow it.</span>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table data-table--stack">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Price</th>
+              <th>Latest signal</th>
+              <th class="actions-cell"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of tickers(); track t.ticker) {
+              <tr>
+                <td class="ticker-cell" data-label="">
+                  <a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a>
+                </td>
+                <td class="num" data-label="Price">
+                  {{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}
+                </td>
+                <td data-label="Latest signal">
+                  @if (t.latest_signal) {
+                    <app-decision-badge [decision]="t.latest_signal.decision" />
+                  } @else {
+                    <span class="muted">no signals</span>
+                  }
+                </td>
+                <td class="actions-cell" data-label="">
+                  <button
+                    class="btn btn-sm btn-danger"
+                    type="button"
+                    (click)="removeTicker(t.ticker)"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 </section>

@@ -1,0 +1,68 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Alerts</h1>
+      <p class="subtitle">
+        The watchdog scans every 15 minutes during US market hours and records what moved.
+      </p>
+    </div>
+    @if (availableTypes().length > 1) {
+      <label class="field">
+        <span class="sr-only">Alert type</span>
+        <select [value]="filter()" (change)="onFilterChange($event)">
+          <option value="">All types</option>
+          @for (type of availableTypes(); track type) {
+            <option [value]="type">{{ icon(type) }} {{ label(type) }}</option>
+          }
+        </select>
+      </label>
+    }
+  </header>
+
+  <section class="card">
+    @if (alerts() === null) {
+      <div class="card-body stack" aria-hidden="true">
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+      </div>
+    } @else if (alerts()!.length === 0) {
+      <div class="empty">
+        <span class="empty-icon" aria-hidden="true">🔔</span>
+        <strong>No alerts yet</strong>
+        <span>
+          A big move, a volume spike, a target touch, or a breached stop is recorded here as it
+          happens.
+        </span>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table data-table--stack">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Type</th>
+              <th>What happened</th>
+              <th class="num">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (alert of visible(); track alert.id) {
+              <tr>
+                <td class="ticker-cell" data-label="">
+                  <a [routerLink]="['/tickers', alert.ticker]">{{ alert.ticker }}</a>
+                </td>
+                <td data-label="Type">
+                  <span aria-hidden="true">{{ icon(alert.alert_type) }}</span>
+                  {{ label(alert.alert_type) }}
+                </td>
+                <td data-label="What happened">{{ alert.message }}</td>
+                <td class="num" data-label="When">{{ when(alert.created_at) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</section>

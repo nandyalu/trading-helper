@@ -1,7 +1,11 @@
 import { Routes } from '@angular/router';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'tickers', pathMatch: 'full' },
+  {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/overview/overview').then((m) => m.Overview),
+  },
   {
     path: 'tickers',
     loadComponent: () => import('./features/tickers/ticker-list').then((m) => m.TickerList),
@@ -19,12 +23,17 @@ export const routes: Routes = [
     loadComponent: () => import('./features/signals/signal-detail').then((m) => m.SignalDetailPage),
   },
   {
+    path: 'alerts',
+    loadComponent: () => import('./features/alerts/alerts-view').then((m) => m.AlertsView),
+  },
+  {
     path: 'paper',
     loadComponent: () => import('./features/paper/paper-dashboard').then((m) => m.PaperDashboard),
   },
   {
     path: 'portfolio',
-    loadComponent: () => import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),
+    loadComponent: () =>
+      import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),
   },
   {
     path: 'scorecard',

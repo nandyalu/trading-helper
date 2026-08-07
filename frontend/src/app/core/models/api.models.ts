@@ -30,6 +30,14 @@ export interface Signal {
   alpha_pct: number | null;
   outcome_vs_benchmark: 'pass' | 'fail' | null;
   price_target_hit: boolean | null;
+  horizon: string | null; // "swing" | "position"
+  // The trade plan, from TradingAgents' trader stage. Null means the model did
+  // not state it — never zero.
+  entry_price: number | null;
+  stop_loss: number | null;
+  win_probability: number | null; // 0-100
+  risk_reward: number | null;
+  expected_value_r: number | null; // signed, in R-multiples
 }
 
 export interface SignalDetail extends Signal {
@@ -150,6 +158,24 @@ export interface Alert {
   created_at: string;
 }
 
+export interface Trade {
+  book: 'real' | 'paper';
+  side: 'buy' | 'sell';
+  date: string;
+  price: number;
+  quantity: number;
+}
+
+/** Everything that happened to one ticker, from GET /api/tickers/{t}/events.
+ * The chart overlays and the timeline are this same data drawn two ways. */
+export interface TickerEvents {
+  ticker: string;
+  bars: OhlcBar[];
+  signals: Signal[];
+  alerts: Alert[];
+  trades: Trade[];
+}
+
 export interface Digest {
   week_start: string;
   resolved: Signal[];
@@ -173,9 +199,12 @@ export interface Regime {
 }
 
 export interface Settings {
+  horizon: string; // "swing" | "position"
   paper_notional: number;
   risk_equity: number | null;
   risk_pct: number;
+  max_position_pct: number;
+  max_positions: number;
   alert_move_pct: number;
   alert_stop_pct: number;
   alert_volume_mult: number;

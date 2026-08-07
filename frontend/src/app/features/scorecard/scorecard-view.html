@@ -1,58 +1,125 @@
 <section class="page">
-  <h1>Scorecard</h1>
+  <header class="page-head">
+    <div>
+      <h1>Scorecard</h1>
+      <p class="subtitle">
+        How the bot has done once its signals matured. A win rate under 20 resolved signals is
+        noise, not evidence.
+      </p>
+    </div>
+  </header>
 
   @if (scorecard(); as s) {
-    <div class="totals">
-      <div><span class="label">Resolved</span><span>{{ s.resolved }}</span></div>
-      <div><span class="label">Pending</span><span>{{ s.pending }}</span></div>
-      <div><span class="label">Win rate</span><span>{{ rate(s.passes, s.resolved) }}</span></div>
-      <div><span class="label">vs SPY</span><span>{{ rate(s.vs_benchmark_passes, s.vs_benchmark_total) }}</span></div>
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-label">Resolved</span>
+        <span class="stat-value">{{ s.resolved }}</span>
+        <span class="stat-note">{{ s.pending }} still pending</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Win rate</span>
+        <span class="stat-value">{{ pct(s.passes, s.resolved) }}</span>
+        <span class="stat-note">{{ s.passes }}/{{ s.resolved }} correct</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Beat SPY</span>
+        <span class="stat-value">{{ pct(s.vs_benchmark_passes, s.vs_benchmark_total) }}</span>
+        <span class="stat-note"
+          >{{ s.vs_benchmark_passes }}/{{ s.vs_benchmark_total }} signals</span
+        >
+      </div>
       @if (s.avg_alpha_pct !== null) {
-        <div><span class="label">Avg alpha</span><span>{{ s.avg_alpha_pct >= 0 ? '+' : '' }}{{ s.avg_alpha_pct.toFixed(1) }}%</span></div>
+        <div class="stat">
+          <span class="stat-label">Average alpha</span>
+          <span
+            class="stat-value"
+            [class.pass]="s.avg_alpha_pct >= 0"
+            [class.fail]="s.avg_alpha_pct < 0"
+          >
+            {{ s.avg_alpha_pct >= 0 ? '+' : '' }}{{ s.avg_alpha_pct.toFixed(1) }}%
+          </span>
+          <span class="stat-note">per resolved signal</span>
+        </div>
       }
-      <div><span class="label">Targets hit</span><span>{{ rate(s.target_hits, s.target_total) }}</span></div>
+      <div class="stat">
+        <span class="stat-label">Targets hit</span>
+        <span class="stat-value">{{ pct(s.target_hits, s.target_total) }}</span>
+        <span class="stat-note">{{ s.target_hits }}/{{ s.target_total }} with a target</span>
+      </div>
     </div>
 
-    <h2>By decision</h2>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Decision</th>
-          <th>Win rate</th>
-          <th>Avg move</th>
-          <th>vs SPY</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of decisionEntries(s.by_decision); track entry[0]) {
-          <tr>
-            <td>{{ entry[0] }}</td>
-            <td>{{ rate(entry[1].passes, entry[1].total) }}</td>
-            <td>{{ entry[1].avg_move_pct !== null ? entry[1].avg_move_pct.toFixed(1) + '%' : 'n/a' }}</td>
-            <td>{{ rate(entry[1].vs_benchmark_passes, entry[1].vs_benchmark_total) }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>By decision</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Decision</th>
+                <th class="num">Win rate</th>
+                <th class="num">Avg move</th>
+                <th class="num">vs SPY</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of decisionEntries(s.by_decision); track entry[0]) {
+                <tr>
+                  <td data-label=""><app-decision-badge [decision]="entry[0]" /></td>
+                  <td class="num" data-label="Win rate">
+                    {{ rate(entry[1].passes, entry[1].total) }}
+                  </td>
+                  <td class="num" data-label="Avg move">
+                    {{
+                      entry[1].avg_move_pct !== null
+                        ? entry[1].avg_move_pct.toFixed(1) + '%'
+                        : 'n/a'
+                    }}
+                  </td>
+                  <td class="num" data-label="vs SPY">
+                    {{ rate(entry[1].vs_benchmark_passes, entry[1].vs_benchmark_total) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-    <h2>By ticker (top 10)</h2>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          <th>Win rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of tickerEntries(s.by_ticker); track entry[0]) {
-          <tr>
-            <td>{{ entry[0] }}</td>
-            <td>{{ rate(entry[1][0], entry[1][1]) }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
+      <section class="card">
+        <div class="card-head">
+          <h2>By ticker</h2>
+          <p class="hint">The ten tickers with the most resolved signals.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th class="num">Win rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of tickerEntries(s.by_ticker); track entry[0]) {
+                <tr>
+                  <td class="ticker-cell" data-label="">
+                    <a [routerLink]="['/tickers', entry[0]]">{{ entry[0] }}</a>
+                  </td>
+                  <td class="num" data-label="Win rate">{{ rate(entry[1][0], entry[1][1]) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   } @else {
-    <p>Loading…</p>
+    <div class="stat-grid" aria-hidden="true">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+    <p class="muted">Loading…</p>
   }
 </section>

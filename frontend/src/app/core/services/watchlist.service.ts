@@ -18,7 +18,7 @@ export class WatchlistService {
 
   async add(ticker: string): Promise<ActionResult> {
     const result = await firstValueFrom(
-      this.http.post<ActionResult>(`/api/watchlist/${ticker}`, {})
+      this.http.post<ActionResult>(`/api/watchlist/${ticker}`, {}),
     );
     await this.load();
     return result;

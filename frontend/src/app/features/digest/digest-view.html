@@ -1,70 +1,123 @@
 <section class="page">
-  <h1>Weekly Digest</h1>
+  <header class="page-head">
+    <div>
+      <h1>Weekly digest</h1>
+      @if (digest(); as d) {
+        <p class="subtitle">Week of {{ d.week_start }}</p>
+      }
+    </div>
+  </header>
 
   @if (digest(); as d) {
-    <p class="muted">Week of {{ d.week_start }}</p>
-
-    <div class="totals">
-      <div><span class="label">Win rate (30d)</span><span>{{ rate(d.win_rate_30d) }}</span></div>
-      <div><span class="label">Win rate (all-time)</span><span>{{ rate(d.win_rate_all) }}</span></div>
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-label">Win rate, 30 days</span>
+        <span class="stat-value">{{ rate(d.win_rate_30d) }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Win rate, all time</span>
+        <span class="stat-value">{{ rate(d.win_rate_all) }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">New signals</span>
+        <span class="stat-value">{{ d.new_signals.length }}</span>
+        <span class="stat-note">this week</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Alerts</span>
+        <span class="stat-value">{{ d.alerts.length }}</span>
+        <span class="stat-note">this week</span>
+      </div>
     </div>
 
-    @if (d.real_book_line) {
-      <p>{{ d.real_book_line }}</p>
-    }
-    @if (d.paper_lines.length > 0) {
-      <h2>Paper book</h2>
-      <ul>
-        @for (line of d.paper_lines; track line) {
-          <li>{{ line }}</li>
-        }
-      </ul>
+    @if (d.real_book_line || d.paper_lines.length > 0) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Books</h2>
+        </div>
+        <div class="card-body stack">
+          @if (d.real_book_line) {
+            <p>{{ d.real_book_line }}</p>
+          }
+          @for (line of d.paper_lines; track line) {
+            <p class="muted">{{ line }}</p>
+          }
+        </div>
+      </section>
     }
 
-    <h2>New signals this week</h2>
-    @if (d.new_signals.length === 0) {
-      <p class="muted">None.</p>
-    } @else {
-      <ul class="signal-list">
-        @for (s of d.new_signals; track s.id) {
-          <li>
-            <a [routerLink]="['/signals', s.id]">
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>New signals</h2>
+        </div>
+        @if (d.new_signals.length === 0) {
+          <p class="card-body muted">None this week.</p>
+        } @else {
+          @for (s of d.new_signals; track s.id) {
+            <div class="opportunity">
+              <a class="ticker" [routerLink]="['/signals', s.id]">{{ s.ticker }}</a>
               <app-decision-badge [decision]="s.decision" />
-              {{ s.ticker }} — {{ s.signal_date }}
-            </a>
-          </li>
+              <span class="spacer muted num">{{ s.signal_date }}</span>
+            </div>
+          }
         }
-      </ul>
-    }
+      </section>
 
-    <h2>Resolved this week</h2>
-    @if (d.resolved.length === 0) {
-      <p class="muted">None.</p>
-    } @else {
-      <ul class="signal-list">
-        @for (s of d.resolved; track s.id) {
-          <li>
-            <a [routerLink]="['/signals', s.id]">
+      <section class="card">
+        <div class="card-head">
+          <h2>Resolved</h2>
+        </div>
+        @if (d.resolved.length === 0) {
+          <p class="card-body muted">None this week.</p>
+        } @else {
+          @for (s of d.resolved; track s.id) {
+            <div class="opportunity">
+              <a class="ticker" [routerLink]="['/signals', s.id]">{{ s.ticker }}</a>
               <app-decision-badge [decision]="s.decision" />
-              {{ s.ticker }} —
-              <span [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">{{ s.outcome }}</span>
-            </a>
-          </li>
+              <span
+                class="spacer outcome"
+                [class.pass]="s.outcome === 'pass'"
+                [class.fail]="s.outcome === 'fail'"
+              >
+                {{ s.outcome }}
+              </span>
+            </div>
+          }
         }
-      </ul>
-    }
+      </section>
+    </div>
 
-    <h2>Alerts this week</h2>
-    @if (d.alerts.length === 0) {
-      <p class="muted">None.</p>
-    } @else {
-      <ul>
-        @for (a of d.alerts; track a.id) {
-          <li>{{ a.ticker }} — {{ a.alert_type }}: {{ a.message }}</li>
-        }
-      </ul>
-    }
+    <section class="card">
+      <div class="card-head">
+        <h2>Alerts this week</h2>
+      </div>
+      @if (d.alerts.length === 0) {
+        <p class="card-body muted">None this week.</p>
+      } @else {
+        <ul class="timeline">
+          @for (a of d.alerts; track a.id) {
+            <li>
+              <span class="timeline-icon" aria-hidden="true">{{ icon(a.alert_type) }}</span>
+              <div class="timeline-body">
+                <div class="timeline-head">
+                  <a [routerLink]="['/tickers', a.ticker]">{{ a.ticker }}</a>
+                  <span class="muted">{{ label(a.alert_type) }}</span>
+                </div>
+                <p class="timeline-detail">{{ a.message }}</p>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
   } @else {
-    <p>Loading…</p>
+    <div class="stat-grid" aria-hidden="true">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+    <p class="muted">Loading…</p>
   }
 </section>

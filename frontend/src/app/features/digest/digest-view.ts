@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 
 import { DigestService } from '../../core/services/digest.service';
 import { DecisionBadge } from '../../shared/decision-badge';
+import { alertIcon, alertLabel } from '../../shared/alert-types';
 
 @Component({
   selector: 'app-digest-view',
@@ -12,6 +13,10 @@ import { DecisionBadge } from '../../shared/decision-badge';
 export class DigestView {
   private readonly digestService = inject(DigestService);
   protected readonly digest = this.digestService.digest;
+
+  // Named the same way here as on the Alerts page and the ticker timeline.
+  protected readonly label = alertLabel;
+  protected readonly icon = alertIcon;
 
   constructor() {
     void this.digestService.load();

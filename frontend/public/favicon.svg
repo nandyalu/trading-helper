@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Trading Helper">
+  <!-- Kept deliberately coarse: this is read at 16px in a browser tab, where
+       thin strokes and candlestick detail turn to mush. A single thick rising
+       line on a dark tile stays legible against both light and dark tab bars. -->
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <polyline points="12,45 25,32 35,39 49,19"
+            fill="none" stroke="#22c55e" stroke-width="7"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 17 L53 15 L51 28 Z" fill="#22c55e"/>
+</svg>

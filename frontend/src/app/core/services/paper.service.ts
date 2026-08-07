@@ -23,7 +23,9 @@ export class PaperService {
   }
 
   async close(ticker: string): Promise<ActionResult> {
-    const result = await firstValueFrom(this.http.post<ActionResult>(`/api/paper/${ticker}/close`, {}));
+    const result = await firstValueFrom(
+      this.http.post<ActionResult>(`/api/paper/${ticker}/close`, {}),
+    );
     await this.load();
     return result;
   }

@@ -10,9 +10,12 @@ export class SettingsView {
   private readonly settingsService = inject(SettingsService);
   protected readonly settings = this.settingsService.settings;
 
+  protected readonly horizon = signal('swing');
   protected readonly paperNotional = signal(1000);
   protected readonly riskEquity = signal<number | null>(null);
   protected readonly riskPct = signal(1);
+  protected readonly maxPositionPct = signal(20);
+  protected readonly maxPositions = signal(5);
   protected readonly alertMovePct = signal(5);
   protected readonly alertStopPct = signal(10);
   protected readonly alertVolumeMult = signal(2);
@@ -27,9 +30,12 @@ export class SettingsView {
     effect(() => {
       const s = this.settings();
       if (!s) return;
+      this.horizon.set(s.horizon);
       this.paperNotional.set(s.paper_notional);
       this.riskEquity.set(s.risk_equity);
       this.riskPct.set(s.risk_pct);
+      this.maxPositionPct.set(s.max_position_pct);
+      this.maxPositions.set(s.max_positions);
       this.alertMovePct.set(s.alert_move_pct);
       this.alertStopPct.set(s.alert_stop_pct);
       this.alertVolumeMult.set(s.alert_volume_mult);
@@ -39,8 +45,20 @@ export class SettingsView {
     void this.settingsService.load();
   }
 
+  protected onHorizonChange(e: Event): void {
+    this.horizon.set((e.target as HTMLSelectElement).value);
+  }
+
   protected onPaperNotionalInput(e: Event): void {
     this.paperNotional.set(Number((e.target as HTMLInputElement).value));
+  }
+
+  protected onMaxPositionPctInput(e: Event): void {
+    this.maxPositionPct.set(Number((e.target as HTMLInputElement).value));
+  }
+
+  protected onMaxPositionsInput(e: Event): void {
+    this.maxPositions.set(Number((e.target as HTMLInputElement).value));
   }
 
   protected onRiskEquityInput(e: Event): void {
@@ -77,9 +95,12 @@ export class SettingsView {
     this.message.set(null);
     try {
       await this.settingsService.update({
+        horizon: this.horizon(),
         paper_notional: this.paperNotional(),
         risk_equity: this.riskEquity() ?? undefined,
         risk_pct: this.riskPct(),
+        max_position_pct: this.maxPositionPct(),
+        max_positions: this.maxPositions(),
         alert_move_pct: this.alertMovePct(),
         alert_stop_pct: this.alertStopPct(),
         alert_volume_mult: this.alertVolumeMult(),
