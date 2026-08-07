@@ -22,6 +22,7 @@ Between analyses, a rule-based watchdog checks prices, volume, stops, and target
 <div class="grid cards" markdown>
 
 - **[How it works](overview.md)** — architecture, the signal lifecycle, the daily schedule, and data sources.
+- **[The dashboard](dashboard.md)** — the web app: the overview, the chart with the analysis drawn on it, and the ticker timeline.
 - **[Command reference](commands.md)** — every slash command, the ✅ reaction, and what posts automatically.
 - **[The daily workflow](trading-workflow.md)** — a practical routine: morning context, intraday alerts, evening grades, weekly review.
 - **[Finding your edge](finding-your-edge.md)** — the method: measure first, paper trade the strategy, and size each trade so it can fail.

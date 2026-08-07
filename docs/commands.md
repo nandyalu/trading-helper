@@ -39,7 +39,8 @@ This keeps the bot responsive.
 
 | Command | What it does |
 |---|---|
-| `/risk equity:25000 risk_pct:1` | Set up sizing suggestions. If you set `equity`, every Buy embed shows a 2×ATR(14) stop and a share count. The share count risks `risk_pct`% of your equity between entry and stop, capped at 100% of equity. If you do not set `equity`, the embed shows only the stop. Run the command with no arguments to view your current settings. |
+| `/risk equity:2800 risk_pct:1 max_position_pct:20 max_positions:5` | Set up sizing suggestions. If you set `equity`, every Buy embed shows a 2×ATR(14) stop and a share count. The share count risks `risk_pct`% of your equity between entry and stop, and is then limited to `max_position_pct`% of equity. Both limits matter: risk sizing controls the loss if the stop is hit, and the position cap controls concentration when low volatility makes the risk-based count large. `max_positions` warns you when the book is already full. If you do not set `equity`, the embed shows only the stop. Run the command with no arguments to view your current settings. |
+| `/horizon horizon:swing` | Set the trade horizon every analysis runs at. `swing` aims at 1 to 2 weeks and grades a signal after 14 days; `position` aims at a multi-month hold and grades after 30. The horizon also sets how far price may drift before a Hold counts as wrong: ±4% for swing, ±10% for position. Signals already recorded keep the horizon they were made under. |
 
 ## Alerts & automation
 

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 import yfinance as yf
 from tradingagents.dataflows.stockstats_utils import yf_retry
 
+from backend.services.positions import drop_incomplete_bars
+
 _VIX_RISK_LEVEL = 25.0
 
 
@@ -30,7 +32,7 @@ class RegimeData:
 
 def _last_close(symbol: str) -> float | None:
     try:
-        history = yf_retry(lambda: yf.Ticker(symbol).history(period="5d"))
+        history = drop_incomplete_bars(yf_retry(lambda: yf.Ticker(symbol).history(period="5d")))
         return float(history["Close"].iloc[-1]) if len(history) else None
     except Exception:
         return None
@@ -46,7 +48,7 @@ def fetch_regime() -> RegimeData:
     vix = _last_close("^VIX")
     spy_price = spy_ma200 = None
     try:
-        history = yf_retry(lambda: yf.Ticker("SPY").history(period="1y"))
+        history = drop_incomplete_bars(yf_retry(lambda: yf.Ticker("SPY").history(period="1y")))
         if len(history) >= 200:
             spy_price = float(history["Close"].iloc[-1])
             spy_ma200 = float(history["Close"].tail(200).mean())

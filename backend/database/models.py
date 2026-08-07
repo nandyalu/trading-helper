@@ -37,6 +37,19 @@ class Signal(SQLModel, table=True):
     Benchmark fields are filled at evaluation time alongside ``outcome``;
     they stay NULL on rows resolved before the columns existed or when the
     SPY window couldn't be fetched.
+
+    ``horizon`` records which trade horizon the run used ("swing" or
+    "position", see backend/services/signals.py HORIZONS). It decides how long
+    to wait before grading and how wide the Hold band is, so a scorecard that
+    mixed horizons would be comparing two different questions. NULL means a row
+    predating the column.
+
+    The trade-plan fields (``entry_price`` through ``expected_value_r``) come
+    from the trader stage rather than the final decision text — see
+    backend/services/signals.py. They are the exit level and the quality of the
+    bet, which the portfolio manager's own output doesn't carry. All nullable:
+    NULL means "the model didn't state it", never zero, so a missing stop can
+    never be read as a stop at $0.
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -57,6 +70,12 @@ class Signal(SQLModel, table=True):
     alpha_pct: float | None = None  # ticker % move − benchmark % move over the window
     outcome_vs_benchmark: str | None = None  # "pass" | "fail"
     price_target_hit: bool | None = None  # price touched the target within the window
+    horizon: str | None = Field(default=None, index=True)  # "swing" | "position"
+    entry_price: float | None = None  # the level the trader proposed entering at
+    stop_loss: float | None = None  # the level at which the thesis is wrong
+    win_probability: float | None = None  # 0-100, the model's own estimate
+    risk_reward: float | None = None  # reward ÷ risk, computed from entry/stop/target
+    expected_value_r: float | None = None  # p×rr − (1−p), in R-multiples; signed
 
 
 class SignalReport(SQLModel, table=True):
@@ -95,6 +114,30 @@ class Alert(SQLModel, table=True):
     dedupe_key: str = Field(unique=True, index=True)
     message: str
     created_at: datetime.datetime
+
+
+class DailyBar(SQLModel, table=True):
+    """Cached daily OHLCV, one row per (ticker, date).
+
+    Only *completed* sessions are stored. A bar for the day in progress keeps
+    changing, so caching it would serve a frozen mid-session snapshot as though
+    it were a close — see backend/services/bars.py.
+
+    Every yfinance history call in the app reads through this table. Before it
+    existed the intraday watchdog refetched roughly a month of bars per ticker
+    every 15 minutes to use two closes and a volume average, and the chart, the
+    ATR, and signal grading each fetched the same bars again independently.
+    Past bars never change, so refetching them is pure waste and pure
+    rate-limit risk.
+    """
+
+    ticker: str = Field(primary_key=True)
+    date: datetime.date = Field(primary_key=True)
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
 
 
 class TickerPrice(SQLModel, table=True):

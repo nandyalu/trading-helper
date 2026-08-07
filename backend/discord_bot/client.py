@@ -15,8 +15,19 @@ from discord.ext import commands
 
 from backend.database import db
 from backend.discord_bot import notify
-from backend.services import analysis, ask, broker, digest, paper, portfolio, regime, sizing, watchdog
-from backend.services.positions import compute_position, describe_position
+from backend.services import (
+    analysis,
+    ask,
+    broker,
+    digest,
+    paper,
+    portfolio,
+    regime,
+    signals,
+    sizing,
+    watchdog,
+)
+from backend.services.positions import compute_position, describe_position, get_current_price
 from backend.services.scorecard import build_scorecard, format_scorecard_embed
 
 log = logging.getLogger("trading-bot.discord")
@@ -248,29 +259,48 @@ async def ask_cmd(interaction: discord.Interaction, ticker: str, question: str):
     await interaction.followup.send(embed=embed)
 
 
-@bot.tree.command(description="View or set account equity and risk % used for sizing suggestions")
+@bot.tree.command(description="View or set account equity and the limits used for sizing suggestions")
 @app_commands.describe(
-    equity="Account equity in dollars, e.g. 25000",
+    equity="Account equity in dollars, e.g. 2800",
     risk_pct="Percent of equity to risk per trade (default 1)",
+    max_position_pct="Ceiling on one position, as a percent of equity (default 20)",
+    max_positions="How many names may be open at once (default 5)",
 )
-async def risk(interaction: discord.Interaction, equity: float | None = None, risk_pct: float | None = None):
+async def risk(
+    interaction: discord.Interaction,
+    equity: float | None = None,
+    risk_pct: float | None = None,
+    max_position_pct: float | None = None,
+    max_positions: int | None = None,
+):
     if equity is not None and equity <= 0:
         await interaction.response.send_message("Equity must be positive.", ephemeral=True)
         return
     if risk_pct is not None and not 0 < risk_pct <= 10:
         await interaction.response.send_message("Risk % must be between 0 and 10.", ephemeral=True)
         return
-    sizing.set_risk_settings(equity, risk_pct)
+    if max_position_pct is not None and not 0 < max_position_pct <= 100:
+        await interaction.response.send_message("Max position % must be between 0 and 100.", ephemeral=True)
+        return
+    if max_positions is not None and not 1 <= max_positions <= 50:
+        await interaction.response.send_message("Max positions must be between 1 and 50.", ephemeral=True)
+        return
+    sizing.set_risk_settings(equity, risk_pct, max_position_pct, max_positions)
     current_equity, current_pct = sizing.get_risk_settings()
+    cap_pct = sizing.get_max_position_pct()
+    slots = sizing.get_max_positions()
     if current_equity is None:
         await interaction.response.send_message(
-            f"Risk per trade: {current_pct:g}% — no account equity set yet, "
-            "so Buy embeds show only the ATR stop. Set it with /risk equity:25000."
+            f"Risk per trade: {current_pct:g}% · at most {cap_pct:g}% per position · "
+            f"up to {slots} positions.\nNo account equity set yet, so Buy embeds show only "
+            "the ATR stop. Set it with /risk equity:2800."
         )
     else:
         await interaction.response.send_message(
             f"Sizing uses {current_pct:g}% risk on ${current_equity:,.0f} equity "
-            f"(~${current_equity * current_pct / 100:,.0f} per trade between entry and stop)."
+            f"(~${current_equity * current_pct / 100:,.0f} per trade between entry and stop), "
+            f"capped at ${current_equity * cap_pct / 100:,.0f} per position "
+            f"({cap_pct:g}%), across at most {slots} positions."
         )
 
 
@@ -287,8 +317,11 @@ async def analyze(interaction: discord.Interaction, ticker: str):
         return
     position = compute_position(db.get_transactions(ticker))
     sizing_field = await asyncio.to_thread(sizing.build_sizing_field, ticker, decision)
+    price = await asyncio.to_thread(get_current_price, ticker)
     message = await interaction.followup.send(
-        embed=analysis.format_decision_embed(ticker, final_state, decision, position, sizing_field)
+        embed=analysis.format_decision_embed(
+            ticker, final_state, decision, position, sizing_field, price
+        )
     )
     analysis.record_signal(ticker, final_state, decision, message_id=str(message.id))
     try:
@@ -348,6 +381,25 @@ async def dailysweep(interaction: discord.Interaction, enabled: bool):
             "Daily watchlist sweep is **off** — analyses now run only on triggers "
             "(earnings, big moves, volume) or /analyze. Signal evaluation still runs daily."
         )
+
+
+@bot.tree.command(description="Set the trade horizon every analysis runs at")
+@app_commands.describe(horizon="swing = 1-2 week trades · position = multi-month holds")
+@app_commands.choices(
+    horizon=[
+        app_commands.Choice(name="swing (1-2 weeks)", value="swing"),
+        app_commands.Choice(name="position (multi-month)", value="position"),
+    ]
+)
+async def horizon(interaction: discord.Interaction, horizon: app_commands.Choice[str]):
+    analysis.set_horizon(horizon.value)
+    params = signals.horizon_params(horizon.value)
+    await interaction.response.send_message(
+        f"Trade horizon set to **{horizon.value}** — signals are graded after "
+        f"{params['eval_days']} days by default, and a Hold passes while price "
+        f"stays within ±{params['hold_band_pct']:g}%.\n"
+        "Signals already recorded keep the horizon they were made under."
+    )
 
 
 async def start_discord() -> None:

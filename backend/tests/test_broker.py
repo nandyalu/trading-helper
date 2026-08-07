@@ -41,7 +41,10 @@ def test_new_holding_imported_and_watchlisted():
     assert len(plan.transactions) == 1
     action = plan.transactions[0]
     assert (action.ticker, action.side, action.quantity, action.price) == ("GOOG", "buy", 4.5, 209.35)
-    assert action.reason == "imported holding"
+    # _pos() carries no opened_at, so the reason records that the purchase date
+    # is unknown rather than letting it default to today — see
+    # backend/tests/test_import_dates.py for why that matters.
+    assert action.reason == "imported holding (date unknown)"
 
 
 def test_matching_position_is_noop():
@@ -72,4 +75,8 @@ def test_fully_closed_bot_ticker_reimported_if_broker_holds():
     plan = plan_sync([_pos(symbol="VERI", quantity=10.0, cost_price=2.73, last_price=1.02)],
                      bot_quantities={"VERI": 0.0}, watchlist=[])
     action = plan.transactions[0]
-    assert (action.side, action.quantity, action.reason) == ("buy", 10.0, "imported holding")
+    assert (action.side, action.quantity, action.reason) == (
+        "buy",
+        10.0,
+        "imported holding (date unknown)",
+    )

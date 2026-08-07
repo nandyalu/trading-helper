@@ -3,12 +3,13 @@ decorators (retry-on-lock, write-serializing lock).
 """
 import datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from backend.database.engine import read_session, write_session
 from backend.database.models import (
     Alert,
     BotSetting,
+    DailyBar,
     PaperSnapshot,
     PaperTransaction,
     Signal,
@@ -76,7 +77,13 @@ def get_transactions(ticker: str, *, _session: Session = None) -> list[dict]:
         select(Transaction).where(Transaction.ticker == ticker).order_by(Transaction.date)
     ).all()
     return [
-        {"side": r.side, "date": r.date.isoformat(), "price": r.price, "quantity": r.quantity}
+        {
+            "side": r.side,
+            "date": r.date.isoformat(),
+            "price": r.price,
+            "quantity": r.quantity,
+            "note": r.note,
+        }
         for r in rows
     ]
 
@@ -119,6 +126,12 @@ def record_signal(
     time_horizon_text: str | None = None,
     price_target: float | None = None,
     message_id: str | None = None,
+    horizon: str | None = None,
+    entry_price: float | None = None,
+    stop_loss: float | None = None,
+    win_probability: float | None = None,
+    risk_reward: float | None = None,
+    expected_value_r: float | None = None,
     *,
     _session: Session = None,
 ) -> int:
@@ -133,6 +146,12 @@ def record_signal(
         price_at_signal=price_at_signal,
         evaluation_date=evaluation_date,
         message_id=message_id,
+        horizon=horizon,
+        entry_price=entry_price,
+        stop_loss=stop_loss,
+        win_probability=win_probability,
+        risk_reward=risk_reward,
+        expected_value_r=expected_value_r,
     )
     _session.add(row)
     _session.commit()
@@ -327,6 +346,57 @@ def get_paper_snapshots(limit: int = 90, *, _session: Session = None) -> list[Pa
     return list(reversed(rows))
 
 
+# --- Daily bar cache (every yfinance history read goes through this) ---------
+
+
+@read_session
+def get_daily_bars(
+    ticker: str,
+    start: datetime.date,
+    end: datetime.date | None = None,
+    *,
+    _session: Session = None,
+) -> list[DailyBar]:
+    """Cached bars in [start, end], oldest first. ``end`` defaults to open-ended."""
+    query = select(DailyBar).where(DailyBar.ticker == ticker, DailyBar.date >= start)
+    if end is not None:
+        query = query.where(DailyBar.date <= end)
+    return list(_session.exec(query.order_by(DailyBar.date)).all())
+
+
+@read_session
+def get_bar_coverage(
+    ticker: str, *, _session: Session = None
+) -> tuple[datetime.date | None, datetime.date | None]:
+    """(oldest, newest) cached dates for a ticker, (None, None) when empty.
+    Callers use this to decide whether a fetch is needed at all."""
+    row = _session.exec(
+        select(func.min(DailyBar.date), func.max(DailyBar.date)).where(DailyBar.ticker == ticker)
+    ).one()
+    return (row[0], row[1]) if row else (None, None)
+
+
+@write_session
+def upsert_daily_bars(ticker: str, bars: list[dict], *, _session: Session = None) -> int:
+    """Insert or replace bars. ``bars`` items carry date/open/high/low/close/volume.
+
+    Replacing rather than skipping duplicates matters: a bar fetched moments
+    after the close can be revised by the exchange, and the later fetch is the
+    better one."""
+    written = 0
+    for bar in bars:
+        row = _session.get(DailyBar, (ticker, bar["date"]))
+        if row is None:
+            row = DailyBar(ticker=ticker, **bar)
+        else:
+            for field in ("open", "high", "low", "close", "volume"):
+                setattr(row, field, bar[field])
+        _session.add(row)
+        written += 1
+    _session.commit()
+    return written
+
+
 # --- Ticker price cache (dashboard reads; written by every live quote fetch) --
 
 
@@ -377,6 +447,18 @@ def get_latest_signal_with_target(ticker: str, *, _session: Session = None) -> S
     return _session.exec(
         select(Signal)
         .where(Signal.ticker == ticker, Signal.price_target.is_not(None))
+        .order_by(Signal.signal_date.desc(), Signal.id.desc())
+    ).first()
+
+
+@read_session
+def get_latest_signal_with_stop(ticker: str, *, _session: Session = None) -> Signal | None:
+    """Newest signal that named a stop-loss level. The newest one is the
+    current thesis, so its stop is the one still worth watching — an older
+    signal's stop was superseded, not merely graded."""
+    return _session.exec(
+        select(Signal)
+        .where(Signal.ticker == ticker, Signal.stop_loss.is_not(None))
         .order_by(Signal.signal_date.desc(), Signal.id.desc())
     ).first()
 

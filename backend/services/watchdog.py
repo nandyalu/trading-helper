@@ -20,6 +20,7 @@ from tradingagents.dataflows.stockstats_utils import yf_retry
 
 from backend.database import db
 from backend.database.models import Signal
+from backend.services import bars
 from backend.services.positions import Position, compute_position
 from backend.services.signals import price_crossed_target
 
@@ -28,6 +29,11 @@ _MARKET_OPEN = datetime.time(9, 30)
 _MARKET_CLOSE = datetime.time(16, 0)
 
 EARNINGS_LOOKAHEAD_DAYS = 2
+
+# Calendar days of history behind the volume-spike baseline. The alert text
+# says "20-day average", and ~30 calendar days is what yields 20 sessions once
+# weekends are removed.
+_VOLUME_BASELINE_DAYS = 30
 
 
 def is_us_market_hours(now: datetime.datetime | None = None) -> bool:
@@ -80,28 +86,46 @@ class DailySnapshot:
 
 
 def get_daily_snapshot(ticker: str) -> DailySnapshot | None:
-    """Best-effort like get_current_price — None on empty/failed fetch. Also
-    writes the price through to the ticker price cache, same as
-    get_current_price — this runs every 15 minutes across the whole
-    watchlist during market hours, so it's the main thing that keeps the
-    dashboard cache warm."""
-    try:
-        history = yf_retry(lambda: yf.Ticker(ticker).history(period="1mo"))
-        if len(history) < 2:
-            return None
-        price = float(history["Close"].iloc[-1])
-        prev_close = float(history["Close"].iloc[-2])
-        db.set_cached_price(ticker, price, source="yfinance")
-        return DailySnapshot(
-            price=price,
-            prev_close=prev_close,
-            day_change_pct=(price / prev_close - 1) * 100 if prev_close else 0.0,
-            last_bar_date=history.index[-1].date(),
-            today_volume=float(history["Volume"].iloc[-1]),
-            avg_volume=float(history["Volume"].iloc[:-1].mean()),
-        )
-    except Exception:
+    """Best-effort like get_current_price — None when there aren't enough bars.
+    Also writes the price through to the ticker price cache, same as
+    get_current_price — this runs every 15 minutes across the whole watchlist
+    during market hours, so it's the main thing that keeps the dashboard cache
+    warm.
+
+    The volume baseline and the previous close come from the daily bar cache,
+    because they are completed sessions and cannot change between two ticks
+    fifteen minutes apart. Only the current session is fetched live. This used
+    to refetch roughly a month of bars per ticker per tick to read two closes
+    and an average.
+
+    A bar for the day in progress that carries no prices yet (pre-market)
+    leaves ``last_bar_date`` on the previous session, and the caller's "no
+    fresh bar" check then skips this ticker — which is intended: a NaN price
+    compares false against every threshold and would silently never fire.
+    """
+    # The market date, passed through explicitly. Left to default, the cache
+    # would use the local clock, which after about 8pm ET is already tomorrow —
+    # so the session that just closed would be treated as still in progress.
+    today = datetime.datetime.now(US_MARKET_TZ).date()
+    history = bars.get_bars(
+        ticker,
+        today - datetime.timedelta(days=_VOLUME_BASELINE_DAYS),
+        include_today=True,
+        today=today,
+    )
+    if len(history) < 2:
         return None
+    latest, previous = history[-1], history[-2]
+    db.set_cached_price(ticker, latest.close, source="yfinance")
+    earlier_volumes = [bar.volume for bar in history[:-1]]
+    return DailySnapshot(
+        price=latest.close,
+        prev_close=previous.close,
+        day_change_pct=(latest.close / previous.close - 1) * 100 if previous.close else 0.0,
+        last_bar_date=datetime.date.fromisoformat(latest.date),
+        today_volume=latest.volume,
+        avg_volume=sum(earlier_volumes) / len(earlier_volumes) if earlier_volumes else 0.0,
+    )
 
 
 # --- Alert evaluation (pure) ------------------------------------------------------
@@ -110,7 +134,7 @@ def get_daily_snapshot(ticker: str) -> DailySnapshot | None:
 @dataclass
 class AlertCandidate:
     ticker: str
-    alert_type: str  # "big_move" | "volume" | "stop_loss" | "target"
+    alert_type: str  # "big_move" | "volume" | "stop_loss" | "signal_stop" | "target"
     dedupe_key: str
     message: str
     trigger_analysis: bool = False
@@ -124,6 +148,7 @@ def evaluate_ticker(
     target_signal: Signal | None,
     config: AlertConfig,
     today: datetime.date,
+    stop_signal: Signal | None = None,
 ) -> list[AlertCandidate]:
     alerts: list[AlertCandidate] = []
 
@@ -151,6 +176,34 @@ def evaluate_ticker(
             )
         )
 
+    held = any(p is not None and p.quantity > 0 for p in (real_position, paper_position))
+
+    # Two stop alerts, deliberately separate. They answer different questions
+    # and either can matter without the other:
+    #
+    # - signal_stop: price reached the level the analysis named as the point
+    #   where its thesis is wrong. The decision to exit was made at entry; this
+    #   is the reminder to execute it.
+    # - stop_loss: price is a fixed percentage below what you actually paid.
+    #   A backstop against the account, unrelated to any thesis, and the only
+    #   one available for a position with no signal behind it.
+    #
+    # Distinct dedupe keys, so each fires at most once and neither suppresses
+    # the other.
+    if held and stop_signal is not None and stop_signal.stop_loss:
+        if snapshot.price <= stop_signal.stop_loss:
+            alerts.append(
+                AlertCandidate(
+                    ticker,
+                    "signal_stop",
+                    f"signal_stop:{stop_signal.id}",
+                    f"🛑 {ticker} at ${snapshot.price:,.2f} reached the "
+                    f"${stop_signal.stop_loss:,.2f} stop from the {stop_signal.decision} "
+                    f"signal of {stop_signal.signal_date}. That analysis called this the "
+                    "level where its thesis is wrong.",
+                )
+            )
+
     stop_hits = []
     for label, position in (("real", real_position), ("paper", paper_position)):
         if position is not None and position.quantity > 0 and position.avg_cost > 0:
@@ -169,7 +222,6 @@ def evaluate_ticker(
             )
         )
 
-    held = any(p is not None and p.quantity > 0 for p in (real_position, paper_position))
     if (
         held
         and target_signal is not None
@@ -225,8 +277,16 @@ def scan_for_alerts() -> tuple[list[AlertCandidate], list[str]]:
         real_position = compute_position(db.get_transactions(ticker))
         paper_position = compute_position(db.get_paper_transactions(ticker))
         target_signal = db.get_latest_signal_with_target(ticker)
+        stop_signal = db.get_latest_signal_with_stop(ticker)
         for candidate in evaluate_ticker(
-            ticker, snapshot, real_position, paper_position, target_signal, config, today
+            ticker,
+            snapshot,
+            real_position,
+            paper_position,
+            target_signal,
+            config,
+            today,
+            stop_signal=stop_signal,
         ):
             if db.alert_already_sent(candidate.dedupe_key):
                 continue

@@ -25,6 +25,7 @@ from backend.database.models import TickerPrice
 from backend.services import analysis
 from backend.api.schemas import (
     ActionResultOut,
+    AlertOut,
     AnalyzeAllQueuedOut,
     AnalyzeQueuedOut,
     AskIn,
@@ -33,7 +34,9 @@ from backend.api.schemas import (
     PortfolioPositionOut,
     SignalOut,
     TickerDetailOut,
+    TickerEventsOut,
     TickerSummaryOut,
+    TradeOut,
 )
 from backend.services.ask import answer_about_ticker
 from backend.services.positions import compute_position, get_current_price, get_price_history
@@ -142,26 +145,52 @@ def get_chart(ticker: str, days: int = 90):
     return [OhlcBarOut.model_validate(bar) for bar in bars]
 
 
+@router.get("/{ticker}/events", response_model=TickerEventsOut)
+def get_ticker_events(ticker: str, days: int = 180):
+    """Price bars plus every signal, alert, and trade for this ticker.
+
+    One call rather than four, because the chart overlays and the timeline
+    under them are the same events drawn two ways. Fetching them separately
+    would let the chart and the list disagree while one request was still in
+    flight, and would put four round trips in front of the page that matters
+    most.
+
+    Events older than the chart window are still returned: the timeline is a
+    history, and truncating it to whatever the chart happens to show would hide
+    the earlier signals that explain a current position.
+    """
+    ticker = ticker.upper().strip()
+    bars = get_price_history(ticker, days=days)
+    trades = [
+        TradeOut(book=book, side=row["side"], date=row["date"], price=row["price"], quantity=row["quantity"])
+        for book, rows in (
+            ("real", db.get_transactions(ticker)),
+            ("paper", db.get_paper_transactions(ticker)),
+        )
+        for row in rows
+    ]
+    return TickerEventsOut(
+        ticker=ticker,
+        bars=[OhlcBarOut.model_validate(bar) for bar in bars],
+        signals=[SignalOut.model_validate(s) for s in db.get_recent_signals(ticker, limit=50)],
+        alerts=[
+            AlertOut.model_validate(a) for a in db.get_recent_alerts(limit=500) if a.ticker == ticker
+        ],
+        trades=sorted(trades, key=lambda t: t.date),
+    )
+
+
 @router.post("/analyze-all", response_model=AnalyzeAllQueuedOut, status_code=202)
 async def trigger_analyze_all():
-    """Fire-and-forget over the whole watchlist, all tickers dispatched
-    concurrently — bounded by analysis.propagate_ticker()'s own semaphore
-    (TRADINGAGENTS_MAX_CONCURRENT_ANALYSES), not by this loop, so this
-    actually uses however many GPUs the Ollama pool has instead of running
-    one ticker at a time. One ticker failing doesn't stop the rest
-    (asyncio.gather below swallows each task's own exception)."""
+    """Fire-and-forget over the whole watchlist. A full analysis takes minutes,
+    far too long for one HTTP request, so this returns 202 immediately and the
+    frontend polls GET /api/signals to see results land.
+
+    Concurrency and per-ticker error isolation both live in
+    analysis.run_analyses, shared with the scheduled sweep so the two cannot
+    drift apart."""
     tickers = db.get_watchlist()
-
-    async def _one(ticker: str) -> None:
-        try:
-            await analysis.run_analysis_and_notify(ticker)
-        except Exception:
-            log.exception("analyze-all: analysis failed for %s", ticker)
-
-    async def _dispatch_all():
-        await asyncio.gather(*(_one(ticker) for ticker in tickers))
-
-    asyncio.create_task(_dispatch_all())
+    asyncio.create_task(analysis.run_analyses(tickers))
     return AnalyzeAllQueuedOut(count=len(tickers))
 
 

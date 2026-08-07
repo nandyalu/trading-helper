@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import logging
 import os
+from collections.abc import Awaitable, Callable
 
 import discord
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -16,8 +17,22 @@ from backend.database.models import Signal
 from backend.discord_bot.notify import notify
 from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
-from backend.services.signals import extract_price_target, extract_time_horizon, parse_time_horizon_days
-from backend.services.sizing import build_sizing_field
+from backend.services.signals import (
+    BUYISH_DECISIONS,
+    DEFAULT_HORIZON,
+    HORIZONS,
+    extract_entry_price,
+    extract_expected_value,
+    extract_price_target,
+    extract_risk_reward,
+    extract_stop_loss,
+    extract_time_horizon,
+    extract_win_probability,
+    horizon_params,
+    parse_time_horizon_days,
+    plausible_level,
+)
+from backend.services.sizing import build_sizing_field, get_atr, suggest_position
 
 log = logging.getLogger("trading-bot.analysis")
 
@@ -56,6 +71,14 @@ _FIELD_MAX = 1024
 _MAX_CONCURRENT_ANALYSES = int(os.environ.get("TRADINGAGENTS_MAX_CONCURRENT_ANALYSES", "2"))
 _analysis_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_ANALYSES)
 
+# Which trade horizon every analysis runs at. TradingAgents takes this as a
+# propagate() argument and threads it into the research manager, trader,
+# portfolio manager, and (in this fork) the market analyst's indicator choice.
+# Stored as a setting rather than an env var so it can be changed without a
+# redeploy, and recorded on each Signal so the scorecard can tell signals
+# generated under different horizons apart.
+_HORIZON_SETTING_KEY = "horizon"
+
 # final_state keys worth persisting per signal (backend/database/models.py SignalReport):
 # the four analyst reports plus both researcher/trader plans. The final
 # decision text is already stored as Signal.rationale.
@@ -75,6 +98,21 @@ REPORT_KEYS = (
 _qa_graph = TradingAgentsGraph(config=DEFAULT_CONFIG.copy())
 
 
+def get_horizon() -> str:
+    """The configured trade horizon, defaulting to swing. An unrecognized
+    stored value falls back to the default rather than raising — a bad setting
+    should not stop analysis from running."""
+    stored = (db.get_setting(_HORIZON_SETTING_KEY) or "").strip().lower()
+    return stored if stored in HORIZONS else DEFAULT_HORIZON
+
+
+def set_horizon(horizon: str) -> None:
+    horizon = horizon.strip().lower()
+    if horizon not in HORIZONS:
+        raise ValueError(f"horizon must be one of {sorted(HORIZONS)}, got {horizon!r}")
+    db.set_setting(_HORIZON_SETTING_KEY, horizon)
+
+
 def _build_graph() -> TradingAgentsGraph:
     """A fresh instance per analysis run. TradingAgentsGraph.propagate()
     mutates its own state in place (self.graph — recompiled every call,
@@ -91,11 +129,89 @@ async def propagate_ticker(ticker: str) -> tuple[dict, str]:
     graph (see _build_graph) and bounding concurrent runs via
     _analysis_semaphore. Returns (final_state, decision); recording and
     Discord posting are the caller's job (order matters — see
-    run_analysis_and_notify)."""
+    run_analysis_and_notify).
+
+    ``horizon`` reaches the prompts through propagate(), and comes back out in
+    final_state, which is where record_signal reads it from — so the recorded
+    signal always carries the horizon the run actually used, even if the
+    setting changes while the analysis is in flight."""
     async with _analysis_semaphore:
         trade_date = datetime.date.today().isoformat()
+        horizon = await asyncio.to_thread(get_horizon)
         graph = await asyncio.to_thread(_build_graph)
-        return await asyncio.to_thread(graph.propagate, ticker, trade_date)
+        return await asyncio.to_thread(graph.propagate, ticker, trade_date, horizon=horizon)
+
+
+def _resolve_stop_loss(
+    ticker: str, decision: str, stated_stop: float | None, price: float
+) -> float | None:
+    """The stop the trader named (already checked for plausibility by the
+    caller), or an ATR-derived one when there isn't a usable one.
+
+    Every actionable Buy needs a defined exit, and a usable stop is missing
+    twice as often as it looks: ``stop_loss`` is optional on TraderProposal,
+    *and* a stated one is discarded when it is nowhere near the traded price.
+    Falling back to the same 2×ATR(14) level the sizing suggestion already
+    shows means the watchdog has something real to watch either way.
+
+    Only for Buy-ish decisions. A stop below the current price is meaningless
+    on a Sell, and this app is long-only.
+    """
+    if stated_stop is not None or decision not in BUYISH_DECISIONS:
+        return stated_stop
+    atr = get_atr(ticker)
+    if atr is None:
+        return None
+    suggestion = suggest_position(price, atr, equity=None)
+    return suggestion.stop if suggestion else None
+
+
+def _trade_plan_levels(
+    trader_plan: str, rationale: str, price: float | None, params: dict
+) -> dict:
+    """Entry / stop / target and the two derived numbers, with anything the
+    model invented removed.
+
+    The derived numbers go out with their inputs. ``risk_reward`` and
+    ``expected_value_r`` are computed by TradingAgents *from* the entry, stop,
+    and target, so once one of those is discarded the pair no longer describes
+    anything — keeping them would put a confident "2.40 : 1, +1.21R" beside a
+    trade that has no levels at all. ``win_probability`` is the model's own
+    estimate rather than a derivation, so it survives.
+    """
+    max_deviation = params["max_level_deviation_pct"]
+    stated = {
+        "entry_price": extract_entry_price(trader_plan),
+        "stop_loss": extract_stop_loss(trader_plan),
+        "price_target": extract_price_target(rationale),
+    }
+    # No price to check against means no basis for rejecting anything. Dropping
+    # every level would be the wrong call — an unknown price is not evidence
+    # that the model invented them.
+    kept = (
+        {name: plausible_level(value, price, max_deviation) for name, value in stated.items()}
+        if price
+        else dict(stated)
+    )
+
+    discarded = {
+        name: value for name, value in stated.items() if value is not None and kept[name] is None
+    }
+    if discarded:
+        log.warning(
+            "Discarded implausible level(s) on a signal priced at %.4f (over %.0f%% away): %s",
+            price,
+            max_deviation,
+            ", ".join(f"{name}={value}" for name, value in discarded.items()),
+        )
+
+    levels_intact = not discarded
+    return {
+        **kept,
+        "win_probability": extract_win_probability(trader_plan),
+        "risk_reward": extract_risk_reward(trader_plan) if levels_intact else None,
+        "expected_value_r": extract_expected_value(trader_plan) if levels_intact else None,
+    }
 
 
 def record_signal(ticker: str, final_state: dict, decision: str, message_id: str | None = None) -> Signal | None:
@@ -105,9 +221,21 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         return None
     rationale = final_state.get("final_trade_decision", "")
     time_horizon_text = extract_time_horizon(rationale)
+    # The exit level and the quality of the bet come from the trader's
+    # proposal, one stage before the portfolio manager — PortfolioDecision
+    # carries only a rating, summary, thesis, price target, and time horizon.
+    trader_plan = final_state.get("trader_investment_plan") or ""
+    # The run's own horizon, not the current setting — see propagate_ticker.
+    horizon = final_state.get("horizon") or get_horizon()
+    params = horizon_params(horizon)
     evaluation_date = datetime.date.today() + datetime.timedelta(
-        days=parse_time_horizon_days(time_horizon_text)
+        days=parse_time_horizon_days(
+            time_horizon_text,
+            default_days=params["eval_days"],
+            max_days=params["max_eval_days"],
+        )
     )
+    levels = _trade_plan_levels(trader_plan, rationale, price, params)
     signal_id = db.record_signal(
         ticker=ticker,
         decision=decision,
@@ -115,8 +243,14 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         price_at_signal=price,
         evaluation_date=evaluation_date,
         time_horizon_text=time_horizon_text,
-        price_target=extract_price_target(rationale),
+        price_target=levels["price_target"],
         message_id=message_id,
+        horizon=horizon,
+        entry_price=levels["entry_price"],
+        stop_loss=_resolve_stop_loss(ticker, decision, levels["stop_loss"], price),
+        win_probability=levels["win_probability"],
+        risk_reward=levels["risk_reward"],
+        expected_value_r=levels["expected_value_r"],
     )
     reports = {
         key: final_state[key]
@@ -141,7 +275,10 @@ async def run_analysis_and_notify(ticker: str) -> Signal | None:
     final_state, decision = await propagate_ticker(ticker)
     position = compute_position(db.get_transactions(ticker))
     sizing_field = await asyncio.to_thread(build_sizing_field, ticker, decision)
-    embed = format_decision_embed(ticker, final_state, decision, position, sizing_field)
+    # Fetched here as well as in record_signal so the embed's trade plan is
+    # checked against the same price the stored one is.
+    price = await asyncio.to_thread(get_current_price, ticker)
+    embed = format_decision_embed(ticker, final_state, decision, position, sizing_field, price)
     message = await notify(embed=embed)
     signal = record_signal(ticker, final_state, decision, message_id=str(message.id) if message else None)
     if message is not None:
@@ -150,6 +287,38 @@ async def run_analysis_and_notify(ticker: str) -> Signal | None:
         except discord.HTTPException:
             log.warning("Couldn't seed the ✅ reaction (missing Add Reactions permission?)")
     return signal
+
+
+async def run_analyses(
+    tickers: list[str], on_failure: Callable[[str], Awaitable[None]] | None = None
+) -> list[Signal]:
+    """Analyze several tickers at once, one failure never stopping the rest.
+
+    Concurrency is bounded by ``_analysis_semaphore`` inside propagate_ticker,
+    not by the caller — which is the whole point. A caller that awaits each
+    ticker in a loop keeps exactly one LLM request in flight no matter how many
+    backends the Ollama pool has, so every extra GPU sits idle. Dispatching
+    them together lets the semaphore admit as many as
+    TRADINGAGENTS_MAX_CONCURRENT_ANALYSES allows.
+
+    ``on_failure`` is awaited once per failed ticker, for callers that want to
+    report it (the scheduler posts to Discord; the API route just logs).
+    """
+
+    async def _one(ticker: str) -> Signal | None:
+        try:
+            return await run_analysis_and_notify(ticker)
+        except Exception:
+            log.exception("Analysis failed for %s", ticker)
+            if on_failure is not None:
+                try:
+                    await on_failure(ticker)
+                except Exception:
+                    log.exception("Failure notification failed for %s", ticker)
+            return None
+
+    results = await asyncio.gather(*(_one(ticker) for ticker in tickers))
+    return [signal for signal in results if signal is not None]
 
 
 def answer_question(context: str, question: str) -> str:
@@ -172,13 +341,51 @@ def answer_question(context: str, question: str) -> str:
     return str(content)
 
 
+def build_trade_plan_field(levels: dict) -> str | None:
+    """The trade's exit level and the quality of the bet, as one embed field.
+    None when nothing survived — an empty section is worse than no section.
+
+    Takes the already-checked levels from _trade_plan_levels rather than
+    re-reading the trader plan, so the embed and the stored signal can never
+    disagree about what the plan was. The embed is posted before record_signal
+    runs, so a level the database rejects would otherwise still be the thing
+    the reader acts on.
+    """
+    entry = levels["entry_price"]
+    stop = levels["stop_loss"]
+    probability = levels["win_probability"]
+    risk_reward = levels["risk_reward"]
+    expected_value = levels["expected_value_r"]
+
+    lines = []
+    if entry is not None:
+        lines.append(f"Entry: ${entry:,.2f}")
+    if stop is not None:
+        risk_line = f"Stop: ${stop:,.2f}"
+        if entry:
+            risk_line += f" ({(stop / entry - 1) * 100:+.1f}% from entry)"
+        lines.append(risk_line)
+    if probability is not None:
+        lines.append(f"Win probability: {probability:.0f}% (the model's own estimate)")
+    if risk_reward is not None:
+        lines.append(f"Risk/reward: {risk_reward:.2f} : 1")
+    if expected_value is not None:
+        verdict = "favorable" if expected_value > 0 else "unfavorable"
+        lines.append(f"Expected value: {expected_value:+.2f}R — {verdict}")
+    return "\n".join(lines) if lines else None
+
+
 def format_decision_embed(
     ticker: str,
     final_state: dict,
     decision: str,
     position: Position | None = None,
     sizing_field: str | None = None,
+    price: float | None = None,
 ) -> discord.Embed:
+    """``price`` is the current quote. Without it the trade-plan levels are
+    shown unchecked, which is only right for callers that have no price to
+    check against."""
     rationale = final_state.get("final_trade_decision", "") or "(none)"
     embed = discord.Embed(
         title=f"{ticker} — {decision}",
@@ -189,6 +396,17 @@ def format_decision_embed(
     if len(rationale) > _DESCRIPTION_MAX:
         overflow = rationale[_DESCRIPTION_MAX : _DESCRIPTION_MAX + _FIELD_MAX]
         embed.add_field(name="Rationale (cont.)", value=overflow, inline=False)
+
+    trade_plan = build_trade_plan_field(
+        _trade_plan_levels(
+            final_state.get("trader_investment_plan") or "",
+            rationale,
+            price,
+            horizon_params(final_state.get("horizon")),
+        )
+    )
+    if trade_plan:
+        embed.add_field(name="Trade plan", value=trade_plan[:_FIELD_MAX], inline=False)
 
     if position is not None and position.quantity > 0:
         lines = describe_position(ticker, position)

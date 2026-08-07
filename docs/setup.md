@@ -38,17 +38,37 @@ WEBULL_APP_SECRET=...
 WEBULL_SANDBOX=1   # omit/unset once you've confirmed sandbox quotes work
 ```
 
-## Reddit OAuth2 (optional)
+## Reddit OAuth2 (optional — and no longer self-serve)
 
-The sentiment analyst always reads Reddit through a public RSS search feed, and this needs no credentials — it works out of the box.
-If you set these two variables, the bot switches to Reddit's OAuth2 API instead (`TradingAgents/tradingagents/dataflows/reddit.py`).
-This raises the rate limit from RSS's occasional 429 errors to 100 requests per minute, and it adds score and comment-count metadata to what the sentiment analyst sees.
-This is purely an upgrade — nothing changes until you set both variables.
+**Skip this.** Leave `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` unset and everything works.
 
-1. Sign in at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) and click **create another app...** at the bottom.
-2. Pick **script** as the app type, not "web app". Script apps use the client-credentials grant this integration expects, with no user login flow.
-3. The name and description can be anything. The form requires a **redirect uri** field, but script apps do not use it — `http://localhost` works fine.
-4. After you create the app, the client ID is the string under the app name (it looks like `Ab12Cd34Ef56Gh`). The **secret** field is `REDDIT_CLIENT_SECRET`.
+The sentiment analyst reads Reddit through a public RSS search feed by default. That path needs no credentials and is what runs unless both variables are set (`TradingAgents/tradingagents/dataflows/reddit.py`).
+
+### Why you probably cannot set these up
+
+Reddit no longer lets you create an API app from [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps).
+Under the [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy), every new application goes through an approval request first, and the process is aimed at products rather than personal tools.
+If you try, you get a message pointing at that policy instead of a client ID.
+
+Earlier versions of this page gave step-by-step instructions for creating a script app. Those steps no longer work.
+
+### What you lose by skipping it
+
+Very little:
+
+| | RSS (default) | OAuth |
+|---|---|---|
+| Credentials | None | Approval required |
+| Rate limit | About 1 request per minute per IP | 100 per minute |
+| Post score and comment count | Not available | Included |
+
+The rate limit is the only real difference, and the RSS path already handles it: a `429` backs off once, honors `Retry-After`, and then reports "no posts found" for that subreddit rather than failing the analysis. Occasional `429` warnings in the logs are expected, not a fault.
+
+Reddit sentiment is also one input among four analysts, and the weakest of them for a 1-2 week trade. If Reddit and StockTwits both come back empty, the sentiment analyst falls back to a general web search.
+
+### If you have credentials anyway
+
+Set both variables and the OAuth path switches on by itself. Nothing else changes.
 
 ```
 REDDIT_CLIENT_ID=...

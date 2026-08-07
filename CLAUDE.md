@@ -33,6 +33,38 @@ trading-bot env`. Don't sudo-edit `/opt/stacks/...` directly — hand the user
 the exact diff/snippet to paste into the Dockge UI instead (their stated
 preference).
 
+## Ollama pool topology (deployed ≠ the repo template)
+
+`dockge/ollama-pool.compose.yaml` describes **two** backends (`ollama-pool`,
+`ollama-pool-b`) behind an nginx round-robin named `ollama-lb`. That is stale.
+What actually runs (verified 2026-08-06):
+
+- **Four** backends: `ollama-pool-a` … `ollama-pool-d`, one AMD card each
+  (gfx1030, 8 GiB).
+- `ollama-proxy` (image `ollama-proxy:local`) replaced nginx. It is a small
+  FastAPI app: least-active-connections routing, `CONCURRENCY_PER_BACKEND=1`,
+  `WAIT_TIMEOUT=600` (queues rather than 503s), and a `/healthz` endpoint
+  reporting per-backend health and active count. Still on host port 11435.
+
+**One analysis occupies exactly one GPU.** TradingAgents' graph is internally
+sequential — analysts run one after another, then the debate, then the trader —
+so a single `propagate()` never has more than one LLM request in flight. Extra
+GPUs are only used by running *several analyses at once*.
+
+That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` (currently 4) the knob that
+decides GPU utilization, and it should equal the backend count. Anything above
+it just queues in the proxy.
+
+Every multi-ticker caller must go through `analysis.run_analyses()`, which
+dispatches with `asyncio.gather` and lets the shared semaphore do the bounding.
+A `for ticker in …: await run_analysis_and_notify(ticker)` loop looks correct
+and silently pins the whole sweep to one GPU — that bug shipped in the daily
+sweep, the watchdog triggers, and the earnings check.
+
+To check which backends served a run:
+`docker logs --since 24h ollama-pool-a | grep "starting runner"` (an idle
+backend has no recent entries), or `curl localhost:11435/healthz`.
+
 ## LLM provider switching
 
 `TradingAgents/tradingagents/llm_clients/` is a full multi-provider
@@ -48,10 +80,20 @@ three vars threaded through `dockge/trading-bot.compose.yaml`'s
   `TradingAgents/tradingagents/graph/trading_graph.py`)
 - `GOOGLE_API_KEY` (passthrough, only relevant when `LLM_PROVIDER=google`)
 
-**Known-bad model:** `gemma4:e2b` previously hit a `GraphRecursionError` on
-ZBH (never terminated its reasoning loop) — `qwen3:latest` is the working
-Ollama default. Comment preserved in the compose file; don't switch back to
-gemma without expecting that failure mode.
+**Current model (2026-08-06):** `gemma4-e2b-96k`, a custom Modelfile build of
+`gemma4:e2b` with the context raised to 96k. A full analysis takes 2-3 minutes,
+against roughly 15 for `qwen3:latest`.
+
+This supersedes an earlier "known-bad model" note about `gemma4:e2b`. Stock
+`gemma4:e2b` did hit a `GraphRecursionError` on ZBH — its reasoning loop never
+terminated — but that was a context-length failure: tool-call history was being
+truncated out from under the loop. At 96k the failure does not occur. Don't
+revert to stock `gemma4:e2b` at the default context; `qwen3:latest` stays the
+known-good slow fallback.
+
+Analysis speed is what makes the 1-2 week trade horizon practical — signals
+have to be produced faster than they expire — so treat a regression here as a
+correctness problem, not a performance one.
 
 **Gemini capacity note (2026-07-30):** `gemini-3.5-flash` returned 100%
 persistent `503 UNAVAILABLE` ("high demand") over ~12h straight — looked
@@ -95,8 +137,11 @@ Remotes (in a working copy that's had the above applied):
   - #1074 retry an undecodable JSON response body instead of aborting the run
   - #1082 probability + risk/reward review on every trader proposal
   - #1134 Reddit OAuth2 (100 QPM) with automatic fallback to the RSS scraper
-    when `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` are unset — see
-    [docs/setup.md](docs/setup.md) for how to get those
+    when `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` are unset. **The OAuth path
+    is effectively dead for this project**: Reddit's Responsible Builder Policy
+    ended self-serve API app creation, so those credentials can't be obtained
+    for a personal tool. RSS is the supported path — see
+    [docs/setup.md](docs/setup.md). Don't treat 429 warnings as a bug.
   - #1122 candidate screener script + trade-horizon-aware analysis prompts
   - plus one local fix-up commit resolving integration issues between the
     above (an `UnboundLocalError` in `sentiment_analyst.py` that was latent
@@ -122,6 +167,68 @@ moved `fork/main`, etc.), the parent repo still points at the old commit
 until you also commit the updated gitlink here: `git add TradingAgents && git
 commit -m "..."` from the trading-helper root. `git status` at the root shows
 `TradingAgents` as dirty/ahead whenever the two are out of sync.
+
+## The model invents price levels (important)
+
+`gemma4-e2b` reasons acceptably in prose but does not reliably carry concrete
+figures into structured numeric fields. On 2026-08-06, 3 of 8 signals came back
+with fabricated entry / stop / target levels:
+
+| Ticker | Real price | Model's entry |
+|---|---|---|
+| GOOG | $356.62 | $2,000.00 |
+| VERI | $1.26 | $4.50 |
+| VERI | $1.25 | $30.00 |
+
+The numbers look like **prices the model remembers from training** — $2,000 is
+roughly pre-split GOOG, $30 roughly VERI's 2021 range. Two runs on the same
+stock the same day produced entries 24× apart, so it is invention, not stale
+data and not another ticker bleeding in. The market analyst's own report had
+the right prices throughout; the *trader* stage was simply never given a price.
+
+Two defenses, both in place:
+
+1. **The trader now receives the deterministic snapshot.**
+   `build_verified_market_snapshot` (computed in Python from the same OHLCV,
+   never by a model) goes into the trader prompt, which explicitly forbids
+   recalled prices and says to omit levels rather than guess.
+2. **`analysis._trade_plan_levels` discards levels far from the traded price**,
+   using `max_level_deviation_pct` per horizon (swing 35%, position 70%).
+   `risk_reward` and `expected_value_r` go out with them, since TradingAgents
+   computes both *from* those levels. `win_probability` survives — it is the
+   model's own estimate, not a derivation.
+
+Defense 2 is the one that must never be removed. A prompt cannot make a 2B
+model reliable, and a fabricated stop is worse than no stop: the watchdog arms
+an alert at a price the stock may never reach, or fires one immediately.
+
+`backend/scripts/scrub_implausible_levels.py` clears bad levels from rows
+written before the check existed.
+
+## Market data goes through the bar cache
+
+`backend/services/bars.py` is a read-through cache over the `dailybar` table
+(`(ticker, date)`). **Route any new daily-history read through `bars.get_bars()`,
+not `yf.Ticker(...).history()`** — the whole point is that a completed session
+never changes, so refetching one is waste and rate-limit risk.
+
+Two legitimate direct yfinance uses remain, neither of them history:
+`positions.get_current_price` (a quote, Webull's fallback) and
+`watchdog.get_next_earnings_date` (the calendar).
+
+Non-obvious rules the cache depends on:
+
+- **Today's bar is never stored.** It is still moving. `include_today=True` gets
+  it via a separate live request instead.
+- **Pass `today=` when the caller has a market-relative date.** The watchdog
+  does: after about 8pm ET the local clock is already tomorrow, so the default
+  would treat the just-closed session as still in progress.
+- **`_earliest_attempt` records what was asked for, not what came back.** Without
+  it, a ticker with less history than requested refetches on every call forever.
+- **`last_completed_session` ignores holidays deliberately.** The 30-minute
+  recheck throttle absorbs the resulting extra request.
+
+The table is pure cache; dropping it costs only a refetch.
 
 ## Reddit/social-sentiment data source
 

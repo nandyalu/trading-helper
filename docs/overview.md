@@ -27,19 +27,90 @@ Two kinds of intelligence run here, and the bot keeps them separate on purpose.
 - **The LLM pipeline** (TradingAgents) runs the analysis. This work is expensive and slow. Four analysts — market/technical, news, sentiment, and fundamentals — feed a bull-vs-bear research debate. A trader drafts a plan, and a risk team picks one of five decisions: **Buy, Overweight, Hold, Underweight, Sell**. The rationale usually includes a price target and a time horizon.
 - **Rule-based logic** handles everything that must be fast, cheap, and reliable: it grades outcomes, watches prices intraday, classifies the market regime, computes position sizes, and reconciles your broker account. No model is involved, so none of this can hallucinate.
 
+## Where things are served
+
+One process serves four things on the same port:
+
+| Path | What |
+|---|---|
+| `/` | The dashboard. Start here. |
+| `/docs` | These pages. |
+| `/api/…` | The JSON API. |
+| `/api/docs` | The interactive API reference, generated from the code. |
+
+The API reference used to sit at `/docs` and hid this site completely, because FastAPI registers that route before the docs are mounted.
+
+## Discord and the dashboard
+
+The two are for different jobs, and neither is a lesser version of the other.
+
+**Discord tells you when something happens.** A signal lands, a stop is reached, a target is touched — it arrives where you already are, and you can follow a signal into the paper book with one ✅.
+
+**The dashboard tells you what is happening and what already happened.** It is where the price chart, the analysis, the signals, the alerts, and your own trades sit on one time axis, so you can see whether the bot's calls actually worked.
+
+The dashboard needs no Discord account, and Discord needs no dashboard. Run either, or both.
+
 ## The signal lifecycle
 
-1. **Born** — An analysis runs, from a scheduled sweep, an event trigger, or `/analyze`. The bot stores the decision, the full rationale, all analyst reports, the price at that moment, and the parsed time horizon. The Discord embed gets a ✅ seeded on it.
-2. **Actionable** — You can follow the signal as a paper trade with the ✅ reaction, ask questions about it with `/ask`, or act on it in your real account using the suggested stop and size from the embed.
-3. **Watched** — While the signal matures, the intraday watchdog sends an alert if the price touches the signal's target or breaches a stop level on a held position.
-4. **Graded** — When the time horizon arrives (30 days by default, if the rationale did not specify one), the bot fetches the full price window since the signal and grades it three ways:
-   - **Absolute**: A Buy passes if the price rose at all. A Sell passes if the price fell. A Hold passes if the price stayed within ±10%.
-   - **vs SPY**: A Buy must have beaten SPY over the same window. A Sell must have lagged SPY — selling something that then underperformed the market was the right call. A Hold passes if alpha stayed within ±10%.
+1. **Born** — An analysis runs, from a scheduled sweep, an event trigger, or `/analyze`. The bot stores the decision, the full rationale, all analyst reports, the price at that moment, the parsed time horizon, and the trade plan (see below). The Discord embed gets a ✅ seeded on it.
+2. **Actionable** — You can follow the signal as a paper trade with the ✅ reaction, ask questions about it with `/ask`, or act on it in your real account using the stop and size from the embed.
+3. **Watched** — While the signal matures, the intraday watchdog sends an alert if the price touches the signal's target or reaches a stop level on a held position.
+4. **Graded** — When the time horizon arrives, the bot fetches the full price window since the signal and grades it three ways:
+   - **Absolute**: A Buy passes if the price rose at all. A Sell passes if the price fell. A Hold passes if the price stayed inside the horizon's band.
+   - **vs SPY**: A Buy must have beaten SPY over the same window. A Sell must have lagged SPY — selling something that then underperformed the market was the right call. A Hold passes if alpha stayed inside the same band.
    - **Target**: Did the price touch the target at any point in the window (using the window's high and low, not just the endpoint)?
 5. **Aggregated** — Every graded signal feeds `/scorecard` (win rates by decision type and ticker) and the weekly digest's rolling trend.
 
 The vs-SPY grade exists because an absolute grade can mislead you in a trending market.
 For example, a Buy that gained 1% while SPY gained 5% "passed" on the absolute grade, but it cost you money against the obvious alternative.
+
+## The trade plan
+
+Every signal carries five numbers beyond the decision itself, taken from the trader stage of the analysis:
+
+| Field | What it means |
+|---|---|
+| Entry price | The level the trader proposed entering at |
+| Stop loss | The level at which the thesis is wrong |
+| Win probability | The model's own estimate that the thesis plays out, 0 to 100 |
+| Risk / reward | Reward divided by risk, from the entry, stop, and target |
+| Expected value | `p × rr − (1 − p)`, in R-multiples. Positive means the bet pays at the stated probability |
+
+The last two are computed in Python from the levels, not asserted by the model, so they always agree with the levels shown beside them.
+The win probability is the one number the model produces rather than derives, which makes it the one worth checking against your own scorecard before trusting.
+
+Any of these can be absent — the model states them only when it has a view.
+Absent is stored as null, never as zero, so a missing stop can never be read as a stop at $0.
+
+When the trader names no stop on a Buy, the bot substitutes the same 2×ATR(14) level the sizing field shows, so every actionable Buy has an exit.
+
+## Stop alerts
+
+Two alerts watch a held position, and they answer different questions:
+
+- **Thesis broken** (`signal_stop`) — price reached the level the analysis named. The decision to exit was made at entry; this is the reminder to carry it out.
+- **Below your cost** (`stop_loss`) — price is a set percentage below what you actually paid. A backstop for the account, unrelated to any thesis, and the only one available for a position with no signal behind it.
+
+Either can fire without the other, and each fires at most once, so neither hides the other.
+
+## Trade horizon
+
+Every analysis runs at one of two horizons, set with `/horizon` or on the settings page.
+The horizon reaches the analysis prompts, so it changes what the model looks at, and it sets both grading parameters.
+
+| | Swing | Position |
+|---|---|---|
+| Intended hold | 1 to 2 weeks | Around 6 months |
+| Graded after | 14 days | 30 days |
+| Hold passes within | ±4% | ±10% |
+| The analysis weights | Near-term momentum, technical setup, immediate catalysts | Durable trends and fundamentals |
+| Market analyst prefers | 10 EMA, MACD, RSI, Bollinger, ATR, VWMA, MFI | The full indicator set, including the 50 and 200 SMA |
+
+The two bands differ because both scale with the length of the window.
+A ±10% band over six months is reasonably tight; over two weeks it is so wide that almost every Hold passes, and the grade stops telling you anything.
+
+Each signal records the horizon it was made under, so changing the setting never re-grades older signals by new rules.
+It does mean a scorecard covering both horizons is comparing two different questions — start fresh after a switch.
 
 ## The daily schedule (all times UTC, weekdays)
 

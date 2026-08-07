@@ -15,7 +15,13 @@ import yfinance as yf
 from tradingagents.dataflows.stockstats_utils import yf_retry
 
 from backend.database import db
-from backend.services.positions import Position, compute_position, get_current_price, signed_dollars
+from backend.services.positions import (
+    Position,
+    compute_position,
+    drop_incomplete_bars,
+    get_current_price,
+    signed_dollars,
+)
 
 _CONCENTRATION_WARN_PCT = 30.0
 
@@ -216,6 +222,16 @@ def build_portfolio_embed() -> discord.Embed | None:
             f"{data.comparison.benchmark_return_pct:+.1f}% (alpha {data.comparison.alpha_pct:+.1f}%), "
             f"same dollars on the same dates"
         )
+        uncompared = data.total_cost - data.comparison.compared_cost
+        if uncompared > 1:
+            totals.append(
+                f"(${uncompared:,.0f} of cost excluded from the SPY comparison — "
+                f"no purchase date, see /buy to set one)"
+            )
+    elif data.total_cost > 0:
+        totals.append(
+            "(no SPY comparison — none of these lots has a known purchase date)"
+        )
     if data.missing_prices:
         totals.append(f"(price unavailable for {', '.join(data.missing_prices)} — excluded)")
     embed.add_field(name="Totals", value="\n".join(totals), inline=False)
@@ -236,12 +252,27 @@ def open_book_vs_spy(priced: dict[str, Position], prices: dict[str, float]) -> B
     history = _spy_history_since(min(lot_dates))
     if history is None:
         return None
+    # Without this the in-progress SPY bar's NaN close makes every lot's
+    # benchmark return NaN, and the whole vs-SPY comparison silently reaches
+    # the dashboard as null instead of as a number.
+    history = drop_incomplete_bars(history)
+    if history.empty:
+        return None
     spy_now = float(history["Close"].iloc[-1])
     lots = [
         LotComparison(
             cost=lot.price * lot.quantity,
             value_now=prices[ticker] * lot.quantity,
-            benchmark_entry=_close_on_or_after(history, datetime.date.fromisoformat(lot.date)),
+            # A lot whose date is the import date, not the purchase date, has no
+            # honest benchmark entry: SPY would get days to move while the
+            # position is credited with months of gains. Leaving benchmark_entry
+            # as None drops it from both sides of the comparison, which is the
+            # same treatment lots with no benchmark data already get.
+            benchmark_entry=(
+                None
+                if lot.date_estimated
+                else _close_on_or_after(history, datetime.date.fromisoformat(lot.date))
+            ),
             benchmark_now=spy_now,
         )
         for ticker, position in priced.items()

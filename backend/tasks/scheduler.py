@@ -25,7 +25,7 @@ from backend.services import analysis, broker, paper, regime, watchdog
 from backend.services.digest import build_weekly_digest_embed
 from backend.discord_bot.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
-from backend.services.signals import SignalEvaluation, evaluate_signal_window
+from backend.services.signals import SignalEvaluation, evaluate_signal_window, horizon_params
 
 log = logging.getLogger("trading-bot.scheduler")
 
@@ -79,6 +79,10 @@ async def _evaluate_pending_signals() -> None:
             price_target=signal.price_target,
             window_high=window.high,
             window_low=window.low,
+            # Per-signal, not the current setting: a Hold graded over two weeks
+            # needs a much tighter band than one graded over six months, and
+            # changing the horizon must not re-grade older signals by new rules.
+            hold_band_pct=horizon_params(signal.horizon)["hold_band_pct"],
         )
         db.resolve_signal(
             signal.id,
@@ -93,13 +97,17 @@ async def _evaluate_pending_signals() -> None:
         await notify(_format_outcome_line(signal, evaluation, window.last_close))
 
 
-async def _run_triggered_analysis(ticker: str, reason: str) -> None:
-    await notify(f"⚡ {reason} — running an analysis of {ticker}...")
-    try:
-        await analysis.run_analysis_and_notify(ticker)
-    except Exception:
-        log.exception("Triggered analysis failed for %s", ticker)
-        await notify(f"Triggered analysis failed for {ticker} — check the logs.")
+async def _run_triggered_analyses(reasons: dict[str, str]) -> None:
+    """``reasons`` maps ticker to why it was triggered. Announces each, then
+    runs them together — the shared semaphore is the backpressure, not this
+    function, so several triggered tickers use several GPUs instead of queueing
+    behind each other."""
+    for ticker, reason in reasons.items():
+        await notify(f"⚡ {reason} — running an analysis of {ticker}...")
+    await analysis.run_analyses(
+        list(reasons),
+        on_failure=lambda ticker: notify(f"Triggered analysis failed for {ticker} — check the logs."),
+    )
 
 
 async def _daily_signals_job() -> None:
@@ -113,12 +121,15 @@ async def _daily_signals_job() -> None:
         log.exception("Paper snapshot failed")
     if db.get_setting("daily_sweep") == "off":
         return  # event-triggered analyses only (/dailysweep); evaluation above still ran
-    for ticker in db.get_watchlist():
-        try:
-            await analysis.run_analysis_and_notify(ticker)
-        except Exception:
-            log.exception("Daily analysis failed for %s", ticker)
-            await notify(f"Daily analysis failed for {ticker} — check the logs.")
+    # Dispatched together, not one await at a time: a sequential loop keeps
+    # exactly one LLM request in flight regardless of how many backends the
+    # Ollama pool has, so every GPU past the first sits idle for the whole
+    # sweep. analysis.run_analyses bounds concurrency with the shared semaphore
+    # (TRADINGAGENTS_MAX_CONCURRENT_ANALYSES) instead.
+    await analysis.run_analyses(
+        db.get_watchlist(),
+        on_failure=lambda ticker: notify(f"Daily analysis failed for {ticker} — check the logs."),
+    )
 
 
 def daily_signals() -> None:
@@ -138,8 +149,10 @@ async def _alert_watchdog_job() -> None:
         return
     for alert in alerts:
         await notify(alert.message)
-    for ticker in to_analyze:
-        await _run_triggered_analysis(ticker, "Unusual price/volume action")
+    if to_analyze:
+        await _run_triggered_analyses(
+            {ticker: "Unusual price/volume action" for ticker in to_analyze}
+        )
 
 
 def alert_watchdog() -> None:
@@ -156,9 +169,16 @@ async def _earnings_check_job() -> None:
     except Exception:
         log.exception("Earnings calendar check failed")
         return
-    for ticker, earnings_date in upcoming:
-        when = "today" if earnings_date == datetime.date.today() else f"on {earnings_date}"
-        await _run_triggered_analysis(ticker, f"{ticker} reports earnings {when}")
+    if upcoming:
+        await _run_triggered_analyses(
+            {
+                ticker: (
+                    f"{ticker} reports earnings "
+                    f"{'today' if earnings_date == datetime.date.today() else f'on {earnings_date}'}"
+                )
+                for ticker, earnings_date in upcoming
+            }
+        )
 
 
 def earnings_check() -> None:

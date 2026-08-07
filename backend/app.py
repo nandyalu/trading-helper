@@ -10,10 +10,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
+    alerts,
     digest,
     jobs,
     paper,
@@ -48,7 +49,18 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()  # mandatory per quiv's own docs — cancels jobs, deletes its temp DB
 
 
-app = FastAPI(title="Trading Helper", lifespan=lifespan)
+# FastAPI's own interactive API reference moves under /api, because /docs
+# belongs to the user-facing Zensical site mounted below. FastAPI registers its
+# routes at construction, before any mount, so leaving it at the default made
+# Swagger UI shadow the real docs entirely — the /docs link in the dashboard
+# nav reached the API reference instead.
+app = FastAPI(
+    title="Trading Helper",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
 
 app.include_router(watchlist.router)
 app.include_router(tickers.router)
@@ -60,10 +72,20 @@ app.include_router(digest.router)
 app.include_router(regime.router)
 app.include_router(settings.router)
 app.include_router(transactions.router)
+app.include_router(alerts.router)
 app.include_router(jobs.router)
 
 if _SITE_DIR.is_dir():
     app.mount("/docs", StaticFiles(directory=_SITE_DIR, html=True), name="docs")
+
+    # A Mount at "/docs" only matches "/docs/...", so a bare "/docs" — which is
+    # what the dashboard nav links to and what anyone types — falls through to
+    # the SPA catch-all below and silently lands on the dashboard home instead
+    # of the docs. Starlette would normally redirect, but only for paths its
+    # Mount actually matches. Redirect explicitly, before the catch-all.
+    @app.get("/docs", include_in_schema=False)
+    async def docs_index() -> RedirectResponse:
+        return RedirectResponse("/docs/")
 else:
     log.info("No built docs at %s — /docs not mounted (run `zensical build`)", _SITE_DIR)
 

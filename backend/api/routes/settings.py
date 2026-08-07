@@ -5,7 +5,7 @@ this just gives them one JSON shape instead of four Discord commands."""
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.services import broker, paper, sizing, watchdog
+from backend.services import analysis, broker, paper, sizing, watchdog
 from backend.api.schemas import ActionResultOut, SettingsOut, SettingsPatchIn
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -15,9 +15,12 @@ def _current_settings() -> SettingsOut:
     equity, risk_pct = sizing.get_risk_settings()
     alerts = watchdog.load_config()
     return SettingsOut(
+        horizon=analysis.get_horizon(),
         paper_notional=paper.get_notional(),
         risk_equity=equity,
         risk_pct=risk_pct,
+        max_position_pct=sizing.get_max_position_pct(),
+        max_positions=sizing.get_max_positions(),
         alert_move_pct=alerts.move_pct,
         alert_stop_pct=alerts.stop_pct,
         alert_volume_mult=alerts.volume_mult,
@@ -33,6 +36,12 @@ def get_settings():
 
 @router.patch("", response_model=SettingsOut)
 def update_settings(payload: SettingsPatchIn):
+    if payload.horizon is not None:
+        try:
+            analysis.set_horizon(payload.horizon)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if payload.paper_notional is not None:
         if not 0 < payload.paper_notional <= 1_000_000:
             raise HTTPException(status_code=400, detail="Paper notional must be between $0 and $1,000,000.")
@@ -42,8 +51,17 @@ def update_settings(payload: SettingsPatchIn):
         raise HTTPException(status_code=400, detail="Equity must be positive.")
     if payload.risk_pct is not None and not 0 < payload.risk_pct <= 10:
         raise HTTPException(status_code=400, detail="Risk % must be between 0 and 10.")
-    if payload.risk_equity is not None or payload.risk_pct is not None:
-        sizing.set_risk_settings(payload.risk_equity, payload.risk_pct)
+    if payload.max_position_pct is not None and not 0 < payload.max_position_pct <= 100:
+        raise HTTPException(status_code=400, detail="Max position % must be between 0 and 100.")
+    if payload.max_positions is not None and not 1 <= payload.max_positions <= 50:
+        raise HTTPException(status_code=400, detail="Max positions must be between 1 and 50.")
+    if any(
+        value is not None
+        for value in (payload.risk_equity, payload.risk_pct, payload.max_position_pct, payload.max_positions)
+    ):
+        sizing.set_risk_settings(
+            payload.risk_equity, payload.risk_pct, payload.max_position_pct, payload.max_positions
+        )
 
     for key, value in (
         ("alert_move_pct", payload.alert_move_pct),

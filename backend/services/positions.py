@@ -16,11 +16,22 @@ from backend.database import db
 _EPSILON = 1e-9
 
 
+# Marks a transaction whose date is the day it was imported, not the day the
+# shares were actually bought — see backend/services/broker.py. Anything
+# date-sensitive has to leave these lots out rather than trust the date.
+ESTIMATED_DATE_NOTE = "date unknown"
+
+
 @dataclass
 class Lot:
     date: str
     price: float
     quantity: float
+    # True when ``date`` is the import date rather than the purchase date. A
+    # benchmark comparison anchored on an import date measures nothing: the
+    # benchmark gets a few days to move while the position is credited with
+    # months of gains, which reads as enormous alpha.
+    date_estimated: bool = False
 
 
 @dataclass
@@ -37,7 +48,14 @@ def compute_position(transactions: list[dict]) -> Position:
 
     for tx in transactions:
         if tx["side"] == "buy":
-            open_lots.append(Lot(date=tx["date"], price=tx["price"], quantity=tx["quantity"]))
+            open_lots.append(
+                Lot(
+                    date=tx["date"],
+                    price=tx["price"],
+                    quantity=tx["quantity"],
+                    date_estimated=ESTIMATED_DATE_NOTE in (tx.get("note") or ""),
+                )
+            )
         else:
             remaining = tx["quantity"]
             while remaining > _EPSILON and open_lots:
@@ -67,7 +85,10 @@ def get_current_price(ticker: str) -> float | None:
         db.set_cached_price(ticker, price, source="webull")
         return price
     try:
-        history = yf_retry(lambda: yf.Ticker(ticker).history(period="1d"))
+        # period="1d" during an open session returns only the partial bar, so
+        # without the drop this fetches a NaN and caches it as the price.
+        history = yf_retry(lambda: yf.Ticker(ticker).history(period="5d"))
+        history = drop_incomplete_bars(history)
         if history.empty:
             return None
         price = float(history["Close"].iloc[-1])
@@ -75,6 +96,26 @@ def get_current_price(ticker: str) -> float | None:
         return price
     except Exception:
         return None
+
+
+def drop_incomplete_bars(history, columns: tuple[str, ...] = ("Close",)):
+    """Drop rows missing any of ``columns``.
+
+    While a US session is open, yfinance appends a row for the day in progress
+    that carries a volume but NaN prices. Nothing here checks for that, and
+    every reader takes ``.iloc[-1]``, so the NaN propagates silently: a NaN
+    price is cached as the current price, a NaN close is written to a graded
+    signal, and NaN compares false against every threshold — so a Buy that
+    actually won is recorded as a loss. It reaches JSON as ``null`` rather than
+    as an error, which is why it went unnoticed.
+
+    Call this on any yfinance frame before reading values off it. ``.max()``
+    and ``.min()`` already skip NaN, so only the positional reads were wrong.
+    """
+    if history is None or history.empty:
+        return history
+    present = [column for column in columns if column in history.columns]
+    return history.dropna(subset=present) if present else history
 
 
 @dataclass
@@ -88,20 +129,23 @@ class PriceWindow:
 
 
 def get_price_window(ticker: str, start: datetime.date) -> PriceWindow | None:
-    """Best-effort like get_current_price — None on empty/failed fetch. If
-    ``start`` is a non-trading day the window begins at the next session."""
-    try:
-        history = yf_retry(lambda: yf.Ticker(ticker).history(start=start.isoformat()))
-        if history.empty:
-            return None
-        return PriceWindow(
-            first_close=float(history["Close"].iloc[0]),
-            last_close=float(history["Close"].iloc[-1]),
-            high=float(history["High"].max()),
-            low=float(history["Low"].min()),
-        )
-    except Exception:
+    """Best-effort like get_current_price — None when no bars are available. If
+    ``start`` is a non-trading day the window begins at the next session.
+
+    Served from the daily bar cache (backend/services/bars.py). Today is
+    included because a signal maturing today should be graded against the
+    latest price available, not against yesterday's close."""
+    from backend.services import bars  # lazy: bars imports from this module
+
+    window = bars.get_bars(ticker, start, include_today=True)
+    if not window:
         return None
+    return PriceWindow(
+        first_close=window[0].close,
+        last_close=window[-1].close,
+        high=max(bar.high for bar in window),
+        low=min(bar.low for bar in window),
+    )
 
 
 @dataclass
@@ -119,25 +163,15 @@ def get_price_history(ticker: str, days: int = 90) -> list[OhlcBar]:
 
     Unlike ``get_price_window``, which collapses the same yfinance frame down
     to 4 summary scalars for signal grading, this keeps every row. Best-effort
-    like the other price lookups here — empty list on a failed/empty fetch."""
+    like the other price lookups here — empty list on a failed/empty fetch.
+
+    Served from the daily bar cache (backend/services/bars.py), with today's
+    partial bar appended live so the chart's last candle is the current
+    session rather than yesterday."""
+    from backend.services import bars  # lazy: bars imports from this module
+
     start = datetime.date.today() - datetime.timedelta(days=days)
-    try:
-        history = yf_retry(lambda: yf.Ticker(ticker).history(start=start.isoformat()))
-        if history.empty:
-            return []
-    except Exception:
-        return []
-    return [
-        OhlcBar(
-            date=timestamp.date().isoformat(),
-            open=float(row["Open"]),
-            high=float(row["High"]),
-            low=float(row["Low"]),
-            close=float(row["Close"]),
-            volume=float(row["Volume"]),
-        )
-        for timestamp, row in history.iterrows()
-    ]
+    return bars.get_bars(ticker, start, include_today=True)
 
 
 def signed_dollars(amount: float) -> str:

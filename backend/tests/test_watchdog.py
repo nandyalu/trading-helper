@@ -39,10 +39,34 @@ def _target_signal(price_target=120.0, price_at_signal=100.0, decision="Buy"):
     )
 
 
-def _evaluate(snapshot, real=None, paper=None, target_signal=None, config=None):
-    return evaluate_ticker(
-        "NVDA", snapshot, real, paper, target_signal, config or AlertConfig(), _TODAY
+def _stop_signal(stop_loss=90.0, signal_id=11, decision="Buy"):
+    return Signal(
+        id=signal_id,
+        ticker="NVDA",
+        signal_date=datetime.date(2026, 7, 1),
+        decision=decision,
+        rationale="",
+        price_at_signal=100.0,
+        stop_loss=stop_loss,
+        evaluation_date=datetime.date(2026, 8, 1),
     )
+
+
+def _evaluate(snapshot, real=None, paper=None, target_signal=None, config=None, stop_signal=None):
+    return evaluate_ticker(
+        "NVDA",
+        snapshot,
+        real,
+        paper,
+        target_signal,
+        config or AlertConfig(),
+        _TODAY,
+        stop_signal=stop_signal,
+    )
+
+
+def _types(alerts):
+    return [a.alert_type for a in alerts]
 
 
 # --- market hours -------------------------------------------------------------
@@ -103,6 +127,51 @@ def test_stop_loss_covers_both_books_in_one_alert():
 def test_stop_loss_ignores_closed_positions():
     alerts = _evaluate(
         _snapshot(price=85.0, prev_close=86.0), real=_position(quantity=0.0, avg_cost=100.0)
+    )
+    assert alerts == []
+
+
+def test_signal_stop_fires_when_price_reaches_the_analysis_level():
+    # Price at the stop, avg cost close enough that the percentage rule stays
+    # quiet — this isolates the signal-stop rule.
+    snapshot = _snapshot(price=90.0, prev_close=91.0)
+    alerts = _evaluate(snapshot, real=_position(avg_cost=95.0), stop_signal=_stop_signal(90.0))
+    assert _types(alerts) == ["signal_stop"]
+    assert alerts[0].dedupe_key == "signal_stop:11"
+    assert "$90.00 stop" in alerts[0].message
+    assert alerts[0].trigger_analysis is False
+
+
+def test_signal_stop_stays_quiet_above_the_level():
+    snapshot = _snapshot(price=90.5, prev_close=91.0)
+    assert _evaluate(snapshot, real=_position(avg_cost=95.0), stop_signal=_stop_signal(90.0)) == []
+
+
+def test_signal_stop_requires_an_open_position():
+    # A stop on a ticker you only watch is not actionable.
+    snapshot = _snapshot(price=85.0, prev_close=86.0)
+    assert _types(_evaluate(snapshot, stop_signal=_stop_signal(90.0))) == []
+
+
+def test_signal_stop_and_percentage_stop_are_independent():
+    # Both true at once: price is under the thesis level AND well below cost.
+    # They answer different questions, so both fire, each with its own key.
+    snapshot = _snapshot(price=85.0, prev_close=86.0)
+    alerts = _evaluate(snapshot, real=_position(avg_cost=100.0), stop_signal=_stop_signal(90.0))
+    assert _types(alerts) == ["signal_stop", "stop_loss"]
+    assert len({a.dedupe_key for a in alerts}) == 2
+
+
+def test_percentage_stop_still_covers_positions_with_no_signal():
+    snapshot = _snapshot(price=85.0, prev_close=86.0)
+    alerts = _evaluate(snapshot, real=_position(avg_cost=100.0), stop_signal=None)
+    assert _types(alerts) == ["stop_loss"]
+
+
+def test_signal_without_a_stop_level_is_ignored():
+    snapshot = _snapshot(price=90.0, prev_close=91.0)
+    alerts = _evaluate(
+        snapshot, real=_position(avg_cost=95.0), stop_signal=_stop_signal(stop_loss=None)
     )
     assert alerts == []
 

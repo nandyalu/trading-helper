@@ -12,11 +12,12 @@ real holdings from every non-crypto account via the Trade API, then:
 ``plan_sync`` is pure and unit-tested; ``run_sync`` does the I/O. All
 blocking — call via asyncio.to_thread.
 """
+import datetime
 import logging
 from dataclasses import dataclass, field
 
 from backend.database import db
-from backend.services.positions import compute_position
+from backend.services.positions import ESTIMATED_DATE_NOTE, compute_position
 from backend.services.quotes import get_api_client
 
 log = logging.getLogger("trading-bot.broker")
@@ -31,6 +32,42 @@ class BrokerPosition:
     quantity: float
     cost_price: float
     last_price: float | None = None
+    opened_at: datetime.date | None = None  # None when the payload carries no date
+
+
+# Candidate keys for the date a position was opened. The Webull SDK returns raw
+# dicts with no schema, so which of these (if any) is present has to be
+# discovered from a live payload. Trying several is harmless — an absent key
+# just leaves the date unknown, which is handled honestly downstream rather
+# than being papered over with today's date.
+_OPENED_AT_KEYS = ("open_date", "position_date", "opened_at", "open_time", "created_time", "trade_date")
+
+
+def _parse_opened_at(raw: dict) -> datetime.date | None:
+    """Best-effort date extraction. Accepts an ISO date/datetime string or an
+    epoch in seconds or milliseconds; returns None for anything else, and for a
+    date in the future (a clock or unit mix-up, not a real purchase)."""
+    for key in _OPENED_AT_KEYS:
+        value = raw.get(key)
+        if value in (None, ""):
+            continue
+        parsed: datetime.date | None = None
+        if isinstance(value, (int, float)) or str(value).isdigit():
+            epoch = float(value)
+            if epoch > 1e11:  # milliseconds
+                epoch /= 1000
+            try:
+                parsed = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).date()
+            except (OverflowError, OSError, ValueError):
+                continue
+        else:
+            try:
+                parsed = datetime.date.fromisoformat(str(value)[:10])
+            except ValueError:
+                continue
+        if parsed and parsed <= datetime.date.today():
+            return parsed
+    return None
 
 
 # --- Fetch (blocking) -----------------------------------------------------------
@@ -58,7 +95,13 @@ def _parse_position(raw: dict) -> BrokerPosition | None:
         return None
     if quantity <= _EPSILON or cost_price <= 0:
         return None
-    return BrokerPosition(symbol=symbol, quantity=quantity, cost_price=cost_price, last_price=last_price)
+    return BrokerPosition(
+        symbol=symbol,
+        quantity=quantity,
+        cost_price=cost_price,
+        last_price=last_price,
+        opened_at=_parse_opened_at(raw),
+    )
 
 
 def fetch_broker_positions() -> list[BrokerPosition] | None:
@@ -113,6 +156,7 @@ class SyncAction:
     price: float
     quantity: float
     reason: str
+    date: datetime.date | None = None  # None when the broker gave no date
 
 
 @dataclass
@@ -144,9 +188,24 @@ def plan_sync(
         if abs(delta) <= _EPSILON:
             continue
         if delta > 0:
-            reason = "imported holding" if bot_quantity <= _EPSILON else "quantity drift"
+            imported = bot_quantity <= _EPSILON
+            reason = "imported holding" if imported else "quantity drift"
+            # A first import is shares bought at some unknown past date. Say so
+            # when the broker didn't tell us, rather than recording it as bought
+            # today — a wrong date silently inflates the vs-SPY alpha, because
+            # the benchmark gets days to move while the position is credited
+            # with months of gains. Drift is genuinely new, so today is right.
+            if imported and position.opened_at is None:
+                reason = f"imported holding ({ESTIMATED_DATE_NOTE})"
             plan.transactions.append(
-                SyncAction(position.symbol, "buy", position.cost_price, delta, reason)
+                SyncAction(
+                    position.symbol,
+                    "buy",
+                    position.cost_price,
+                    delta,
+                    reason,
+                    date=position.opened_at if imported else None,
+                )
             )
         else:
             # Broker holds less than the bot thinks: mirror the reduction at
@@ -186,6 +245,7 @@ def run_sync() -> str | None:
             action.side,
             action.price,
             action.quantity,
+            date=action.date,
             note=f"{_SYNC_NOTE}: {action.reason}",
         )
 

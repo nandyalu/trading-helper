@@ -43,6 +43,12 @@ class SignalOut(OrmModel):
     alpha_pct: float | None
     outcome_vs_benchmark: str | None
     price_target_hit: bool | None
+    horizon: str | None
+    entry_price: float | None
+    stop_loss: float | None
+    win_probability: float | None
+    risk_reward: float | None
+    expected_value_r: float | None
 
 
 class SignalDetailOut(SignalOut):
@@ -141,6 +147,32 @@ class TickerDetailOut(BaseModel):
     latest_signal: SignalOut | None
 
 
+class TradeOut(BaseModel):
+    """A recorded buy or sell, in either book. ``book`` distinguishes them so
+    one timeline can carry both without the caller joining two lists."""
+
+    book: str  # "real" | "paper"
+    side: str  # "buy" | "sell"
+    date: date
+    price: float
+    quantity: float
+
+
+class TickerEventsOut(BaseModel):
+    """Everything that happened to one ticker, in one call.
+
+    The chart overlays and the timeline below it are the same events drawn two
+    ways, so fetching them separately would let the two views disagree while
+    one request was still in flight.
+    """
+
+    ticker: str
+    bars: list[OhlcBarOut]
+    signals: list[SignalOut]
+    alerts: list[AlertOut]
+    trades: list[TradeOut]
+
+
 class AnalyzeQueuedOut(BaseModel):
     status: str = "queued"
     ticker: str
@@ -186,9 +218,12 @@ class RegimeOut(OrmModel):
 
 
 class SettingsOut(BaseModel):
+    horizon: str  # "swing" | "position"
     paper_notional: float
     risk_equity: float | None
     risk_pct: float
+    max_position_pct: float
+    max_positions: int
     alert_move_pct: float
     alert_stop_pct: float
     alert_volume_mult: float
@@ -197,9 +232,12 @@ class SettingsOut(BaseModel):
 
 
 class SettingsPatchIn(BaseModel):
+    horizon: str | None = None
     paper_notional: float | None = None
     risk_equity: float | None = None
     risk_pct: float | None = None
+    max_position_pct: float | None = None
+    max_positions: int | None = None
     alert_move_pct: float | None = None
     alert_stop_pct: float | None = None
     alert_volume_mult: float | None = None

@@ -32,8 +32,11 @@ Follow a signal without real money, with one click:
 - The bot seeds a ✅ reaction on every analysis embed it posts.
 - Clicking ✅ executes that signal as a paper trade **at the current price** (an honest
   fill — you can't trade at a past price):
-  - **Buy/Overweight** → opens a lot sized to a fixed notional (default $1,000,
-    configurable via `/papersize`).
+  - **Buy/Overweight** → opens a lot sized the same way a real one would be: the ATR
+    risk sizing from `/risk`, limited by the per-position cap. Falls back to a fixed
+    notional (default $1,000, configurable via `/papersize`) only when no account
+    equity is set. Matching the two books is what makes the paper equity curve
+    evidence about the real account.
   - **Sell/Underweight** → closes the entire open paper position (FIFO), reporting
     realized P&L. No shorting in v1 — reacting to a Sell with no open position just says so.
   - **Hold** → nothing to execute; the bot replies saying so.
@@ -97,13 +100,202 @@ budgets the context (~4k chars per report, 24k total) for the small local model.
 ### 4.3 Position sizing & risk levels in the embed
 Buy/Overweight embeds now carry a "Suggested sizing" field: a 2×ATR(14) stop, and — once
 `/risk equity:… risk_pct:…` is configured — a share count that puts that % of equity at
-risk between entry and stop, capped at 100% of equity (backend/services/sizing.py).
+risk between entry and stop, then limited to `max_position_pct` of equity (20% by
+default). The field also warns when `max_positions` names are already open
+(backend/services/sizing.py).
+
+The position cap is not redundant with risk sizing. Risk sizing bounds the loss if the
+stop is hit; the cap bounds concentration. A low-ATR stock produces a large share count
+from a small risk budget, and the earlier 100%-of-equity limit was no limit at all for
+anyone holding more than one name.
 
 ### 4.4 Paper equity curve vs SPY
 The daily task snapshots the paper book into `papersnapshot` (upsert per day). /paper
 grows a Performance section: P&L sparkline since the first snapshot, max drawdown, SPY
 buy-and-hold over the same span, and the lot-by-lot open-book vs-SPY comparison shared
 with /portfolio.
+
+## Phase 5 — Retarget at 1-2 week swing trades *(implemented)*
+
+Every analysis before this ran at TradingAgents' default `position` horizon — a
+roughly 6-month thesis — because `propagate()` was never passed a `horizon`. The
+recorded signals answered a question the user was not asking.
+
+### 5.1 Horizon threaded end to end
+A `horizon` setting (`swing` by default) reaches `graph.propagate()`, so it changes what
+the analysis weights. In the vendored fork, `get_horizon_instruction` now states 1 to 2
+weeks rather than "a few days", and a new `get_indicator_instruction` steers the market
+analyst toward indicators that resolve inside that window — the base prompt leads with
+the 50 and 200 SMA, which its own text calls unsuited to frequent entries.
+
+The horizon also sets both grading parameters, because both scale with the window:
+signals are graded after 14 days rather than 30, and a Hold passes within ±4% rather than
+±10%. A ±10% band over two weeks passes almost every Hold, which makes the grade
+meaningless.
+
+Each `signal` row records its own horizon, so changing the setting never re-grades older
+signals by new rules.
+
+### 5.2 Small-account sizing limits
+See 4.3 — a per-position cap and a max-open-positions warning, and paper buys now using
+the same sizing as real ones.
+
+### 5.3 Start fresh
+`backend/scripts/reset_signals.py` deletes signals and everything derived from them
+(reports, paper trades, paper snapshots), in foreign-key order. It is deliberately a
+script and not a migration: a migration would run on every deployment. Real transactions,
+the watchlist, settings, and the price cache survive.
+
+### 5.4 The trade plan is kept, not discarded
+TradingAgents computes an entry price, a stop-loss, a win probability, a risk/reward
+ratio, and an expected value for every analysis — on `TraderProposal`, one stage before
+the portfolio manager. `PortfolioDecision` carries none of it, and `record_signal` read
+only the final decision text, so all of it was thrown away.
+
+Five nullable columns on `signal` now keep it, parsed from
+`final_state["trader_investment_plan"]` by pure extractors in
+backend/services/signals.py. The risk/reward and expected value are computed in
+TradingAgents from the levels rather than asserted by the model, so they stay consistent
+with the levels shown beside them. Nullable matters: a missing stop read as 0.0 would
+look like a stop at $0.
+
+The Discord embed grows a "Trade plan" field and the signal detail page a matching
+section. Both also now show `alpha_pct`, `outcome_vs_benchmark`, and `price_target_hit`,
+which were stored but never rendered on the web.
+
+### 5.5 Stop alerts keyed to the analysis
+The watchdog gains a `signal_stop` alert that fires when a held ticker reaches the stop
+level its own analysis named. The existing `stop_loss` alert (a fixed percentage below
+your average cost) stays, with a separate dedupe key.
+
+They are deliberately independent, because they answer different questions: `signal_stop`
+means the thesis is broken, `stop_loss` means you are down a set amount on what you
+actually paid. Either can be true without the other, and a position with no signal behind
+it has only the second.
+
+When the trader names no stop on a Buy, `record_signal` falls back to the same
+2×ATR(14) level the sizing field already displays, so every actionable Buy has an exit
+the watchdog can watch.
+
+### 5.6 Alerts are visible outside Discord
+`GET /api/alerts` plus an Alerts page. The alert log existed and was written on every
+scan, but only ever surfaced in the weekly digest. At a 1-2 week horizon the alerts are
+the channel that matters most.
+
+*Still open:* the conviction filter (thresholds on win probability and risk/reward, with
+the scorecard split by band) and calibrating the stated win probability against realized
+outcomes. Both need a few months of swing signals first.
+
+## Phase 6 — The dashboard as the place you look *(implemented)*
+
+Discord is good at telling you something happened. It is bad at showing what happened, and
+worse at showing whether any of it worked. The web app existed but was a set of separate
+tables — the price chart knew nothing about the signals, and the signals knew nothing about
+the alerts.
+
+### 6.1 The chart carries the analysis
+`GET /api/tickers/{t}/events` returns bars, signals, alerts, and trades in one call, because
+the chart overlays and the timeline below them are the same events drawn two ways; fetching
+them separately let the two disagree mid-flight.
+
+The chart draws signal arrows (up for Buy-ish, down for Sell-ish), trade squares, alert dots,
+and dashed stop and target lines from the signal currently in force. Entries sit below the bar
+and exits above it so they cannot overlap.
+
+### 6.2 One timeline per ticker
+Signals, alerts, and trades merged newest-first, with the graded outcome on each signal. Three
+tables, three shapes, one list — the reader should not have to interleave them by eye.
+
+### 6.3 An Overview page
+A landing page that answers "is there anything I should do?" — held tickers whose newest
+analysis says exit, and recent stop/target alerts, above everything else. Informational alerts
+(big move, volume) stay off it. The win rate shows a raw count until ~20 signals have resolved.
+
+### 6.4 /docs belongs to the docs
+FastAPI registers its Swagger UI at construction, before the Zensical site is mounted, so
+`/docs` served the API reference and the real docs were unreachable. The API reference moved to
+`/api/docs`, alongside `/api/redoc` and `/api/openapi.json`.
+
+### 6.5 The in-progress bar (a correctness fix, found via a blank chart)
+While a session is open, yfinance appends a row for that day with a volume but NaN prices.
+Every reader took `.iloc[-1]`, so the NaN propagated silently — it reaches JSON as `null`, not
+as an error. Three consequences, all live before this fix:
+
+- `get_price_window` returned a NaN `last_close`, so **graded signals stored NaN and their
+  pass/fail came out wrong** — NaN compares false against every threshold, so a Buy that won
+  was recorded as a loss.
+- `open_book_vs_spy` returned NaN, so the **vs-SPY comparison silently reached the dashboard
+  as null** rather than as a number.
+- `fetch_regime` lost the SPY price and the SPY-vs-200-day reading.
+
+`drop_incomplete_bars` in backend/services/positions.py is now applied at every yfinance read.
+For the watchdog it deliberately makes the scan skip a ticker rather than alert on a NaN.
+
+## Phase 7 — Actually use the GPU pool *(implemented)*
+
+The Ollama pool grew to four cards behind `ollama-proxy`, and
+`TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` was raised to 4 to match — but a sweep of
+8 tickers still ran on one GPU, taking about four times longer than it needed to.
+
+The cause was in this repo, not the pool. `analysis.propagate_ticker` has always
+held a semaphore to bound concurrent runs, but three callers awaited each ticker in
+a loop, so the semaphore never saw more than one caller at a time:
+
+- `_daily_signals_job` — the daily watchlist sweep
+- `_alert_watchdog_job` — big-move and volume triggers
+- `_earnings_check_job` — pre-market earnings runs
+
+Only the `POST /api/tickers/analyze-all` route dispatched concurrently, so the
+manual button used every GPU while every scheduled job used one.
+
+`analysis.run_analyses()` is now the single dispatch path for all four, with
+per-ticker error isolation and an optional per-failure callback (the scheduler
+posts to Discord, the route just logs). The route's inline `asyncio.gather` is
+gone, so the two cannot drift apart again.
+
+**The thing to remember:** one analysis occupies exactly one GPU. TradingAgents'
+graph is internally sequential, so it never has more than one LLM request in
+flight. GPU utilization is entirely a function of how many analyses run at once,
+which makes a sequential `await` loop indistinguishable from having one card.
+
+## Phase 8 — Stop refetching bars that cannot change *(implemented)*
+
+Every caller fetched its own yfinance history. The intraday watchdog pulled roughly
+a month of bars per ticker **every 15 minutes** to read two closes and a volume
+average, then discarded the rest; the chart (180d), the ATR (3mo), and signal
+grading each refetched overlapping ranges of the same bars independently.
+
+`backend/services/bars.py` is now a read-through cache over a `dailybar` table
+keyed `(ticker, date)`. It works because **a completed session never changes**.
+
+The bar for the day in progress is deliberately never stored — caching it would
+freeze a mid-session snapshot and serve it as a close to the next reader. Callers
+that need it pass `include_today=True` and get a separate live request.
+
+Three cases decide whether a cache like this actually helps or quietly degrades
+into "fetch every time", and each has a test:
+
+- **A ticker with less history than requested** (a recent listing, or a 365-day
+  chart of a stock that has traded for 200) looks permanently incomplete.
+  `_earliest_attempt` records what was *asked for*, not what came back, which is
+  what makes "we asked and this is all there is" distinguishable from "we never
+  asked".
+- **A market holiday** means no new session closes, so the "is the cache behind?"
+  check can never be satisfied. A 30-minute recheck throttle absorbs it.
+- **A widened range** (the user switching the chart from 90 days to 365) must
+  fetch immediately and not wait out that throttle.
+
+Measured on a warm cache: the ATR, the chart, and grading make **no** yfinance
+history call at all. The watchdog still makes one per tick — it needs the current
+price and volume, which is irreducible — but the payload is one bar instead of
+about twenty-one.
+
+`last_completed_session` ignores market holidays on purpose. Being wrong in the
+conservative direction costs one extra request, which the throttle then absorbs;
+modeling the NYSE calendar would not pay for itself.
+
+The table is pure cache — dropping it costs nothing but a refetch. Growth is
+about 250 rows per ticker per year, so no pruning is needed.
 
 ## Broker sync — track what you actually hold *(implemented)*
 

@@ -13,6 +13,7 @@ import discord
 
 from backend.database import db
 from backend.database.models import Signal
+from backend.services import sizing
 from backend.services.portfolio import open_book_vs_spy
 from backend.services.positions import Position, compute_position, get_current_price, signed_dollars
 from backend.services.signals import BUYISH_DECISIONS, SELLISH_DECISIONS
@@ -62,6 +63,32 @@ def set_notional(amount: float) -> None:
     db.set_setting(_NOTIONAL_SETTING_KEY, str(amount))
 
 
+def paper_buy_quantity(ticker: str, price: float) -> tuple[float, str]:
+    """Share count for a paper buy, and a short label saying how it was
+    derived. Always returns a size — the flat notional is the last resort — so
+    a missing ATR or an unconfigured account never silently skips a fill.
+
+    Paper trades use the same ATR risk sizing as the real book whenever
+    account equity is configured. They used to use a flat notional, which made
+    the paper equity curve unusable as evidence: a flat $1,000 per trade is
+    36% of a $2,800 account, so the paper book was running a concentration the
+    real book never would, and its returns predicted nothing about the real
+    one. The flat notional survives only as the fallback for an unconfigured
+    account.
+    """
+    equity, risk_pct = sizing.get_risk_settings()
+    if equity and equity > 0:
+        atr = sizing.get_atr(ticker)
+        if atr is not None:
+            suggestion = sizing.suggest_position(
+                price, atr, equity, risk_pct, max_position_pct=sizing.get_max_position_pct()
+            )
+            if suggestion is not None and suggestion.shares:
+                return suggestion.shares, f"{risk_pct:g}% risk sizing"
+    notional = get_notional()
+    return round(notional / price, 4), f"${notional:,.0f} flat notional"
+
+
 def _close_all(ticker: str, signal_id: int | None, note: str) -> str | None:
     """Sell the entire open paper position at the current price. Returns the
     reply text, or None when there's nothing open to close."""
@@ -91,8 +118,9 @@ def execute_signal_reaction(signal: Signal) -> str:
         price = get_current_price(signal.ticker)
         if price is None:
             return f"Couldn't fetch a price for {signal.ticker} — try reacting again shortly."
-        notional = get_notional()
-        quantity = round(notional / price, 4)
+        quantity, basis = paper_buy_quantity(signal.ticker, price)
+        if quantity <= 0:
+            return f"Sizing came out at zero shares for {signal.ticker} — check /risk."
         db.add_paper_transaction(
             signal.ticker,
             "buy",
@@ -103,7 +131,8 @@ def execute_signal_reaction(signal: Signal) -> str:
         )
         position = compute_position(db.get_paper_transactions(signal.ticker))
         return (
-            f"📄 Paper buy: {quantity:g} {signal.ticker} @ ${price:,.2f} (~${notional:,.0f}). "
+            f"📄 Paper buy: {quantity:g} {signal.ticker} @ ${price:,.2f} "
+            f"(~${quantity * price:,.0f}, {basis}). "
             f"Paper position: {position.quantity:g} shares @ avg ${position.avg_cost:,.2f}."
         )
 
