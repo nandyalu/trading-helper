@@ -21,7 +21,7 @@ import os
 from quiv import Quiv, run_on_main
 
 from backend.database import db
-from backend.services import analysis, broker, paper, regime, watchdog
+from backend.services import analysis, broker, listings, paper, regime, watchdog
 from backend.services.digest import build_weekly_digest_embed
 from backend.discord_bot.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
@@ -126,8 +126,17 @@ async def _daily_signals_job() -> None:
     # Ollama pool has, so every GPU past the first sits idle for the whole
     # sweep. analysis.run_analyses bounds concurrency with the shared semaphore
     # (TRADINGAGENTS_MAX_CONCURRENT_ANALYSES) instead.
+    # Delisted and halted tickers are dropped here rather than inside
+    # run_analyses: an analysis of something with no market costs minutes of
+    # GPU and then cannot even be recorded, because there is no price to record
+    # it against.
+    inactive = set(listings.inactive_tickers())
+    tickers = [t for t in db.get_watchlist() if t not in inactive]
+    skipped = sorted(set(db.get_watchlist()) & inactive)
+    if skipped:
+        log.info("Daily sweep skipping %s — no market data", ", ".join(skipped))
     await analysis.run_analyses(
-        db.get_watchlist(),
+        tickers,
         on_failure=lambda ticker: notify(f"Daily analysis failed for {ticker} — check the logs."),
     )
 

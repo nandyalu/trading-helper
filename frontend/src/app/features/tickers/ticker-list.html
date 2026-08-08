@@ -65,9 +65,16 @@
               <tr>
                 <td class="ticker-cell" data-label="">
                   <a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a>
+                  @if (t.inactive) {
+                    <span class="badge badge-warn" [attr.title]="t.inactive_reason">No data</span>
+                  }
                 </td>
                 <td class="num" data-label="Price">
-                  {{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}
+                  @if (t.inactive) {
+                    <span class="muted">—</span>
+                  } @else {
+                    {{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}
+                  }
                 </td>
                 <td data-label="Latest signal">
                   @if (t.latest_signal) {

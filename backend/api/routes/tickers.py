@@ -95,6 +95,7 @@ def _paper_position(ticker: str, price: float | None) -> PaperPositionOut | None
 
 def _ticker_detail(ticker: str, cached: TickerPrice | None) -> TickerDetailOut:
     price = cached.price if cached else None
+    status = db.get_ticker_status(ticker)
     return TickerDetailOut(
         ticker=ticker,
         current_price=price,
@@ -102,6 +103,8 @@ def _ticker_detail(ticker: str, cached: TickerPrice | None) -> TickerDetailOut:
         real_position=_real_position(ticker, price),
         paper_position=_paper_position(ticker, price),
         latest_signal=_latest_signal(ticker),
+        inactive=bool(status and status.inactive),
+        inactive_reason=status.reason if status and status.inactive else None,
     )
 
 
@@ -109,12 +112,19 @@ def _ticker_detail(ticker: str, cached: TickerPrice | None) -> TickerDetailOut:
 def list_tickers():
     watchlist = db.get_watchlist()
     cached = db.get_cached_prices(watchlist)
+    statuses = {status.ticker: status for status in db.get_inactive_tickers()}
     return [
         TickerSummaryOut(
             ticker=ticker,
             current_price=cached[ticker].price if ticker in cached else None,
             price_updated_at=cached[ticker].fetched_at if ticker in cached else None,
             latest_signal=_latest_signal(ticker),
+            inactive=bool(statuses.get(ticker) and statuses[ticker].inactive),
+            inactive_reason=(
+                statuses[ticker].reason
+                if statuses.get(ticker) and statuses[ticker].inactive
+                else None
+            ),
         )
         for ticker in watchlist
     ]

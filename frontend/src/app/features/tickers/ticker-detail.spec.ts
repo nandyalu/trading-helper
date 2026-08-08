@@ -109,6 +109,8 @@ const DETAIL: TickerDetail = {
   real_position: null,
   paper_position: null,
   latest_signal: null,
+  inactive: false,
+  inactive_reason: null,
 };
 
 class TickersServiceStub {

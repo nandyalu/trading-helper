@@ -21,6 +21,7 @@ import yfinance as yf
 from tradingagents.dataflows.stockstats_utils import yf_retry
 
 from backend.database import db
+from backend.services import listings
 from backend.services.positions import OhlcBar, drop_incomplete_bars
 
 log = logging.getLogger("trading-bot.bars")
@@ -95,12 +96,24 @@ def _fetch_history(ticker: str, start: datetime.date):
 
 
 def refresh(ticker: str, start: datetime.date, today: datetime.date | None = None) -> int:
-    """Fetch and store completed sessions from ``start``. Returns rows written."""
+    """Fetch and store completed sessions from ``start``. Returns rows written.
+
+    Also judges whether the ticker still trades. This is the right place for
+    that: it is the one function that sees what the provider actually returned,
+    and a delisted symbol is invisible from anywhere else — the provider keeps
+    answering, just with bars months old.
+    """
     today = today or datetime.date.today()
     history = _fetch_history(ticker, start)
     _last_fetch[ticker] = _now()
     previous_attempt = _earliest_attempt.get(ticker)
     _earliest_attempt[ticker] = min(start, previous_attempt) if previous_attempt else start
+
+    newest = None
+    if history is not None and not history.empty:
+        newest = history.index[-1].date()
+    listings.record_fetch(ticker, newest, today)
+
     if history is None or history.empty:
         return 0
     bars = _to_bars(history, cutoff=today)
@@ -114,6 +127,12 @@ def _asked_recently(ticker: str) -> bool:
 
 def _needs_fetch(ticker: str, start: datetime.date, today: datetime.date) -> datetime.date | None:
     """The date to fetch from, or None when the cache already covers the ask."""
+    # A ticker that has stopped trading is asked at most once a day, and only
+    # so a resumed listing can be noticed. Whatever bars it has are already
+    # cached and will not grow.
+    if not listings.should_fetch(ticker):
+        return None
+
     oldest, newest = db.get_bar_coverage(ticker)
 
     # Nothing cached. Throttled too, so a ticker yfinance has no data for
@@ -185,6 +204,8 @@ def _todays_bar(ticker: str, today: datetime.date) -> OhlcBar | None:
     both wasted and alarming to read in the logs.
     """
     if today.weekday() >= 5:
+        return None
+    if not listings.should_fetch(ticker):
         return None
     history = _fetch_history(ticker, today)
     if history is None or history.empty:

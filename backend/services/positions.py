@@ -78,7 +78,15 @@ def get_current_price(ticker: str) -> float | None:
     falls back to yfinance's delayed close. Every successful fetch writes through
     to the ticker price cache (backend/database/db.py's TickerPrice table), which
     is what the dashboard's list/detail routes read from instead of fetching live."""
-    from backend.services.quotes import get_realtime_price  # lazy: keeps positions import-light
+    from backend.services import listings  # lazy: keeps positions import-light
+    from backend.services.quotes import get_realtime_price
+
+    # A ticker that stopped trading has no current price to fetch. Asking
+    # Webull and yfinance anyway returns the delisted shell's last tick —
+    # $0.000001 for AILEQ — which is worse than admitting we don't know, since
+    # it gets cached and shown as a real quote.
+    if listings.is_inactive(ticker):
+        return None
 
     price = get_realtime_price(ticker)
     if price is not None:

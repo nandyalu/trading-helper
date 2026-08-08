@@ -20,6 +20,7 @@ from backend.services import (
     ask,
     broker,
     digest,
+    listings,
     paper,
     portfolio,
     regime,
@@ -381,6 +382,43 @@ async def dailysweep(interaction: discord.Interaction, enabled: bool):
             "Daily watchlist sweep is **off** — analyses now run only on triggers "
             "(earnings, big moves, volume) or /analyze. Signal evaluation still runs daily."
         )
+
+
+@bot.tree.command(description="Skip a ticker that has no usable market data, or un-skip one")
+@app_commands.describe(
+    ticker="Ticker symbol",
+    skip="True = never fetch or analyze it · False = follow it normally",
+)
+async def ignore(interaction: discord.Interaction, ticker: str, skip: bool = True):
+    """Manual override for the delisted/halted detection.
+
+    Detection handles the common case on its own. This is for the two it gets
+    wrong: a thinly traded name the user wants followed anyway, and a ticker
+    they simply do not want spending GPU time.
+    """
+    ticker = ticker.upper().strip()
+    listings.set_manual(ticker, inactive=skip, reason="manually ignored" if skip else None)
+    if skip:
+        await interaction.response.send_message(
+            f"**{ticker}** is now skipped — no price fetches, no alerts, no scheduled analysis. "
+            f"Any position you hold still shows in /portfolio. Undo with `/ignore {ticker} skip:False`."
+        )
+    else:
+        await interaction.response.send_message(
+            f"**{ticker}** is followed normally again, and detection will no longer override that. "
+            f"Use `/unignore {ticker}` to hand it back to automatic detection."
+        )
+
+
+@bot.tree.command(description="Hand a ticker back to automatic delisted/halted detection")
+@app_commands.describe(ticker="Ticker symbol")
+async def unignore(interaction: discord.Interaction, ticker: str):
+    ticker = ticker.upper().strip()
+    listings.clear_manual(ticker)
+    await interaction.response.send_message(
+        f"**{ticker}** is back on automatic detection — it will be skipped only if it stops "
+        f"producing bars for {listings.STALE_AFTER_TRADING_DAYS} trading days."
+    )
 
 
 @bot.tree.command(description="Set the trade horizon every analysis runs at")

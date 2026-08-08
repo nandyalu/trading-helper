@@ -125,6 +125,10 @@ export interface TickerSummary {
   current_price: number | null;
   price_updated_at: string | null;
   latest_signal: Signal | null;
+  /** No market data any more — delisted, halted, or a wrong symbol. Every
+   * fetch path skips it, so the UI has to say why the price is stale. */
+  inactive: boolean;
+  inactive_reason: string | null;
 }
 
 export interface TickerDetail {
@@ -134,6 +138,8 @@ export interface TickerDetail {
   real_position: PortfolioPosition | null;
   paper_position: PaperPosition | null;
   latest_signal: Signal | null;
+  inactive: boolean;
+  inactive_reason: string | null;
 }
 
 export interface AnalyzeQueued {

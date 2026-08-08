@@ -116,6 +116,34 @@ class Alert(SQLModel, table=True):
     created_at: datetime.datetime
 
 
+class TickerStatus(SQLModel, table=True):
+    """Tickers that have stopped producing market data, so every fetch path can
+    skip them instead of asking again.
+
+    A delisted symbol does not fail cleanly. yfinance keeps answering for the
+    shell — AILEQ returned five bars in two months, all at $0.000001 — which
+    looks to a cache like a ticker that is merely behind, so it refetches
+    forever. The daily sweep meanwhile spends minutes of GPU analyzing
+    something that no longer trades.
+
+    ``inactive`` is set automatically once no fresh bar has appeared for
+    ``STALE_AFTER_TRADING_DAYS`` (see backend/services/listings.py), and cleared
+    if the ticker ever produces one again — a halt can lift, and a manual
+    override should not be needed for that. ``checked_at`` throttles the
+    once-a-day recheck that makes recovery possible.
+    """
+
+    ticker: str = Field(primary_key=True)
+    inactive: bool = False
+    reason: str | None = None
+    # Last bar seen, and when we last asked. Both NULL until the first check.
+    last_bar_date: datetime.date | None = None
+    checked_at: datetime.datetime | None = None
+    # Set by a person, and never overwritten by detection. Lets a ticker be
+    # force-ignored (or force-kept) when the heuristic gets it wrong.
+    manual: bool = False
+
+
 class DailyBar(SQLModel, table=True):
     """Cached daily OHLCV, one row per (ticker, date).
 

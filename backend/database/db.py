@@ -15,6 +15,7 @@ from backend.database.models import (
     Signal,
     SignalReport,
     TickerPrice,
+    TickerStatus,
     Transaction,
     WatchlistTicker,
 )
@@ -344,6 +345,46 @@ def get_paper_snapshots(limit: int = 90, *, _session: Session = None) -> list[Pa
         select(PaperSnapshot).order_by(PaperSnapshot.snapshot_date.desc()).limit(limit)
     ).all()
     return list(reversed(rows))
+
+
+# --- Ticker status (delisted / halted symbols, see services/listings.py) -----
+
+
+@read_session
+def get_ticker_status(ticker: str, *, _session: Session = None) -> TickerStatus | None:
+    return _session.get(TickerStatus, ticker)
+
+
+@read_session
+def get_inactive_tickers(*, _session: Session = None) -> list[TickerStatus]:
+    return list(_session.exec(select(TickerStatus).where(TickerStatus.inactive.is_(True))).all())
+
+
+@write_session
+def set_ticker_status(
+    ticker: str,
+    inactive: bool | None = None,
+    reason: str | None = None,
+    last_bar_date: datetime.date | None = None,
+    manual: bool | None = None,
+    *,
+    _session: Session = None,
+) -> None:
+    """Upsert. Only the fields passed are changed, so a detection pass can
+    update freshness without clearing a manual override, and vice versa.
+    ``checked_at`` is always stamped — the point of a check is that it
+    happened, whatever it found."""
+    row = _session.get(TickerStatus, ticker) or TickerStatus(ticker=ticker)
+    if inactive is not None:
+        row.inactive = inactive
+        row.reason = reason
+    if last_bar_date is not None:
+        row.last_bar_date = last_bar_date
+    if manual is not None:
+        row.manual = manual
+    row.checked_at = datetime.datetime.now(datetime.timezone.utc)
+    _session.add(row)
+    _session.commit()
 
 
 # --- Daily bar cache (every yfinance history read goes through this) ---------

@@ -325,6 +325,30 @@ silently returns nothing or fails: rows are combo wrappers with the real orders
 nested under `orders`; `page_size` must be 10-100; and the documented rate limit
 is optimistic. See CLAUDE.md.
 
+## Phase 10 — Stop chasing tickers that no longer trade *(implemented)*
+
+A delisted symbol does not fail cleanly. AILEQ, held and delisted, kept returning
+data: five bars across two months, all at $0.000001. To the bar cache that looked
+like a ticker merely behind, so it refetched every 30 minutes forever; the
+watchdog polled it every 15; and the daily sweep spent minutes of GPU analyzing a
+company with no market before failing to record the signal for want of a price.
+
+`backend/services/listings.py` marks a ticker inactive once no fresh bar has
+appeared for seven trading days, and every fetch path checks it. The rule is
+deliberately about freshness rather than price — a real penny stock at $0.0001 is
+still real, and a price threshold would retire it by mistake.
+
+Inactive is not permanent: one recheck a day means a lifted halt recovers on its
+own. `/ignore` and `/unignore` are the manual override, and a manual setting is
+never overwritten by detection. A held position still appears in the portfolio;
+there is simply nothing to fetch for it.
+
+Writing this also exposed that the test suite had been writing ticker state into
+the developer's real database — a "NOTREAL" symbol from one test was marked
+inactive there, and the next run of that same test read it back and failed on an
+assertion about fetch counts. The isolation fixture is now autouse and
+unconditional.
+
 ## Broker sync — track what you actually hold *(implemented)*
 
 backend/services/broker.py mirrors the Webull account (read-only Trade API, same credentials) into

@@ -10,7 +10,44 @@ import datetime
 
 import pytest
 
-from backend.services import bars
+from backend.database.models import TickerStatus
+from backend.services import bars, listings
+
+
+@pytest.fixture(autouse=True)
+def isolated_ticker_status(monkeypatch):
+    """Keep ticker status in memory for every test.
+
+    Autouse and unconditional, because this state is written from deep inside
+    the fetch path — bars.refresh records whether a ticker still trades — so a
+    test that never mentions listings can still persist a row. One did: a
+    "NOTREAL" symbol got marked inactive in the developer's real database, and
+    the next run of that same test saw it, skipped the fetch it was asserting
+    on, and failed. A test must not be able to reach the real database at all.
+    """
+    store: dict[str, TickerStatus] = {}
+
+    def get_status(ticker):
+        return store.get(ticker)
+
+    def set_status(ticker, inactive=None, reason=None, last_bar_date=None, manual=None):
+        row = store.setdefault(ticker, TickerStatus(ticker=ticker))
+        if inactive is not None:
+            row.inactive = inactive
+            row.reason = reason
+        if last_bar_date is not None:
+            row.last_bar_date = last_bar_date
+        if manual is not None:
+            row.manual = manual
+        row.checked_at = datetime.datetime.now(datetime.timezone.utc)
+
+    def inactive_rows():
+        return [row for row in store.values() if row.inactive]
+
+    monkeypatch.setattr(listings.db, "get_ticker_status", get_status)
+    monkeypatch.setattr(listings.db, "set_ticker_status", set_status)
+    monkeypatch.setattr(listings.db, "get_inactive_tickers", inactive_rows)
+    return store
 
 
 @pytest.fixture

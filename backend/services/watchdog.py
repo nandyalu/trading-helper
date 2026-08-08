@@ -20,7 +20,7 @@ from tradingagents.dataflows.stockstats_utils import yf_retry
 
 from backend.database import db
 from backend.database.models import Signal
-from backend.services import bars
+from backend.services import bars, listings
 from backend.services.positions import Position, compute_position
 from backend.services.signals import price_crossed_target
 
@@ -248,7 +248,9 @@ def evaluate_ticker(
 
 
 def _tracked_tickers() -> list[str]:
-    """Watchlist plus anything actually held, in either book."""
+    """Watchlist plus anything actually held, in either book — minus anything
+    that has stopped trading. A delisted holding still appears in the portfolio;
+    there is just nothing to watch, and no alert it could ever produce."""
     tickers = set(db.get_watchlist())
     for ticker in db.get_all_transaction_tickers():
         if compute_position(db.get_transactions(ticker)).quantity > 0:
@@ -256,7 +258,7 @@ def _tracked_tickers() -> list[str]:
     for ticker in db.get_all_paper_tickers():
         if compute_position(db.get_paper_transactions(ticker)).quantity > 0:
             tickers.add(ticker)
-    return sorted(tickers)
+    return sorted(tickers - set(listings.inactive_tickers()))
 
 
 def scan_for_alerts() -> tuple[list[AlertCandidate], list[str]]:

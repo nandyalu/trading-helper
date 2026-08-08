@@ -136,6 +136,11 @@ class TickerSummaryOut(BaseModel):
     current_price: float | None
     price_updated_at: datetime | None
     latest_signal: SignalOut | None
+    # True when the ticker has stopped producing market data (delisted, halted,
+    # or simply wrong). Every fetch path skips it, so without saying so the
+    # dashboard would just show a stale price and no explanation.
+    inactive: bool = False
+    inactive_reason: str | None = None
 
 
 class TickerDetailOut(BaseModel):
@@ -145,6 +150,8 @@ class TickerDetailOut(BaseModel):
     real_position: PortfolioPositionOut | None
     paper_position: PaperPositionOut | None
     latest_signal: SignalOut | None
+    inactive: bool = False
+    inactive_reason: str | None = None
 
 
 class TradeOut(BaseModel):
