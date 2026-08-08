@@ -230,6 +230,58 @@ Non-obvious rules the cache depends on:
 
 The table is pure cache; dropping it costs only a refetch.
 
+## Webull OpenAPI reference
+
+**<https://developer.webull.com/apis/llms.txt>** — an LLM-oriented index of the
+whole OpenAPI documentation, with links to every endpoint page. Read it before
+guessing at a Webull payload shape or endpoint name. The Python SDK
+(`webull-openapi-python-sdk`) returns **raw dicts with no typed models**, so the
+field names this repo relies on were discovered from live responses, not from
+the package — the docs are the only other source of truth.
+
+What the index covers, and where each maps here:
+
+| Docs area | Used by |
+|---|---|
+| Account Management — Account List, Account Balance, Account Positions | `backend/services/broker.py` (`fetch_broker_positions`) |
+| Market Data — snapshot, tick, depth, bars, fundamentals | `backend/services/quotes.py` (`get_realtime_price`) |
+| Authentication — HMAC-SHA1 signature, client token lifecycle | `quotes.get_api_client`, token cached under `WEBULL_OPENAPI_TOKEN_DIR` |
+| Order Management — preview/place/replace/cancel | **not used, deliberately.** Real order execution is a standing non-goal; access here is read-only |
+
+Two things the index settles that have bitten this project:
+
+- It confirms there is **no news or social-sentiment endpoint**, so Webull
+  cannot replace `get_news`/`reddit.py` no matter how the quota looks.
+- It documents **MQTT streaming** for real-time data. This repo polls instead,
+  which is the right call at a 1-2 week horizon, but it is the thing to reach
+  for if intraday granularity ever matters.
+
+Rate limits are not in the index itself — they live on the linked Market Data
+API Overview page. Order History is documented at 2 requests per 2 seconds.
+
+### Confirmed from the docs (2026-08-07)
+
+**Account Positions** returns exactly: `position_id`, `currency`, `quantity`,
+`symbol`, `option_strategy`, `instrument_type`, `last_price`, `cost_price`,
+`unrealized_profit_loss`, `event_outcome`, `legs[]`. The four names
+`broker._parse_position` relies on are correct.
+
+**There is no acquisition-date field on a position.** Not under any name. This
+makes `broker._parse_opened_at` dead code — it tries `open_date`,
+`position_date`, `open_time` and others, and none of them can ever match, so
+every synced holding falls through to the `(date unknown)` path and is excluded
+from the vs-SPY comparison. It was written that way because the payload shape
+had never been checked; the fallback is doing all the work.
+
+**The real source is Order History**
+(`docs/reference/order-history.md`), which carries `symbol`, `side`,
+`filled_quantity`, `filled_price`, and `filled_time_at` (ISO8601 UTC), with
+`start_date`/`end_date` back to 2018-05-21 and cursor pagination at up to 100
+records a page. Rebuilding the import from order history — rather than from a
+position snapshot with no dates — would give every lot a real purchase date and
+restore a meaningful benchmark comparison. Not built yet; `fix_import_dates`
+exists so the dates can be entered by hand in the meantime.
+
 ## Reddit/social-sentiment data source
 
 `TradingAgents/tradingagents/dataflows/reddit.py` scrapes Reddit's public RSS

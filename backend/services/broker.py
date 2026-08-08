@@ -35,11 +35,21 @@ class BrokerPosition:
     opened_at: datetime.date | None = None  # None when the payload carries no date
 
 
-# Candidate keys for the date a position was opened. The Webull SDK returns raw
-# dicts with no schema, so which of these (if any) is present has to be
-# discovered from a live payload. Trying several is harmless — an absent key
-# just leaves the date unknown, which is handled honestly downstream rather
-# than being papered over with today's date.
+# Candidate keys for the date a position was opened.
+#
+# **None of these exist.** The Account Positions response is documented at
+# https://developer.webull.com/apis/docs/reference/account-position.md and
+# carries no acquisition date under any name — only position_id, currency,
+# quantity, symbol, option_strategy, instrument_type, last_price, cost_price,
+# unrealized_profit_loss, event_outcome, legs. These keys were guesses made
+# before the schema was checked, so in practice every synced holding takes the
+# "(date unknown)" path below.
+#
+# Kept because it costs nothing and a future payload may add one. The real fix
+# is the Order History endpoint (docs/reference/order-history.md), which has
+# symbol / side / filled_quantity / filled_price / filled_time_at going back to
+# 2018 — see CLAUDE.md. Until that exists, backend/scripts/fix_import_dates.py
+# is how a real date gets set.
 _OPENED_AT_KEYS = ("open_date", "position_date", "opened_at", "open_time", "created_time", "trade_date")
 
 
