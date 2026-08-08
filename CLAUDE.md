@@ -273,14 +273,29 @@ every synced holding falls through to the `(date unknown)` path and is excluded
 from the vs-SPY comparison. It was written that way because the payload shape
 had never been checked; the fallback is doing all the work.
 
-**The real source is Order History**
-(`docs/reference/order-history.md`), which carries `symbol`, `side`,
-`filled_quantity`, `filled_price`, and `filled_time_at` (ISO8601 UTC), with
-`start_date`/`end_date` back to 2018-05-21 and cursor pagination at up to 100
-records a page. Rebuilding the import from order history — rather than from a
-position snapshot with no dates — would give every lot a real purchase date and
-restore a meaningful benchmark comparison. Not built yet; `fix_import_dates`
-exists so the dates can be entered by hand in the meantime.
+**Order History is where the dates are**, and the sync now reads it
+(`broker.fetch_order_fills` → `reconstruct_open_lots`). Three things about that
+endpoint are not obvious and cost time to find:
+
+- **Rows are combo wrappers, not orders.** Each row is
+  `{client_order_id, combo_type, combo_order_id, orders: [...]}`, and a
+  single-leg order is still wrapped in a one-element list. Read the top level
+  and you find no symbol, no side, no quantity — every row parses to nothing.
+  `broker.orders_in()` unwraps it.
+- **`page_size` must be 10-100.** Anything outside that is HTTP 417,
+  `OAUTH_OPENAPI_PARAM_ERR`.
+- **The documented "2 requests per 2 seconds" is optimistic.** Pacing at exactly
+  that returned 429s; `_ORDER_HISTORY_PAUSE` is 2.5s.
+
+Verified against the live account 2026-08-07: 53 equity fills back to
+2021-02-23. Dropped rows were all correct — unfilled orders, plus OPTION and
+CRYPTO fills this equities-only app has no use for.
+
+`fix_import_dates --from-webull` rebuilds already-imported holdings the same
+way. Holdings with no fill (transferred in, or pre-2018) keep a date-unknown
+remainder lot and stay out of the benchmark comparison rather than corrupting
+it — which is also how a fractional dividend share is handled, since it never
+came through an order.
 
 ## Reddit/social-sentiment data source
 

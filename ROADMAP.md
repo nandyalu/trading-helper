@@ -297,6 +297,34 @@ modeling the NYSE calendar would not pay for itself.
 The table is pure cache — dropping it costs nothing but a refetch. Growth is
 about 250 rows per ticker per year, so no pruning is needed.
 
+## Phase 9 — Import holdings with their real purchase dates *(implemented)*
+
+A Webull position snapshot carries **no acquisition date** — confirmed against the
+documented schema, which is why `broker._parse_opened_at` never matched anything
+and every imported holding was dated the day the sync ran. That anchored each
+lot's benchmark entry on the import date, so SPY got days to move while the
+position was credited with months of gains and the vs-SPY alpha came out
+meaningless.
+
+Order History does carry it. `fetch_order_fills` pages it read-only, and
+`reconstruct_open_lots` walks the buys newest-first — FIFO sells oldest first, so
+what is still held is the newest buys — until they cover the broker's quantity.
+The result is one dated transaction per real lot, at the real fill price rather
+than the broker's blended average.
+
+Shares the history cannot explain come back as a single date-unknown remainder
+and stay out of the benchmark comparison. That covers holdings transferred in,
+anything bought before the 2018 horizon, and fractional dividend shares that
+never came through an order.
+
+`fix_import_dates --from-webull` applies the same rebuild to holdings imported
+before this existed.
+
+Three things about the endpoint that the docs do not make obvious, each of which
+silently returns nothing or fails: rows are combo wrappers with the real orders
+nested under `orders`; `page_size` must be 10-100; and the documented rate limit
+is optimistic. See CLAUDE.md.
+
 ## Broker sync — track what you actually hold *(implemented)*
 
 backend/services/broker.py mirrors the Webull account (read-only Trade API, same credentials) into

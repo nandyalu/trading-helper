@@ -24,7 +24,7 @@ This keeps the bot responsive.
 | `/sell ticker price quantity` | Record a real sell. The bot checks that you hold enough shares, and it reports the realized P&L. |
 | `/positions` | Show your open positions: cost basis, current price, and unrealized and realized P&L. |
 | `/portfolio` | Show the full dashboard: per-position weights, concentration warnings (at 30% of the book or more), totals, and open-book performance against putting the same dollars into SPY on the same dates. |
-| `/webullsync` | Pull in your real Webull holdings now. The bot adds every held equity to the watchlist, and it imports and reconciles positions. This also runs automatically each weekday at 12:35 UTC. If a bot-side position is missing at Webull, the bot flags it — it never sells the position for you. |
+| `/webullsync` | Pull in your real Webull holdings now. A holding the bot has not seen before is rebuilt from your Webull order history, so each lot keeps its real purchase date and fill price. Shares the history cannot explain — transferred in, bought before 2018, or a fractional dividend share — are recorded without a date and left out of the vs-SPY comparison rather than given an invented one. The bot adds every held equity to the watchlist, and it imports and reconciles positions. This also runs automatically each weekday at 12:35 UTC. If a bot-side position is missing at Webull, the bot flags it — it never sells the position for you. |
 
 ## Paper trading
 

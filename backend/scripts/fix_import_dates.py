@@ -80,6 +80,65 @@ def _apply(dates: dict[str, datetime.date], mark_unknown: bool, *, _session: Ses
     return dated, marked
 
 
+@write_session
+def _rebuild_from_fills(*, _session: Session = None) -> tuple[int, int, list[str]]:
+    """Replace synthetic sync imports with lots reconstructed from Webull's
+    order history. Returns (tickers rebuilt, lots written, tickers skipped).
+
+    Only rows this tool created are touched — a buy whose note starts with
+    "webull sync: imported holding". Anything you entered by hand, and any
+    quantity-drift row, is left exactly as it is.
+
+    A ticker is skipped when order history explains none of its shares, which
+    happens for holdings transferred in from another broker or bought before
+    the 2018 horizon. Those keep their date-unknown row.
+    """
+    from backend.services import broker
+
+    positions = broker.fetch_broker_positions()
+    if positions is None:
+        raise SystemExit("Webull isn't reachable — nothing changed.")
+    fills = broker.fetch_order_fills()
+    if fills is None:
+        raise SystemExit("Order history isn't reachable — nothing changed.")
+
+    rebuilt = lots_written = 0
+    skipped: list[str] = []
+    for position in positions:
+        synthetic = [
+            row
+            for row in _session.exec(
+                select(Transaction).where(
+                    Transaction.ticker == position.symbol, Transaction.side == "buy"
+                )
+            ).all()
+            if row.note and row.note.startswith(_IMPORT_NOTE)
+        ]
+        if not synthetic:
+            continue
+        lots = broker.reconstruct_open_lots(position, fills)
+        if not lots or all(lot.date is None for lot in lots):
+            skipped.append(position.symbol)
+            continue
+        for row in synthetic:
+            _session.delete(row)
+        for lot in lots:
+            _session.add(
+                Transaction(
+                    ticker=lot.ticker,
+                    side="buy",
+                    date=lot.date or datetime.date.today(),
+                    price=lot.price,
+                    quantity=lot.quantity,
+                    note=f"{_IMPORT_NOTE.rsplit(':', 1)[0]}: {lot.reason}",
+                )
+            )
+            lots_written += 1
+        rebuilt += 1
+    _session.commit()
+    return rebuilt, lots_written, skipped
+
+
 def _parse_set(values: list[str]) -> dict[str, datetime.date]:
     dates = {}
     for item in values:
@@ -107,8 +166,36 @@ def main() -> int:
         help="mark every remaining imported holding as having an unknown date, "
              "which excludes it from the SPY comparison",
     )
+    parser.add_argument(
+        "--from-webull", action="store_true",
+        help="replace synthetic imports with lots rebuilt from Webull order "
+             "history — real dates and real fill prices. Try this first.",
+    )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="confirm --from-webull, which deletes and rewrites transaction rows",
+    )
     args = parser.parse_args()
     dates = _parse_set(args.set)
+
+    if args.from_webull:
+        if not args.yes:
+            print(
+                "Would fetch Webull order history and replace each synthetic import with\n"
+                "the real buys behind it — actual dates, actual fill prices, one row per lot.\n"
+                "Only rows noted 'webull sync: imported holding' are touched; anything you\n"
+                "entered by hand is left alone.\n\n"
+                "Re-run with --yes to do it."
+            )
+            return 0
+        rebuilt, lots, skipped = _rebuild_from_fills()
+        print(f"Rebuilt {rebuilt} holding(s) into {lots} dated lot(s).")
+        if skipped:
+            print(
+                f"No order history for: {', '.join(skipped)} — transferred in, or bought "
+                "before 2018. These keep their date-unknown row; use --set for them."
+            )
+        return 0
 
     rows = _imported_rows()
     if not rows and not dates:
