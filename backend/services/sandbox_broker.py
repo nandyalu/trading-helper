@@ -192,8 +192,16 @@ def place_market_order(ticker: str, side: str, quantity: float) -> dict:
 
 
 def get_order_detail(client_order_id: str) -> dict | None:
-    """Look one order up so the fill price can be recorded. The order is placed
-    at market, so the price is only knowable after the fact."""
+    """The order itself, so the fill price can be recorded — placed at market,
+    the price is only knowable after the fact.
+
+    The endpoint answers with a *combo wrapper*, not an order: the status,
+    price, and quantity all live inside a one-element ``orders`` list, and the
+    top level carries none of them. Reading the top level finds a dict that
+    looks plausible and parses to nothing, so every fill stays pending forever.
+    ``broker.orders_in`` already unwraps this shape for order history; the same
+    unwrapping is what this needs.
+    """
     _assert_sandbox()
     client = quotes.get_api_client()
     account_id = get_paper_account_id()
@@ -201,6 +209,11 @@ def get_order_detail(client_order_id: str) -> dict | None:
         return None
     from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
 
+    from backend.services.broker import orders_in
+
     response = OrderOperationV3(client).get_order_detail(account_id, client_order_id)
     body = response.json() if hasattr(response, "json") else response
-    return body if isinstance(body, dict) else None
+    if not isinstance(body, dict):
+        return None
+    orders = orders_in(body)
+    return orders[0] if orders else None

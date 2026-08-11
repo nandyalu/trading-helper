@@ -221,11 +221,14 @@
         </label>
         <label class="field narrow">
           Budget ($)
+          <!-- step="any": a step with min="1" makes the browser accept only
+               1, 51, 101 … and reject round numbers like 1000. A budget is an
+               arbitrary amount, not a multiple of anything. -->
           <input
             type="number"
             inputmode="decimal"
             min="1"
-            step="50"
+            step="any"
             [value]="agentBudget()"
             (input)="onAgentBudgetInput($event)"
           />

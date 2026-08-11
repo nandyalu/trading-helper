@@ -601,6 +601,7 @@ def settle_agent_trade(
     client_order_id: str,
     status: str,
     price: float | None = None,
+    quantity: float | None = None,
     filled_at: datetime.datetime | None = None,
     broker_order_id: str | None = None,
     *,
@@ -619,6 +620,9 @@ def settle_agent_trade(
     row.status = status
     if price is not None:
         row.price = price
+    # Only ever narrowed to what the broker actually filled — see the caller.
+    if quantity is not None:
+        row.quantity = quantity
     if filled_at is not None:
         row.filled_at = filled_at
     if broker_order_id:
