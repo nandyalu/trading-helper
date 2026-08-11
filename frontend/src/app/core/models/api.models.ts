@@ -317,3 +317,14 @@ export interface AgentComparison {
   verdict: string;
   strategies: Strategy[];
 }
+
+/** A screened ticker worth considering. Never followed automatically — each
+ * one added costs about seven minutes of GPU on every later sweep. */
+export interface Candidate {
+  ticker: string;
+  name: string;
+  price: number;
+  volume: number;
+  change_pct: number | null;
+  source: string;
+}

@@ -99,4 +99,69 @@
       </div>
     }
   </section>
+
+  @if (candidates().length) {
+    <section class="card">
+      <div class="card-head">
+        <h2>Worth considering</h2>
+        <p class="hint">
+          Liquid names from the broker's screener that you don't already follow — over $5, over 1M
+          shares traded, and not up or down more than 30% today, which keeps the day's pumps out.
+          These are candidates for analysis, not recommendations: following one adds about seven
+          minutes to every sweep from then on, so add them one at a time.
+        </p>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table data-table--stack">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Price</th>
+              <th class="num">Volume</th>
+              <th class="num">Today</th>
+              <th>Why it showed up</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of candidates(); track c.ticker) {
+              <tr>
+                <td data-label="">
+                  <strong>{{ c.ticker }}</strong>
+                  @if (c.name) {
+                    <span class="muted"> {{ c.name }}</span>
+                  }
+                </td>
+                <td class="num" data-label="Price">${{ c.price.toFixed(2) }}</td>
+                <td class="num" data-label="Volume">{{ volumeM(c.volume) }}</td>
+                <td
+                  class="num"
+                  data-label="Today"
+                  [class.pass]="(c.change_pct ?? 0) >= 0"
+                  [class.fail]="(c.change_pct ?? 0) < 0"
+                >
+                  @if (c.change_pct !== null) {
+                    {{ c.change_pct >= 0 ? '+' : '' }}{{ c.change_pct.toFixed(1) }}%
+                  } @else {
+                    —
+                  }
+                </td>
+                <td data-label="Why it showed up">{{ c.source }}</td>
+                <td class="actions-cell" data-label="">
+                  <button
+                    class="btn btn-sm"
+                    type="button"
+                    (click)="follow(c.ticker)"
+                    [disabled]="following() === c.ticker"
+                  >
+                    {{ following() === c.ticker ? 'Following…' : 'Follow' }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
 </section>

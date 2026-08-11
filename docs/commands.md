@@ -11,6 +11,7 @@ This keeps the bot responsive.
 | `/track ticker:NVDA` | Add a ticker to the watchlist. The daily sweep, the watchdog, and the earnings check all cover it. |
 | `/untrack ticker:NVDA` | Remove a ticker from the watchlist. |
 | `/watchlist` | List tracked tickers. |
+| `/candidates` | Screened tickers worth considering, from the broker's most-active and daily-gainer lists. Filtered to names over $5 trading over a million shares that have not moved more than 30% today, minus anything you already follow or hold. It suggests only — following one costs about seven minutes of analysis on every sweep from then on, so you add them yourself. Also posts weekly with the Friday digest. |
 | `/analyze ticker:NVDA` | Run the full TradingAgents analysis right now. This takes a few minutes on the local model. The bot records the result as a signal, the same as any scheduled run. |
 | `/ask ticker:NVDA question:…` | Ask a question about the ticker's **latest** analysis. The local LLM answers from the stored analyst reports — for example, "What did the bear case say?" or "Why hold instead of sell?" |
 | `/signals ticker:NVDA` | Show recent signals and their outcomes (the `ticker` argument is optional). Resolved rows show the absolute grade and the vs-SPY grade. |

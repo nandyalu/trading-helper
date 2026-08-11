@@ -33,10 +33,10 @@
 
     @if (d.inactive) {
       <p class="notice notice-warn">
-        <span aria-hidden="true">⚠️</span> No market data for {{ ticker() }} — {{ d.inactive_reason }}.
-        Price fetches, alerts, and scheduled analysis are all skipped. Your position still counts
-        toward the book, but it is left out of the SPY comparison. The bot rechecks once a day in
-        case trading resumes.
+        <span aria-hidden="true">⚠️</span> No market data for {{ ticker() }} —
+        {{ d.inactive_reason }}. Price fetches, alerts, and scheduled analysis are all skipped. Your
+        position still counts toward the book, but it is left out of the SPY comparison. The bot
+        rechecks once a day in case trading resumes.
       </p>
     }
 

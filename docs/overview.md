@@ -167,6 +167,14 @@ Two details worth knowing when reading the page:
 
 Why the open rather than straight after the sweep: the sweep runs at 21:30 UTC, which is 17:30 in New York, ninety minutes after the close. Webull rejects a market order outright at that hour, so an agent chained to the sweep would look healthy and never fill anything.
 
+## Finding new tickers
+
+The broker's screener suggests candidates: liquid names you do not already follow, over $5 and over a million shares traded, that have not moved more than 30% in the day.
+That last filter is the one that matters. A raw screen is full of the day's pumps — one returned a stock up 927% — and the price floor alone does not catch them, because the pump is what lifted the price over the floor.
+
+Nothing is followed automatically. An analysis costs about seven minutes of GPU, so every ticker you follow lengthens every later sweep, which makes adding one a decision rather than a default.
+See them on the Tickers page, with `/candidates`, or in the weekly digest post.
+
 ## The daily schedule (all times UTC, weekdays)
 
 | Time | What happens |
