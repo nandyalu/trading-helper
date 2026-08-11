@@ -149,3 +149,61 @@ def test_a_buy_with_no_price_is_refused(book_of):
 )
 def test_malformed_orders_are_refused(book_of, order):
     assert agent_book.validate(order, book_of([]), price=10.0) is not None
+
+
+# --- closed round trips (what the agent learns from) ---------------------------
+
+
+def test_a_buy_then_sell_becomes_one_closed_trade(monkeypatch):
+    trades = [
+        _trade(quantity=2, price=100.0, order_id="b1"),
+        _trade(side="sell", quantity=2, price=120.0, order_id="s1"),
+    ]
+    closed = agent_book.closed_trades(trades)
+
+    assert len(closed) == 1
+    assert closed[0].entry == 100.0
+    assert closed[0].exit == 120.0
+    assert closed[0].pnl == pytest.approx(40.0)
+    assert closed[0].return_pct == pytest.approx(20.0)
+    assert closed[0].won
+
+
+def test_an_open_position_is_not_a_closed_trade():
+    assert agent_book.closed_trades([_trade(quantity=2, price=100.0)]) == []
+
+
+def test_lots_are_matched_fifo_so_realized_pnl_agrees_with_the_book():
+    """If this diverged from compute_position, the history shown to the model
+    would contradict the realized figure shown beside it."""
+    trades = [
+        _trade(quantity=2, price=100.0, order_id="b1"),
+        _trade(quantity=2, price=200.0, order_id="b2"),
+        _trade(side="sell", quantity=3, price=150.0, order_id="s1"),
+    ]
+    closed = agent_book.closed_trades(trades)
+
+    # FIFO: 2 from the $100 lot, 1 from the $200 lot.
+    assert [(t.quantity, t.entry) for t in closed] == [(2.0, 100.0), (1.0, 200.0)]
+    assert sum(t.pnl for t in closed) == pytest.approx(100.0 - 50.0)
+
+
+def test_the_signal_decision_is_carried_from_the_buy_not_the_sell():
+    """"You bought this on a Hold" is the pattern worth naming, so the decision
+    has to come from the order that opened the position."""
+    buy = _trade(quantity=1, price=100.0, order_id="b1")
+    buy.signal_id = 7
+    sell = _trade(side="sell", quantity=1, price=90.0, order_id="s1")
+    sell.signal_id = 9
+
+    closed = agent_book.closed_trades([buy, sell], decisions={7: "Hold", 9: "Sell"})
+
+    assert closed[0].signal_decision == "Hold"
+
+
+def test_pending_orders_are_not_counted_as_round_trips():
+    trades = [
+        _trade(quantity=2, price=100.0, order_id="b1"),
+        _trade(side="sell", quantity=2, price=None, status="pending", order_id="s1"),
+    ]
+    assert agent_book.closed_trades(trades) == []

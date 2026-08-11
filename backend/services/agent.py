@@ -57,11 +57,56 @@ def _recent_signals() -> list:
     return [s for s in db.get_recent_signals(limit=_MAX_SIGNALS) if s.signal_date >= cutoff]
 
 
+# How many past trades to show individually. Enough to see a pattern, few
+# enough that the list does not crowd out today's actual decision.
+_HISTORY_SHOWN = 6
+
+
+def describe_history(closed: list) -> list[str]:
+    """The agent's own track record, in its own prompt.
+
+    Without this it wakes every morning with a book and no idea that the last
+    four things it bought on a Hold signal all lost money. A model that cannot
+    see its outcomes cannot avoid repeating them, and neither can you tell
+    whether it is learning.
+
+    Returns [] on an empty record rather than a line saying so — "you have made
+    no trades" is noise on day one, and the holdings section already says the
+    book is empty.
+    """
+    if not closed:
+        return []
+    wins = sum(1 for t in closed if t.won)
+    net = sum(t.pnl for t in closed)
+    held = sum(t.held_days for t in closed) / len(closed)
+    lines = [
+        f"How your own past trades turned out — {len(closed)} closed, {wins} profitable, "
+        f"{net:+,.2f} net, held {held:.0f} days on average:",
+    ]
+    for trade in closed[-_HISTORY_SHOWN:]:
+        origin = f" (analyst said {trade.signal_decision})" if trade.signal_decision else ""
+        lines.append(
+            f"- {trade.ticker}: bought ${trade.entry:,.2f}, sold ${trade.exit:,.2f}, "
+            f"{trade.return_pct:+.1f}% over {trade.held_days} day(s){origin}"
+        )
+
+    # The pattern most worth naming: this model bought a stock whose only signal
+    # was Hold, and put 98% of the budget into it.
+    on_hold = [t for t in closed if (t.signal_decision or "").lower() == "hold"]
+    if len(on_hold) >= 2:
+        hold_wins = sum(1 for t in on_hold if t.won)
+        lines.append(
+            f"Of the {len(on_hold)} you bought on a Hold signal, {hold_wins} made money."
+        )
+    return lines
+
+
 def build_prompt(
     book: agent_book.Book,
     signals: list,
     prices: dict[str, float | None],
     rejected: list[agent_book.Rejection] | None = None,
+    closed: list[agent_book.ClosedTrade] | None = None,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -131,6 +176,10 @@ def build_prompt(
             )
     else:
         lines.append("No new signals today.")
+
+    history = describe_history(closed or [])
+    if history:
+        lines += ["", *history]
 
     if rejected:
         lines += [
@@ -261,7 +310,7 @@ def _ask(prompt: str) -> str:
     return str(content)
 
 
-def _decide(book: agent_book.Book, signals: list, prices: dict[str, float | None]):
+def _decide(book: agent_book.Book, signals: list, prices: dict[str, float | None], closed=None):
     """(reasoning, accepted, rejected), with one correction pass.
 
     A refused order is information the model never sees otherwise: it proposed
@@ -276,14 +325,14 @@ def _decide(book: agent_book.Book, signals: list, prices: dict[str, float | None
     than merging, because nothing has been placed yet and two half-adopted plans
     are harder to reason about than one.
     """
-    reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices)))
+    reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices, closed=closed)))
     accepted, rejected = screen(proposed, book, prices)
     if not rejected:
         return reasoning, accepted, rejected
 
     log.info("Re-asking after %d refused order(s): %s", len(rejected), [r.why for r in rejected])
     retry_reasoning, retry_proposed = parse_decision(
-        _ask(build_prompt(book, signals, prices, rejected=rejected))
+        _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed))
     )
     if not retry_proposed:
         # A retry that proposes nothing is a decision to stand pat; keep the
@@ -439,7 +488,12 @@ def run_once() -> AgentRun:
     prices = _price_map([s.ticker for s in signals] + [h.ticker for h in book.holdings])
     book = agent_book.build_book(price_lookup=prices.get)
 
-    reasoning, accepted, rejected = _decide(book, signals, prices)
+    # What its own past decisions did. Signal decisions are joined in so the
+    # history can say "you bought this on a Hold", which is the pattern worth
+    # naming.
+    decisions = {s.id: s.decision for s in db.get_recent_signals(limit=200) if s.id}
+    closed = agent_book.closed_trades(decisions=decisions)
+    reasoning, accepted, rejected = _decide(book, signals, prices, closed=closed)
 
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
     signal_by_ticker = {s.ticker: s.id for s in signals}

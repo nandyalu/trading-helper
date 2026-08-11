@@ -187,3 +187,79 @@ def validate(order: dict, book: Book, price: float | None) -> Rejection | None:
     if cost > book.cash + _CASH_EPSILON:
         return no(f"costs ${cost:,.2f} but only ${book.cash:,.2f} is uninvested")
     return None
+
+
+@dataclass
+class ClosedTrade:
+    """One completed round trip: bought, then sold."""
+
+    ticker: str
+    quantity: float
+    entry: float
+    exit: float
+    opened: datetime.date
+    closed: datetime.date
+    signal_decision: str | None = None  # what the analyst said when it bought
+
+    @property
+    def pnl(self) -> float:
+        return (self.exit - self.entry) * self.quantity
+
+    @property
+    def return_pct(self) -> float:
+        return (self.exit / self.entry - 1) * 100 if self.entry else 0.0
+
+    @property
+    def held_days(self) -> int:
+        return (self.closed - self.opened).days
+
+    @property
+    def won(self) -> bool:
+        return self.pnl > 0
+
+
+def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[ClosedTrade]:
+    """Completed round trips, oldest first, matched FIFO.
+
+    The agent has no memory otherwise: every morning it wakes with a book and
+    no idea that the last four things it bought on a Hold signal all lost
+    money. This is the raw material for telling it — see agent.build_prompt.
+
+    Matching is FIFO to agree with compute_position, so the realized P/L summed
+    here equals the realized P/L on the book rather than diverging from it.
+    """
+    rows = trades if trades is not None else db.get_agent_trades()
+    decisions = decisions or {}
+    open_lots: dict[str, list[list]] = {}  # ticker -> [[qty, price, date, decision], ...]
+    closed: list[ClosedTrade] = []
+
+    for trade in rows:
+        if trade.status != "filled" or trade.price is None:
+            continue
+        when = (trade.filled_at or trade.placed_at).date()
+        if trade.side == "buy":
+            open_lots.setdefault(trade.ticker, []).append(
+                [trade.quantity, trade.price, when, decisions.get(trade.signal_id)]
+            )
+            continue
+        remaining = trade.quantity
+        lots = open_lots.get(trade.ticker, [])
+        while remaining > _QUANTITY_EPSILON and lots:
+            lot = lots[0]
+            matched = min(lot[0], remaining)
+            closed.append(
+                ClosedTrade(
+                    ticker=trade.ticker,
+                    quantity=matched,
+                    entry=lot[1],
+                    exit=trade.price,
+                    opened=lot[2],
+                    closed=when,
+                    signal_decision=lot[3],
+                )
+            )
+            lot[0] -= matched
+            remaining -= matched
+            if lot[0] <= _QUANTITY_EPSILON:
+                lots.pop(0)
+    return closed

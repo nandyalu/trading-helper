@@ -407,6 +407,8 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or 0)
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
+    monkeypatch.setattr(agent.agent_book, "closed_trades", lambda decisions=None: [])
     monkeypatch.setattr(agent, "_price_map", lambda _t: {"AAA": 10.0})
     monkeypatch.setattr(
         agent.agent_book, "build_book",
@@ -414,7 +416,7 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
     )
     monkeypatch.setattr(
         agent, "_decide",
-        lambda *a: ("go", [{"ticker": "AAA", "side": "buy", "quantity": 1}], []),
+        lambda *a, **kw: ("go", [{"ticker": "AAA", "side": "buy", "quantity": 1}], []),
     )
     monkeypatch.setattr(
         agent.sandbox_broker, "place_market_order",
@@ -437,10 +439,81 @@ def test_a_run_that_places_nothing_does_not_settle_twice(monkeypatch):
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or 0)
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
+    monkeypatch.setattr(agent.agent_book, "closed_trades", lambda decisions=None: [])
     monkeypatch.setattr(agent, "_price_map", lambda _t: {})
     monkeypatch.setattr(agent.agent_book, "build_book", lambda price_lookup=None: _book())
-    monkeypatch.setattr(agent, "_decide", lambda *a: ("hold", [], []))
+    monkeypatch.setattr(agent, "_decide", lambda *a, **kw: ("hold", [], []))
 
     agent.run_once()
 
     assert calls.count("settle") == 1
+
+
+# --- learning from its own record ----------------------------------------------
+
+
+def _closed(ticker="AAA", entry=100.0, exit=110.0, days=5, decision=None, qty=2):
+    import datetime
+
+    return agent_book.ClosedTrade(
+        ticker=ticker,
+        quantity=qty,
+        entry=entry,
+        exit=exit,
+        opened=datetime.date(2026, 8, 1),
+        closed=datetime.date(2026, 8, 1) + datetime.timedelta(days=days),
+        signal_decision=decision,
+    )
+
+
+def test_an_empty_record_adds_nothing_to_the_prompt():
+    """"You have made no trades" is noise on day one, and the holdings section
+    already says the book is empty."""
+    assert agent.describe_history([]) == []
+
+
+def test_the_record_leads_with_the_score():
+    lines = agent.describe_history([_closed(exit=110.0), _closed(exit=90.0)])
+
+    assert "2 closed, 1 profitable" in lines[0]
+    assert "held 5 days on average" in lines[0]
+
+
+def test_each_past_trade_shows_its_return_and_what_the_analyst_had_said():
+    lines = agent.describe_history([_closed(entry=100.0, exit=110.0, decision="Buy")])
+
+    assert any("+10.0% over 5 day(s) (analyst said Buy)" in line for line in lines)
+
+
+def test_buying_on_hold_signals_is_called_out_once_there_is_a_pattern():
+    """The model put 98% of the budget into a stock whose only signal was Hold.
+    One instance is an anecdote; two is worth telling it about."""
+    closed = [_closed(decision="Hold", exit=90.0), _closed(decision="Hold", exit=95.0)]
+
+    lines = agent.describe_history(closed)
+
+    assert any("bought on a Hold signal, 0 made money" in line for line in lines)
+
+
+def test_a_single_hold_trade_is_not_called_a_pattern():
+    lines = agent.describe_history([_closed(decision="Hold", exit=90.0)])
+    assert not any("Hold signal," in line for line in lines)
+
+
+def test_only_the_most_recent_trades_are_listed_individually():
+    """The list must not crowd out today's actual decision."""
+    closed = [_closed(ticker=f"T{i}") for i in range(20)]
+
+    lines = agent.describe_history(closed)
+
+    assert len(lines) - 1 <= agent._HISTORY_SHOWN
+    assert "T19" in "\n".join(lines)
+    assert "T0:" not in "\n".join(lines)
+
+
+def test_the_record_reaches_the_prompt():
+    prompt = agent.build_prompt(
+        _book(), [], {}, closed=[_closed(decision="Buy", entry=100.0, exit=120.0)]
+    )
+    assert "How your own past trades turned out" in prompt
