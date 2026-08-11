@@ -21,7 +21,7 @@ import os
 from quiv import Quiv, run_on_main
 
 from backend.database import db
-from backend.services import agent, analysis, broker, listings, paper, regime, watchdog
+from backend.services import agent, analysis, broker, listings, paper, quotes, regime, watchdog
 from backend.services.digest import build_weekly_digest_embed
 from backend.discord_bot.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
@@ -201,6 +201,12 @@ async def _broker_sync_job() -> None:
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
         return
     if not broker.is_configured():
+        return
+    # run_sync refuses in sandbox and explains why, which is right for someone
+    # who typed /webullsync and is waiting for an answer. Posting that same
+    # explanation unprompted every weekday morning is just noise, so the
+    # scheduled job stays quiet about it.
+    if quotes.is_sandbox():
         return
     try:
         summary = await asyncio.to_thread(broker.run_sync)
