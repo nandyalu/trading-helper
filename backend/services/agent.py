@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 
 from backend.database import db
-from backend.services import agent_book, analysis, quotes, sandbox_broker
+from backend.services import agent_book, analysis, quotes, sandbox_broker, watchdog
 from backend.services.positions import get_current_price
 
 log = logging.getLogger("trading-bot.agent")
@@ -717,3 +717,102 @@ def format_stop_fill(fill: dict) -> str:
         f"at ${fill['price']:,.2f}. The thesis level from the analysis was reached, "
         "so the paper position is closed."
     )
+
+
+@dataclass
+class ResetResult:
+    cancelled: int = 0
+    closed: list[str] = field(default_factory=list)
+    cleared: int = 0
+    refused: str | None = None
+
+
+def reset_book(pending_external_flatten: bool = False) -> ResetResult:
+    """Return the agent to a flat book and an empty ledger.
+
+    For when the agent itself has changed enough that its record describes a
+    system that no longer exists — a new prompt, new rules, exits it did not
+    have. Not for a run that went badly: resetting on bad results is how you
+    accumulate no evidence at all, and the baselines exist precisely so a bad
+    run can be read rather than erased.
+
+    The broker is asked first, and what it says decides the work. An account
+    already flat — reset from Webull's own site, say — needs nothing sold, so
+    the ledger is simply cleared and the market's hours are irrelevant. Only
+    when shares are actually held does this have to cancel and sell, which
+    market orders make a market-hours operation.
+
+    The ledger is cleared **only after the account is confirmed empty**.
+    Clearing first would leave the ledger claiming nothing while the broker
+    still held shares, which is the one disagreement reconciliation cannot
+    recover from.
+    """
+    if not quotes.is_sandbox():
+        return ResetResult(refused="Webull is not in sandbox mode.")
+
+    result = ResetResult()
+    held = sandbox_broker.get_positions()
+
+    if pending_external_flatten and held:
+        # The account is going to be flattened from Webull's own site, so the
+        # usual refusal would just block a reset that is genuinely intended.
+        # But between now and then the ledger and the account disagree, and an
+        # agent trading into that gap would buy positions the site reset then
+        # silently wipes — leaving the ledger claiming stock that is gone. So
+        # the agent is switched off as part of this, and only turning it back
+        # on resumes trading.
+        for ticker in sorted(held):
+            result.cancelled += _cancel_resting_exits(ticker)
+        set_enabled(False)
+        result.cleared = db.clear_agent_trades()
+        result.refused = (
+            f"Ledger cleared and the agent switched OFF. The account still holds {held} "
+            "with the exits cancelled — flatten it on Webull's site, then switch the "
+            "agent back on."
+        )
+        log.warning("Ledger cleared ahead of an external flatten; agent disabled")
+        return result
+    if held is None:
+        return ResetResult(refused="Couldn't read the account — nothing was touched.")
+
+    if held:
+        # Checked before anything is touched. Market orders are rejected outside
+        # the session, so a reset started after the close would cancel the exits,
+        # fail to sell, and leave the positions naked overnight — which is how
+        # this guard came to exist.
+        if not watchdog.is_us_market_hours():
+            return ResetResult(
+                refused=f"The account still holds {held}, and closing a position needs a "
+                "market order. Nothing was touched — reset it on Webull's site, or run "
+                "this again once the market opens."
+            )
+        # Cancel and sell one holding at a time. Cancelling everything up front
+        # means a failure on the first sell leaves every other position
+        # unprotected too, rather than only the one being closed.
+        for ticker, quantity in sorted(held.items()):
+            result.cancelled += _cancel_resting_exits(ticker)
+            try:
+                sandbox_broker.place_market_order(ticker, "SELL", quantity)
+                result.closed.append(f"{quantity:g} {ticker}")
+            except Exception as exc:
+                log.exception("Couldn't close %s during reset", ticker)
+                result.refused = f"Couldn't close {ticker}: {exc}"
+                return result
+
+        still_held = sandbox_broker.get_positions()
+        if still_held is None or still_held:
+            result.refused = (
+                f"Account still holds {still_held} — the sells may not have filled yet. "
+                "Ledger left alone; try again once they have."
+            )
+            return result
+
+    # Nothing is held, so any exit still resting belongs to a position that no
+    # longer exists — an order to sell shares the account does not have.
+    for trade in db.get_pending_agent_trades():
+        if trade.is_stop and sandbox_broker.cancel_order(trade.client_order_id):
+            result.cancelled += 1
+
+    result.cleared = db.clear_agent_trades()
+    log.info("Agent book reset: cleared %d ledger row(s)", result.cleared)
+    return result

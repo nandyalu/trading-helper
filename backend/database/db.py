@@ -631,3 +631,19 @@ def settle_agent_trade(
         row.broker_order_id = broker_order_id
     _session.add(row)
     _session.commit()
+
+
+@write_session
+def clear_agent_trades(*, _session: Session = None) -> int:
+    """Delete the agent's entire ledger. Returns how many rows went.
+
+    Only ever called after the simulated account has been confirmed flat — see
+    backend/services/agent.py reset_book. Clearing while positions remain would
+    leave the ledger claiming nothing and the broker holding shares, which is
+    the one state the reconciliation check cannot recover from.
+    """
+    rows = list(_session.exec(select(AgentTrade)).all())
+    for row in rows:
+        _session.delete(row)
+    _session.commit()
+    return len(rows)

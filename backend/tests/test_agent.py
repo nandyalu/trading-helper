@@ -733,3 +733,175 @@ def test_an_unknown_price_does_not_block_arming(monkeypatch):
     agent._arm_exits({"ticker": "AAA", "quantity": 1, "side": "buy"}, 90.0, 110.0)
 
     assert placed == {"stop": 90.0, "target": 110.0}
+
+
+# --- resetting the book --------------------------------------------------------
+
+
+def _reset_world(monkeypatch, held, held_after=None, sell_fails=False, open_market=True):
+    """The broker is the authority here, so ``held`` is what it reports."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: open_market)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
+    monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [])
+
+    positions = iter([held, held_after if held_after is not None else {}])
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: next(positions, {}))
+
+    def sell(ticker, side, qty):
+        if sell_fails:
+            raise RuntimeError("market closed")
+        return {"client_order_id": "x", "placed_at": None}
+
+    monkeypatch.setattr(agent.sandbox_broker, "place_market_order", sell)
+    cleared = []
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: cleared.append(1) or 7)
+    return cleared
+
+
+def test_a_reset_closes_positions_and_clears(monkeypatch):
+    cleared = _reset_world(monkeypatch, held={"AAA": 10.0})
+
+    result = agent.reset_book()
+
+    assert result.closed == ["10 AAA"]
+    assert result.cleared == 7 and cleared == [1]
+
+
+def test_an_already_flat_account_just_clears_the_ledger(monkeypatch):
+    """Reset from Webull's own site: nothing to sell, so the market's hours are
+    irrelevant."""
+    cleared = _reset_world(monkeypatch, held={}, open_market=False)
+
+    result = agent.reset_book()
+
+    assert result.closed == []
+    assert result.cleared == 7 and cleared == [1]
+
+
+def test_a_reset_refuses_before_touching_anything_when_the_market_is_shut(monkeypatch):
+    """Started after the close, a reset cancels the exits, fails to sell, and
+    leaves the positions naked overnight. That happened once; this is why the
+    check comes before the first cancel."""
+    touched = []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: touched.append("cancel") or 1)
+    monkeypatch.setattr(agent.sandbox_broker, "place_market_order", lambda *a: touched.append("sell"))
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: touched.append("clear") or 0)
+
+    result = agent.reset_book()
+
+    assert touched == [], "nothing may be touched when the reset cannot finish"
+    assert "market opens" in result.refused
+
+
+def test_the_ledger_survives_if_the_account_is_not_flat_afterwards(monkeypatch):
+    """Clearing while shares remain leaves the ledger claiming nothing and the
+    broker holding stock — the one disagreement reconciliation cannot fix."""
+    cleared = _reset_world(monkeypatch, held={"AAA": 10.0}, held_after={"AAA": 10.0})
+
+    result = agent.reset_book()
+
+    assert result.cleared == 0 and cleared == []
+    assert "still holds" in result.refused
+
+
+def test_the_ledger_survives_if_a_sell_fails(monkeypatch):
+    cleared = _reset_world(monkeypatch, held={"AAA": 10.0}, sell_fails=True)
+
+    result = agent.reset_book()
+
+    assert cleared == []
+    assert "Couldn't close AAA" in result.refused
+
+
+def test_the_ledger_survives_if_the_account_cannot_be_read(monkeypatch):
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: None)
+    cleared = []
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: cleared.append(1) or 0)
+
+    result = agent.reset_book()
+
+    assert cleared == []
+    assert "Couldn't read the account" in result.refused
+
+
+def test_a_reset_is_refused_outside_the_sandbox(monkeypatch):
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: False)
+    result = agent.reset_book()
+    assert result.cleared == 0
+    assert "not in sandbox" in result.refused
+
+
+def test_a_failed_sell_leaves_the_other_positions_protected(monkeypatch):
+    """Cancelling every exit up front means one failure exposes the whole book
+    instead of the single position being closed."""
+    cancelled = []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0, "BBB": 1.0})
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: cancelled.append(t) or 1)
+
+    def sell(*a):
+        raise RuntimeError("rejected")
+
+    monkeypatch.setattr(agent.sandbox_broker, "place_market_order", sell)
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: 0)
+
+    agent.reset_book()
+
+    assert cancelled == ["AAA"], "BBB's exits must still be resting"
+
+
+def test_exits_left_over_from_a_site_reset_are_cancelled(monkeypatch):
+    """An exit resting against a position that no longer exists is an order to
+    sell shares the account does not have."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {})
+
+    class Stop:
+        client_order_id, is_stop = "s1", True
+
+    monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Stop()])
+    monkeypatch.setattr(agent.sandbox_broker, "cancel_order", lambda _id: True)
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: 3)
+
+    result = agent.reset_book()
+
+    assert result.cancelled == 1
+    assert result.cleared == 3
+
+
+def test_a_reset_ahead_of_a_site_flatten_disables_the_agent(monkeypatch):
+    """Between the ledger being cleared and the account being flattened the two
+    disagree. An agent trading into that gap buys positions the site reset then
+    wipes, leaving the ledger claiming stock that is gone."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: 5)
+    disabled = []
+    monkeypatch.setattr(agent, "set_enabled", lambda on: disabled.append(on))
+
+    result = agent.reset_book(pending_external_flatten=True)
+
+    assert result.cleared == 5
+    assert result.cancelled == 2, "live exits must not outlive the ledger that tracked them"
+    assert disabled == [False]
+    assert "switched OFF" in result.refused
+
+
+def test_the_normal_reset_still_refuses_a_held_account(monkeypatch):
+    """The escape hatch must be asked for explicitly, never the default."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
+    cleared = []
+    monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: cleared.append(1) or 0)
+
+    agent.reset_book()
+
+    assert cleared == []
