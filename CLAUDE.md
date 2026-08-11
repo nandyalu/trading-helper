@@ -111,9 +111,12 @@ save. Every `Signal` records `model`, and the scorecard's `by_model`
 breakdown is the point of the whole mechanism — switching models teaches you
 nothing if the win rates blend.
 
-**Current model (2026-08-06):** `gemma4-e2b-96k`, a custom Modelfile build of
-`gemma4:e2b` with the context raised to 96k. A full analysis takes 2-3 minutes,
-against roughly 15 for `qwen3:latest`.
+**Current model (2026-08-11):** `gemma4-e2b-96k`, a custom Modelfile build of
+`gemma4:e2b` with the context raised to 96k. A full analysis takes about 7
+minutes, against roughly 15 for `qwen3:latest`. That is 23 LLM calls spending
+roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured
+2026-08-11). An earlier "2-3 minutes" figure here was wrong: 7 matches both
+that run and days of observed sweeps.
 
 This supersedes an earlier "known-bad model" note about `gemma4:e2b`. Stock
 `gemma4:e2b` did hit a `GraphRecursionError` on ZBH — its reasoning loop never
