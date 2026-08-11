@@ -20,6 +20,7 @@ from tradingagents.llm_clients.openai_client import OPENAI_COMPATIBLE_PROVIDERS
 from backend.database import db
 from backend.database.models import Signal
 from backend.discord_bot.notify import notify
+from backend.services import llm_usage
 from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
 from backend.services.signals import (
@@ -230,7 +231,9 @@ def list_models(*, force: bool = False) -> list[str]:
     return models
 
 
-def _build_graph(model: str | None = None) -> TradingAgentsGraph:
+def _build_graph(
+    model: str | None = None, tracker: llm_usage.UsageTracker | None = None
+) -> TradingAgentsGraph:
     """A fresh instance per analysis run. TradingAgentsGraph.propagate()
     mutates its own state in place (self.graph — recompiled every call,
     self.curr_state, self.ticker, self._checkpointer_ctx), so two concurrent
@@ -239,10 +242,15 @@ def _build_graph(model: str | None = None) -> TradingAgentsGraph:
     I/O) — the expense is entirely in propagate()'s LLM calls.
 
     ``model`` overrides the configured LLM for both think stages; None reads
-    the current setting."""
+    the current setting. ``tracker`` counts the tokens every stage spends —
+    attached here because this is the only place that sees both clients before
+    the agents start sharing them."""
     config = DEFAULT_CONFIG.copy()
     config["deep_think_llm"] = config["quick_think_llm"] = model or get_model()
-    return TradingAgentsGraph(config=config)
+    graph = TradingAgentsGraph(config=config)
+    if tracker is not None:
+        llm_usage.attach(tracker, graph.deep_thinking_llm, graph.quick_thinking_llm)
+    return graph
 
 
 def _quick_think_llm():
@@ -267,18 +275,25 @@ async def propagate_ticker(ticker: str) -> tuple[dict, str]:
     ``horizon`` reaches the prompts through propagate(), and comes back out in
     final_state, which is where record_signal reads it from — so the recorded
     signal always carries the horizon the run actually used, even if the
-    setting changes while the analysis is in flight. The model is put into
-    final_state here for exactly the same reason; TradingAgents has no reason
-    to report it itself."""
+    setting changes while the analysis is in flight. The model and what the run
+    cost are put into final_state here for exactly the same reason;
+    TradingAgents has no reason to report either itself.
+
+    The clock starts after the graph is built and the semaphore is acquired, so
+    the recorded duration is the analysis itself — not the queue behind three
+    other analyses holding the GPUs."""
     async with _analysis_semaphore:
         trade_date = datetime.date.today().isoformat()
         horizon = await asyncio.to_thread(get_horizon)
         model = await asyncio.to_thread(get_model)
-        graph = await asyncio.to_thread(_build_graph, model)
+        tracker = llm_usage.UsageTracker()
+        graph = await asyncio.to_thread(_build_graph, model, tracker)
+        started = time.monotonic()
         final_state, decision = await asyncio.to_thread(
             graph.propagate, ticker, trade_date, horizon=horizon
         )
         final_state["llm_model"] = model
+        final_state["llm_usage"] = tracker.finish(time.monotonic() - started)
         return final_state, decision
 
 
@@ -369,6 +384,9 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     # propagate_ticker.
     horizon = final_state.get("horizon") or get_horizon()
     model = final_state.get("llm_model") or get_model()
+    # Absent for a signal recorded outside propagate_ticker (a replayed
+    # final_state, a test), which stores NULL rather than a fabricated zero.
+    usage = final_state.get("llm_usage") or llm_usage.Usage()
     params = horizon_params(horizon)
     evaluation_date = datetime.date.today() + datetime.timedelta(
         days=parse_time_horizon_days(
@@ -389,6 +407,10 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         message_id=message_id,
         horizon=horizon,
         model=model,
+        duration_seconds=usage.duration_seconds,
+        prompt_tokens=usage.prompt_tokens or None,
+        completion_tokens=usage.completion_tokens or None,
+        llm_calls=usage.llm_calls or None,
         entry_price=levels["entry_price"],
         stop_loss=_resolve_stop_loss(ticker, decision, levels["stop_loss"], price),
         win_probability=levels["win_probability"],
@@ -561,5 +583,33 @@ def format_decision_embed(
     if sizing_field:
         embed.add_field(name="Suggested sizing", value=sizing_field[:_FIELD_MAX], inline=False)
 
-    embed.set_footer(text=f"TradingAgents · {final_state.get('trade_date', '')}")
+    footer = ["TradingAgents", final_state.get("trade_date", "")]
+    if final_state.get("llm_model"):
+        footer.append(final_state["llm_model"])
+    cost = format_run_cost(final_state.get("llm_usage"))
+    if cost:
+        footer.append(cost)
+    embed.set_footer(text=" · ".join(part for part in footer if part))
     return embed
+
+
+def format_run_cost(usage) -> str | None:
+    """What the run cost, for the embed footer — "2m 14s · 48.2k tokens
+    (44.1k in / 4.1k out)". None when nothing was measured, so an unmeasured
+    run shows no cost rather than a confident zero."""
+    if usage is None or (not usage.duration_seconds and not usage.total_tokens):
+        return None
+    parts = []
+    if usage.duration_seconds:
+        minutes, seconds = divmod(int(usage.duration_seconds), 60)
+        parts.append(f"{minutes}m {seconds}s" if minutes else f"{seconds}s")
+    if usage.total_tokens:
+        parts.append(
+            f"{_thousands(usage.total_tokens)} tokens "
+            f"({_thousands(usage.prompt_tokens)} in / {_thousands(usage.completion_tokens)} out)"
+        )
+    return " · ".join(parts)
+
+
+def _thousands(count: int) -> str:
+    return f"{count / 1000:.1f}k" if count >= 1000 else str(count)

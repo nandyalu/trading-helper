@@ -45,6 +45,10 @@ class SignalOut(OrmModel):
     price_target_hit: bool | None
     horizon: str | None
     model: str | None
+    duration_seconds: float | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    llm_calls: int | None
     entry_price: float | None
     stop_loss: float | None
     win_probability: float | None

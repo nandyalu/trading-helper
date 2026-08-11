@@ -128,6 +128,17 @@ Two things go wrong more often than a bad answer does:
 
 Watch the logs after a switch, not just the win rate.
 
+### What a run costs
+
+Every signal also records how long its analysis took, how many LLM calls it made, and how many tokens went in and came back out.
+The Discord embed carries a short version in its footer; the signal detail page shows all of it.
+
+This is here for one decision: whether to keep self-hosting or move to a cloud provider.
+The two are not billed in the same currency — a local model costs GPU time on hardware you already own, a hosted one costs tokens on an invoice, and providers charge several times more for output tokens than input ones.
+Recording both, per run, from the provider's own accounting rather than an estimate, is what makes the comparison an arithmetic problem instead of a guess.
+
+A run that was never measured stores nothing rather than zero, and shows nothing rather than a free run.
+
 ## The daily schedule (all times UTC, weekdays)
 
 | Time | What happens |

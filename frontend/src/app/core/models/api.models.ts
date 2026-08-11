@@ -32,6 +32,11 @@ export interface Signal {
   price_target_hit: boolean | null;
   horizon: string | null; // "swing" | "position"
   model: string | null; // the LLM that produced it; null on rows predating the column
+  // What the run cost. Null means it wasn't measured, never that it was free.
+  duration_seconds: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  llm_calls: number | null;
   // The trade plan, from TradingAgents' trader stage. Null means the model did
   // not state it — never zero.
   entry_price: number | null;

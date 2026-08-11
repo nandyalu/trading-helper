@@ -49,6 +49,12 @@ class Signal(SQLModel, table=True):
     answers anything. NULL means a row predating the column, which in practice
     means gemma4-e2b-96k.
 
+    ``duration_seconds`` through ``llm_calls`` are what the run cost. A
+    self-hosted model is billed in GPU time and a cloud one in tokens, so
+    choosing between them needs both, per run, from the provider's own
+    accounting — see backend/services/llm_usage.py. All nullable: NULL means
+    the run wasn't measured, never that it was free.
+
     The trade-plan fields (``entry_price`` through ``expected_value_r``) come
     from the trader stage rather than the final decision text — see
     backend/services/signals.py. They are the exit level and the quality of the
@@ -77,6 +83,10 @@ class Signal(SQLModel, table=True):
     price_target_hit: bool | None = None  # price touched the target within the window
     horizon: str | None = Field(default=None, index=True)  # "swing" | "position"
     model: str | None = Field(default=None, index=True)  # the LLM that produced it
+    duration_seconds: float | None = None  # how long the graph took, queue time excluded
+    prompt_tokens: int | None = None  # summed over every LLM call in the run
+    completion_tokens: int | None = None
+    llm_calls: int | None = None  # tells "endpoint reported no usage" from "run died early"
     entry_price: float | None = None  # the level the trader proposed entering at
     stop_loss: float | None = None  # the level at which the thesis is wrong
     win_probability: float | None = None  # 0-100, the model's own estimate

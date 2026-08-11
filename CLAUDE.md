@@ -199,6 +199,29 @@ until you also commit the updated gitlink here: `git add TradingAgents && git
 commit -m "..."` from the trading-helper root. `git status` at the root shows
 `TradingAgents` as dirty/ahead whenever the two are out of sync.
 
+## Per-run cost telemetry
+
+`backend/services/llm_usage.py` counts what each analysis spends: wall-clock
+seconds, LLM calls, and prompt/completion tokens, stored on `Signal` and shown
+in the Discord footer and the signal detail page. It exists to make the
+self-host-vs-cloud decision arithmetic rather than guesswork, which is why the
+token split by direction matters (cloud output tokens cost several times input
+ones).
+
+Two things about it are easy to get wrong:
+
+- **The counts come from the provider's `usage` block, never a tokenizer
+  estimate.** An estimate is wrong by exactly the amount that matters once it
+  is multiplied by a price per million.
+- **`UsageTracker` attaches to the two LLM client objects, not to a
+  `propagate()` argument** — `propagate()` accepts no callbacks, and every
+  agent, the debate, the reflector, and the signal processor all share
+  `graph.deep_thinking_llm` / `graph.quick_thinking_llm`. Attaching there is
+  what makes the count cover the whole run. A per-run tracker is safe because
+  `_build_graph` already builds a fresh graph per analysis.
+
+An unmeasured run stores NULL, never 0 — a zero would read as a free run.
+
 ## The model invents price levels (important)
 
 `gemma4-e2b` reasons acceptably in prose but does not reliably carry concrete

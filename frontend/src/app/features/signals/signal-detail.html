@@ -145,6 +145,53 @@
       </section>
     }
 
+    @if (hasRunCost(s)) {
+      <section class="card">
+        <div class="card-head">
+          <h2>What this run cost</h2>
+          <p class="hint">
+            A self-hosted model is paid for in GPU time, a cloud one in tokens — and cloud providers
+            charge more for output than input. Both are recorded so the two can be compared when it
+            matters.
+          </p>
+        </div>
+        <div class="card-body">
+          <dl class="meta-grid">
+            @if (s.model) {
+              <div>
+                <dt>Model</dt>
+                <dd>{{ s.model }}</dd>
+              </div>
+            }
+            @if (s.duration_seconds !== null) {
+              <div>
+                <dt>Time taken</dt>
+                <dd>{{ duration(s.duration_seconds) }}</dd>
+              </div>
+            }
+            @if (s.prompt_tokens !== null) {
+              <div>
+                <dt>Input tokens</dt>
+                <dd>{{ s.prompt_tokens.toLocaleString() }}</dd>
+              </div>
+            }
+            @if (s.completion_tokens !== null) {
+              <div>
+                <dt>Output tokens</dt>
+                <dd>{{ s.completion_tokens.toLocaleString() }}</dd>
+              </div>
+            }
+            @if (s.llm_calls !== null) {
+              <div>
+                <dt>LLM calls</dt>
+                <dd>{{ s.llm_calls }}</dd>
+              </div>
+            }
+          </dl>
+        </div>
+      </section>
+    }
+
     <section class="card">
       <div class="card-head">
         <h2>Rationale</h2>

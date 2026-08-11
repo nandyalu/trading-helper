@@ -55,6 +55,18 @@ export class SignalDetailPage {
     );
   }
 
+  /** Whether the run was measured at all. Signals recorded before the columns
+   * existed have none of it, and an unmeasured run must not render as free. */
+  protected hasRunCost(s: SignalDetail): boolean {
+    return s.duration_seconds !== null || s.prompt_tokens !== null || s.llm_calls !== null;
+  }
+
+  protected duration(seconds: number): string {
+    const whole = Math.round(seconds);
+    const minutes = Math.floor(whole / 60);
+    return minutes ? `${minutes}m ${whole % 60}s` : `${whole}s`;
+  }
+
   /** How far the stop sits below the proposed entry, as a percentage — the
    * planned loss if the thesis fails. */
   protected stopDistance(s: SignalDetail): string {
