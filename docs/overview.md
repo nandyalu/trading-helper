@@ -142,7 +142,13 @@ A run that was never measured stores nothing rather than zero, and shows nothing
 ## The auto trader
 
 A simulated Webull account the model trades on its own, inside a budget you set (default $1,000).
-It runs each weekday at 13:35 UTC — five minutes after the US open — on the signals produced by the previous evening's sweep.
+It runs on two triggers.
+
+Each weekday at 13:35 UTC — five minutes after the US open — it decides on everything the previous evening's sweep produced.
+And whenever an intraday analysis is triggered during market hours, by an unusual move or a volume spike, it decides again on the spot, at most once every 30 minutes.
+
+The split is deliberate. The nightly sweep lands at 21:30 UTC, which is 17:30 in New York — nothing placed then can fill, and deciding its eight signals one at a time would hand the budget out first-come-first-served instead of weighing them against each other.
+An intraday trigger is the opposite: it arrives while the market is open, and a move worth analyzing at 11:00 is worth nothing by the next morning.
 
 **No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
 The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.

@@ -108,6 +108,47 @@ async def _run_triggered_analyses(reasons: dict[str, str]) -> None:
         list(reasons),
         on_failure=lambda ticker: notify(f"Triggered analysis failed for {ticker} — check the logs."),
     )
+    await _maybe_run_agent()
+
+
+# Event-driven agent runs are rate-limited. A triggered analysis takes about
+# seven minutes and the watchdog ticks every fifteen, so a busy morning could
+# otherwise have the model re-plan the whole book several times an hour against
+# a book that has barely moved.
+_AGENT_COOLDOWN = datetime.timedelta(minutes=30)
+_last_agent_run: datetime.datetime | None = None
+
+
+async def _maybe_run_agent() -> None:
+    """Let the agent act on fresh intraday signals, but only when it could
+    actually trade on them.
+
+    The nightly sweep is deliberately *not* wired here. 21:30 UTC is 17:30 in
+    New York, so nothing placed then can fill, and deciding its eight signals
+    one at a time would hand the budget out first-come-first-served instead of
+    comparing them against each other — which is the entire job. Those go to
+    the 13:35 batch, which re-decides at the open on fresh prices.
+
+    Intraday triggers are the opposite case: they arrive while the market is
+    open, and a move worth analyzing at 11:00 is worth nothing by tomorrow
+    morning. The earnings check reaches this too, but runs pre-market, so it
+    falls through the market-hours gate to the batch — which is right.
+    """
+    global _last_agent_run
+    if not agent.is_enabled() or not watchdog.is_us_market_hours():
+        return
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if _last_agent_run is not None and now - _last_agent_run < _AGENT_COOLDOWN:
+        log.info("Agent ran %s ago — inside the cooldown, skipping", now - _last_agent_run)
+        return
+    _last_agent_run = now
+    try:
+        run = await asyncio.to_thread(agent.run_once)
+    except Exception:
+        log.exception("Event-driven agent run failed")
+        return
+    if run.acted or run.rejected or run.failed:
+        await notify(embed=agent.format_run_embed(run))
 
 
 async def _daily_signals_job() -> None:
@@ -268,10 +309,14 @@ async def _paper_agent_job() -> None:
     The five-minute delay past 09:30 lets the opening auction settle, so the
     price the agent is shown is a traded price rather than the first print.
     """
+    global _last_agent_run
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
         return
     if not agent.is_enabled():
         return
+    # Shares the cooldown clock with the event-driven path, so a trigger firing
+    # minutes after the batch doesn't re-plan a book that just moved.
+    _last_agent_run = datetime.datetime.now(datetime.timezone.utc)
     try:
         run = await asyncio.to_thread(agent.run_once)
     except Exception:
