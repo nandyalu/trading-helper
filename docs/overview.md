@@ -112,6 +112,22 @@ A ±10% band over six months is reasonably tight; over two weeks it is so wide t
 Each signal records the horizon it was made under, so changing the setting never re-grades older signals by new rules.
 It does mean a scorecard covering both horizons is comparing two different questions — start fresh after a switch.
 
+## The analysis model
+
+Every analysis runs on one LLM, chosen with `/model` or on the settings page, from whatever the configured endpoint has pulled.
+The default is the model the stack's `TRADINGAGENTS_DEEP_THINK_LLM` names, so leaving the setting alone changes nothing.
+
+Each signal records the model that produced it, and the scorecard grows a "By model" table as soon as a second model has resolved signals.
+That table is the only reason to switch: a new model's win rate has to be readable next to the old one's, not blended into it.
+Give it enough signals to mean something — a win rate under 20 resolved signals is noise whichever model produced it.
+
+Two things go wrong more often than a bad answer does:
+
+- **A model with a small context window fails partway through.** The analysis carries the whole tool-call history, and once that no longer fits, the reasoning loop stops terminating and the run dies with a `GraphRecursionError`. This is why the default is a custom `gemma4-e2b-96k` build rather than stock `gemma4:e2b` — same weights, 96k of context instead of 8k.
+- **A model that answers in another language produces signals nothing can read.** The decision, the price levels, and the trade plan are all parsed out of the text. A rationale in Indonesian is not wrong, it is simply invisible to every stage after it.
+
+Watch the logs after a switch, not just the win rate.
+
 ## The daily schedule (all times UTC, weekdays)
 
 | Time | What happens |

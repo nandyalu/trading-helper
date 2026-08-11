@@ -15,9 +15,16 @@ from backend.database.models import Signal
 # Display order for the by-decision breakdown; unknown decisions sort last.
 _DECISION_ORDER = ["Buy", "Overweight", "Hold", "Underweight", "Sell"]
 
+# Rows written before Signal.model existed. Named rather than dropped: those
+# signals are real track record, they just can't be attributed.
+UNKNOWN_MODEL = "unknown"
+
 
 @dataclass
 class DecisionStats:
+    """One slice of the resolved signals. Used for both the by-decision and the
+    by-model breakdown — the two ask different questions of the same numbers."""
+
     total: int = 0
     passes: int = 0
     vs_benchmark_total: int = 0
@@ -28,6 +35,16 @@ class DecisionStats:
     @property
     def avg_move_pct(self) -> float | None:
         return self.sum_move_pct / self.moves_counted if self.moves_counted else None
+
+    def add(self, signal: Signal) -> None:
+        self.total += 1
+        self.passes += signal.outcome == "pass"
+        if signal.price_at_evaluation is not None and signal.price_at_signal:
+            self.sum_move_pct += (signal.price_at_evaluation / signal.price_at_signal - 1) * 100
+            self.moves_counted += 1
+        if signal.outcome_vs_benchmark is not None:
+            self.vs_benchmark_total += 1
+            self.vs_benchmark_passes += signal.outcome_vs_benchmark == "pass"
 
 
 @dataclass
@@ -42,6 +59,7 @@ class ScorecardStats:
     target_total: int = 0  # rows that had a price target and got graded
     target_hits: int = 0
     by_decision: dict[str, DecisionStats] = field(default_factory=dict)
+    by_model: dict[str, DecisionStats] = field(default_factory=dict)  # LLM -> its record
     by_ticker: dict[str, tuple[int, int]] = field(default_factory=dict)  # ticker -> (passes, total)
 
     @property
@@ -56,23 +74,14 @@ def aggregate(resolved: list[Signal], pending: int = 0) -> ScorecardStats:
     for signal in resolved:
         passed = signal.outcome == "pass"
         stats.passes += passed
-        decision = stats.by_decision.setdefault(signal.decision, DecisionStats())
-        decision.total += 1
-        decision.passes += passed
+        stats.by_decision.setdefault(signal.decision, DecisionStats()).add(signal)
+        stats.by_model.setdefault(signal.model or UNKNOWN_MODEL, DecisionStats()).add(signal)
         ticker_counts[signal.ticker][0] += passed
         ticker_counts[signal.ticker][1] += 1
 
-        if signal.price_at_evaluation is not None and signal.price_at_signal:
-            move = (signal.price_at_evaluation / signal.price_at_signal - 1) * 100
-            decision.sum_move_pct += move
-            decision.moves_counted += 1
-
         if signal.outcome_vs_benchmark is not None:
-            benchmark_passed = signal.outcome_vs_benchmark == "pass"
             stats.vs_benchmark_total += 1
-            stats.vs_benchmark_passes += benchmark_passed
-            decision.vs_benchmark_total += 1
-            decision.vs_benchmark_passes += benchmark_passed
+            stats.vs_benchmark_passes += signal.outcome_vs_benchmark == "pass"
         if signal.alpha_pct is not None:
             stats.sum_alpha_pct += signal.alpha_pct
             stats.alphas_counted += 1
@@ -132,6 +141,20 @@ def format_scorecard_embed(stats: ScorecardStats, ticker: str | None = None) -> 
                 line += f" · vs SPY {_rate(ds.vs_benchmark_passes, ds.vs_benchmark_total)}"
             lines.append(line)
         embed.add_field(name="By decision", value="\n".join(lines), inline=False)
+
+    # Only worth showing once there is something to compare against — with one
+    # model it just restates the overall win rate under a different heading.
+    if len(stats.by_model) > 1:
+        by_model = sorted(stats.by_model.items(), key=lambda kv: kv[1].total, reverse=True)
+        lines = []
+        for model, ms in by_model:
+            line = f"{model}: {_rate(ms.passes, ms.total)}"
+            if ms.avg_move_pct is not None:
+                line += f" · avg move {ms.avg_move_pct:+.1f}%"
+            if ms.vs_benchmark_total:
+                line += f" · vs SPY {_rate(ms.vs_benchmark_passes, ms.vs_benchmark_total)}"
+            lines.append(line)
+        embed.add_field(name="By model", value="\n".join(lines), inline=False)
 
     if not ticker and stats.by_ticker:
         top = sorted(stats.by_ticker.items(), key=lambda kv: kv[1][1], reverse=True)[:10]

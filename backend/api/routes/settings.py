@@ -16,6 +16,8 @@ def _current_settings() -> SettingsOut:
     alerts = watchdog.load_config()
     return SettingsOut(
         horizon=analysis.get_horizon(),
+        llm_model=analysis.get_model(),
+        llm_model_choices=analysis.model_choices(),
         paper_notional=paper.get_notional(),
         risk_equity=equity,
         risk_pct=risk_pct,
@@ -39,6 +41,12 @@ def update_settings(payload: SettingsPatchIn):
     if payload.horizon is not None:
         try:
             analysis.set_horizon(payload.horizon)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if payload.llm_model is not None:
+        try:
+            analysis.set_model(payload.llm_model)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

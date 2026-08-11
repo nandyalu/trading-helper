@@ -33,6 +33,38 @@
 
     <section class="card">
       <div class="card-head">
+        <h2>Analysis model</h2>
+        <p class="hint">
+          The LLM every analysis runs on. Each signal records the model it was made with, so the
+          scorecard's "By model" table shows how a new one compares before you trust it. A model
+          with a small context window may fail partway through an analysis rather than answer badly
+          — check the logs after switching.
+        </p>
+      </div>
+      <div class="card-body">
+        <label class="field narrow">
+          Model
+          @if (llmModelChoices().length) {
+            <select [value]="llmModel()" (change)="onLlmModelChange($event)">
+              @for (name of llmModelChoices(); track name) {
+                <option [value]="name">{{ name }}</option>
+              }
+            </select>
+          } @else {
+            <input type="text" [value]="llmModel()" (input)="onLlmModelChange($event)" />
+          }
+        </label>
+        @if (!llmModelChoices().length) {
+          <p class="hint">
+            Couldn't reach the LLM endpoint to list what it serves, so this is a free text field.
+            The name has to match a model the endpoint has pulled.
+          </p>
+        }
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h2>Position sizing</h2>
         <p class="hint">
           Risk % bounds the loss if a stop is hit. The position cap bounds concentration: a

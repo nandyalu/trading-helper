@@ -32,6 +32,12 @@ export class ScorecardView {
     return Object.entries(byDecision);
   }
 
+  /** Most-used model first — that is the incumbent a new one is being judged
+   * against. */
+  protected modelEntries(byModel: Record<string, DecisionStats>): [string, DecisionStats][] {
+    return Object.entries(byModel).sort((a, b) => b[1].total - a[1].total);
+  }
+
   protected tickerEntries(
     byTicker: Record<string, [number, number]>,
   ): [string, [number, number]][] {

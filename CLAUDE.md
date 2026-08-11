@@ -65,6 +65,26 @@ To check which backends served a run:
 `docker logs --since 24h ollama-pool-a | grep "starting runner"` (an idle
 backend has no recent entries), or `curl localhost:11435/healthz`.
 
+## Custom context builds (`ollama/`)
+
+`ollama/*.Modelfile` plus `ollama/build.sh`, which installs one on all four
+backends — a model on only one backend fails three runs in four, since the
+proxy spreads analyses across them. See `ollama/README.md` for the numbers.
+
+The non-obvious part, measured 2026-08-11 on the 8 GiB gfx1030 cards: **the
+compute graph is what limits context, not the KV cache.** The cache is already
+`q4_0` (flash attention is on) and costs 2.6 GiB at 96k, while the compute
+graph at the default `num_batch 512` wants 5.1 GiB and pushes 40% of a
+llama-3.2-3B's layers onto the CPU. Dropping `num_batch` to 64 fits the full
+128k in 6.6 GiB, entirely on the GPU, for 16% slower prefill (411 vs 490
+tok/s). So a new build needs `PARAMETER num_batch`, not just `num_ctx`, and
+`ollama ps` must read `100% GPU` — any CPU split costs far more than the batch
+size ever will.
+
+Gemma is the exception that made this confusing: `gemma4-e2b-96k` runs at 96k
+with the default batch because sliding-window attention keeps its compute graph
+small. Don't reason from it to a Llama of the same size.
+
 ## LLM provider switching
 
 `TradingAgents/tradingagents/llm_clients/` is a full multi-provider
@@ -79,6 +99,17 @@ three vars threaded through `dockge/trading-bot.compose.yaml`'s
   share one value; splitting them needs a small code change in
   `TradingAgents/tradingagents/graph/trading_graph.py`)
 - `GOOGLE_API_KEY` (passthrough, only relevant when `LLM_PROVIDER=google`)
+
+**The model is also a runtime setting.** `analysis.get_model()/set_model()`
+store it in `BotSetting` under `llm_model` and `_build_graph()` applies it to
+both think stages, so `/model` or the settings page switches models without a
+redeploy. The env var above is only the default for an unset setting.
+`analysis.model_choices()` lists what the endpoint actually serves, via the
+OpenAI-compatible `/v1/models` route (ollama serves it too), and an
+unreachable endpoint degrades to a free-text field rather than blocking a
+save. Every `Signal` records `model`, and the scorecard's `by_model`
+breakdown is the point of the whole mechanism — switching models teaches you
+nothing if the win rates blend.
 
 **Current model (2026-08-06):** `gemma4-e2b-96k`, a custom Modelfile build of
 `gemma4:e2b` with the context raised to 96k. A full analysis takes 2-3 minutes,

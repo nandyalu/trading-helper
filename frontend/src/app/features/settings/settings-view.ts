@@ -11,6 +11,8 @@ export class SettingsView {
   protected readonly settings = this.settingsService.settings;
 
   protected readonly horizon = signal('swing');
+  protected readonly llmModel = signal('');
+  protected readonly llmModelChoices = signal<string[]>([]);
   protected readonly paperNotional = signal(1000);
   protected readonly riskEquity = signal<number | null>(null);
   protected readonly riskPct = signal(1);
@@ -31,6 +33,8 @@ export class SettingsView {
       const s = this.settings();
       if (!s) return;
       this.horizon.set(s.horizon);
+      this.llmModel.set(s.llm_model);
+      this.llmModelChoices.set(s.llm_model_choices);
       this.paperNotional.set(s.paper_notional);
       this.riskEquity.set(s.risk_equity);
       this.riskPct.set(s.risk_pct);
@@ -47,6 +51,10 @@ export class SettingsView {
 
   protected onHorizonChange(e: Event): void {
     this.horizon.set((e.target as HTMLSelectElement).value);
+  }
+
+  protected onLlmModelChange(e: Event): void {
+    this.llmModel.set((e.target as HTMLSelectElement | HTMLInputElement).value);
   }
 
   protected onPaperNotionalInput(e: Event): void {
@@ -96,6 +104,9 @@ export class SettingsView {
     try {
       await this.settingsService.update({
         horizon: this.horizon(),
+        // Omitted rather than sent empty: the signal is blank until the first
+        // load lands, and an empty model is a 400.
+        llm_model: this.llmModel() || undefined,
         paper_notional: this.paperNotional(),
         risk_equity: this.riskEquity() ?? undefined,
         risk_pct: this.riskPct(),
@@ -108,8 +119,11 @@ export class SettingsView {
         daily_sweep_enabled: this.dailySweepEnabled(),
       });
       this.message.set('Settings saved.');
-    } catch {
-      this.message.set("Couldn't save settings.");
+    } catch (err) {
+      // The API rejects a few values by name (an unknown model, an out-of-range
+      // threshold); its reason is more use than "couldn't save".
+      const detail = (err as { error?: { detail?: string } })?.error?.detail;
+      this.message.set(detail ?? "Couldn't save settings.");
     } finally {
       this.saving.set(false);
     }

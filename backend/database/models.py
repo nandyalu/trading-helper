@@ -44,6 +44,11 @@ class Signal(SQLModel, table=True):
     mixed horizons would be comparing two different questions. NULL means a row
     predating the column.
 
+    ``model`` records the LLM that produced the signal, so one model's track
+    record can be read apart from another's — the only way trying a new model
+    answers anything. NULL means a row predating the column, which in practice
+    means gemma4-e2b-96k.
+
     The trade-plan fields (``entry_price`` through ``expected_value_r``) come
     from the trader stage rather than the final decision text — see
     backend/services/signals.py. They are the exit level and the quality of the
@@ -71,6 +76,7 @@ class Signal(SQLModel, table=True):
     outcome_vs_benchmark: str | None = None  # "pass" | "fail"
     price_target_hit: bool | None = None  # price touched the target within the window
     horizon: str | None = Field(default=None, index=True)  # "swing" | "position"
+    model: str | None = Field(default=None, index=True)  # the LLM that produced it
     entry_price: float | None = None  # the level the trader proposed entering at
     stop_loss: float | None = None  # the level at which the thesis is wrong
     win_probability: float | None = None  # 0-100, the model's own estimate

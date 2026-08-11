@@ -1,0 +1,9 @@
+# adityakale/kotakneo at its full 128k context, sized to stay entirely on one
+# 8 GiB card. See README.md for the measurements behind both numbers.
+#
+# num_batch is the load-bearing setting, not num_ctx: at the default batch of
+# 512 this model needs a 5.1 GiB compute graph and ollama spills 40% of the
+# layers to CPU. The KV cache was never the problem — it is already q4_0.
+FROM adityakale/kotakneo:latest
+PARAMETER num_ctx 131072
+PARAMETER num_batch 64

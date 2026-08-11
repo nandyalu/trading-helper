@@ -4,13 +4,18 @@ stored analysis text via a shared quick-think LLM client.
 """
 import asyncio
 import datetime
+import json
 import logging
 import os
+import threading
+import time
+import urllib.request
 from collections.abc import Awaitable, Callable
 
 import discord
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.llm_clients.openai_client import OPENAI_COMPATIBLE_PROVIDERS
 
 from backend.database import db
 from backend.database.models import Signal
@@ -79,6 +84,25 @@ _analysis_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_ANALYSES)
 # generated under different horizons apart.
 _HORIZON_SETTING_KEY = "horizon"
 
+# Which LLM every analysis runs on. Stored as a setting for the same reason the
+# horizon is — a different model can be tried without a redeploy — and recorded
+# on each Signal, so the scorecard can tell one model's track record from
+# another's instead of blending them. Unset means whatever the stack's env vars
+# configured: DEFAULT_CONFIG already has TRADINGAGENTS_DEEP_THINK_LLM applied.
+#
+# Both think stages get the same model, matching how the deployed env vars are
+# set. Splitting them would double the number of things to compare while the
+# question being asked is only "is this model any good at all".
+_MODEL_SETTING_KEY = "llm_model"
+DEFAULT_MODEL = DEFAULT_CONFIG["deep_think_llm"]
+
+# The settings page asks for the model list on every load, and the answer only
+# changes when someone pulls a model, so a short cache is enough to keep the
+# page off the LLM server.
+_MODEL_LIST_TTL_SECONDS = 300
+_MODEL_LIST_TIMEOUT_SECONDS = 5
+_model_list_cache: tuple[float, list[str]] = (0.0, [])
+
 # final_state keys worth persisting per signal (backend/database/models.py SignalReport):
 # the four analyst reports plus both researcher/trader plans. The final
 # decision text is already stored as Signal.rationale.
@@ -95,7 +119,11 @@ REPORT_KEYS = (
 # A plain LLM client's .invoke() doesn't mutate shared state, so reusing one
 # instance across concurrent /ask calls is safe (unlike the graph itself,
 # see _build_graph below for why analysis needs a fresh instance per run).
-_qa_graph = TradingAgentsGraph(config=DEFAULT_CONFIG.copy())
+# Built on first use and rebuilt whenever the model setting changes, so an
+# answer about an analysis comes from the model currently selected.
+_qa_graph: TradingAgentsGraph | None = None
+_qa_graph_model: str | None = None
+_qa_graph_lock = threading.Lock()
 
 
 def get_horizon() -> str:
@@ -113,14 +141,119 @@ def set_horizon(horizon: str) -> None:
     db.set_setting(_HORIZON_SETTING_KEY, horizon)
 
 
-def _build_graph() -> TradingAgentsGraph:
+def get_model() -> str:
+    """The LLM every analysis runs on. An unset setting means the model the
+    stack's env vars configured."""
+    return (db.get_setting(_MODEL_SETTING_KEY) or "").strip() or DEFAULT_MODEL
+
+
+def _canonical(model: str) -> str:
+    """Ollama's implicit tag: ``foo`` and ``foo:latest`` name the same model,
+    and the endpoint always reports the tagged form. Without this the
+    deployment's own default (TRADINGAGENTS_DEEP_THINK_LLM=gemma4-e2b-96k)
+    would be rejected as unavailable by the very endpoint serving it."""
+    return model if ":" in model else f"{model}:latest"
+
+
+def set_model(model: str) -> None:
+    """Rejects a model the endpoint doesn't serve, but only when the endpoint
+    could actually be asked — see list_models() for why an empty list is not
+    evidence of anything."""
+    model = model.strip()
+    if not model:
+        raise ValueError("Model must not be empty.")
+    available = list_models()
+    if available and _canonical(model) not in {_canonical(name) for name in available}:
+        raise ValueError(f"{model} isn't served by the LLM endpoint — pull it there first.")
+    db.set_setting(_MODEL_SETTING_KEY, model)
+
+
+def model_choices() -> list[str]:
+    """What the settings page offers: every model the endpoint serves, with the
+    current one always present under the exact name it is stored as.
+
+    A dropdown with no option matching the current value shows some other model
+    as if it were selected, and the endpoint's spelling need not match the
+    setting's — it reports ``gemma4-e2b-96k:latest`` for a setting that reads
+    ``gemma4-e2b-96k``. Substituting rather than appending keeps one entry per
+    model instead of two names for the same weights."""
+    available = list_models()
+    if not available:
+        return []
+    current = get_model()
+    others = [name for name in available if _canonical(name) != _canonical(current)]
+    return sorted([*others, current])
+
+
+def _models_endpoint() -> str | None:
+    """The ``/models`` URL of whichever OpenAI-compatible endpoint the graph
+    will talk to, or None for a provider that isn't one.
+
+    Base-URL precedence (config > provider env var > provider default) is read
+    from the same registry OpenAIClient.get_llm() uses, so the list can never
+    describe a different server than the one that runs the analysis."""
+    spec = OPENAI_COMPATIBLE_PROVIDERS.get(str(DEFAULT_CONFIG.get("llm_provider") or "").lower())
+    if spec is None:
+        return None
+    env_base_url = os.environ.get(spec.base_url_env) if spec.base_url_env else None
+    base_url = DEFAULT_CONFIG.get("backend_url") or env_base_url or spec.base_url
+    return f"{base_url.rstrip('/')}/models" if base_url else None
+
+
+def list_models(*, force: bool = False) -> list[str]:
+    """Every model the configured LLM endpoint currently serves, sorted.
+
+    An empty list means "couldn't ask", never "there are no models". Every
+    caller treats it that way, so an unreachable Ollama pool degrades the
+    settings page to showing the current model on its own — it never blocks a
+    save and never stops an analysis. Blocking (one HTTP request) — run from a
+    thread when called off the event loop."""
+    global _model_list_cache
+    cached_at, cached = _model_list_cache
+    if not force and cached and time.monotonic() - cached_at < _MODEL_LIST_TTL_SECONDS:
+        return cached
+    url = _models_endpoint()
+    if url is None:
+        return []
+    try:
+        with urllib.request.urlopen(url, timeout=_MODEL_LIST_TIMEOUT_SECONDS) as response:
+            payload = json.load(response)
+        models = sorted(
+            str(entry["id"])
+            for entry in payload.get("data", [])
+            if isinstance(entry, dict) and entry.get("id")
+        )
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        log.warning("Couldn't list models from %s: %s", url, exc)
+        return cached
+    _model_list_cache = (time.monotonic(), models)
+    return models
+
+
+def _build_graph(model: str | None = None) -> TradingAgentsGraph:
     """A fresh instance per analysis run. TradingAgentsGraph.propagate()
     mutates its own state in place (self.graph — recompiled every call,
     self.curr_state, self.ticker, self._checkpointer_ctx), so two concurrent
     propagate() calls sharing one instance would corrupt each other's run.
     Construction itself is cheap (in-memory client/graph wiring, no network
-    I/O) — the expense is entirely in propagate()'s LLM calls."""
-    return TradingAgentsGraph(config=DEFAULT_CONFIG.copy())
+    I/O) — the expense is entirely in propagate()'s LLM calls.
+
+    ``model`` overrides the configured LLM for both think stages; None reads
+    the current setting."""
+    config = DEFAULT_CONFIG.copy()
+    config["deep_think_llm"] = config["quick_think_llm"] = model or get_model()
+    return TradingAgentsGraph(config=config)
+
+
+def _quick_think_llm():
+    """The shared Q&A client, rebuilt when the model setting changes."""
+    global _qa_graph, _qa_graph_model
+    model = get_model()
+    with _qa_graph_lock:
+        if _qa_graph is None or _qa_graph_model != model:
+            _qa_graph = _build_graph(model)
+            _qa_graph_model = model
+        return _qa_graph.quick_thinking_llm
 
 
 async def propagate_ticker(ticker: str) -> tuple[dict, str]:
@@ -134,12 +267,19 @@ async def propagate_ticker(ticker: str) -> tuple[dict, str]:
     ``horizon`` reaches the prompts through propagate(), and comes back out in
     final_state, which is where record_signal reads it from — so the recorded
     signal always carries the horizon the run actually used, even if the
-    setting changes while the analysis is in flight."""
+    setting changes while the analysis is in flight. The model is put into
+    final_state here for exactly the same reason; TradingAgents has no reason
+    to report it itself."""
     async with _analysis_semaphore:
         trade_date = datetime.date.today().isoformat()
         horizon = await asyncio.to_thread(get_horizon)
-        graph = await asyncio.to_thread(_build_graph)
-        return await asyncio.to_thread(graph.propagate, ticker, trade_date, horizon=horizon)
+        model = await asyncio.to_thread(get_model)
+        graph = await asyncio.to_thread(_build_graph, model)
+        final_state, decision = await asyncio.to_thread(
+            graph.propagate, ticker, trade_date, horizon=horizon
+        )
+        final_state["llm_model"] = model
+        return final_state, decision
 
 
 def _resolve_stop_loss(
@@ -225,8 +365,10 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     # proposal, one stage before the portfolio manager — PortfolioDecision
     # carries only a rating, summary, thesis, price target, and time horizon.
     trader_plan = final_state.get("trader_investment_plan") or ""
-    # The run's own horizon, not the current setting — see propagate_ticker.
+    # The run's own horizon and model, not the current settings — see
+    # propagate_ticker.
     horizon = final_state.get("horizon") or get_horizon()
+    model = final_state.get("llm_model") or get_model()
     params = horizon_params(horizon)
     evaluation_date = datetime.date.today() + datetime.timedelta(
         days=parse_time_horizon_days(
@@ -246,6 +388,7 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         price_target=levels["price_target"],
         message_id=message_id,
         horizon=horizon,
+        model=model,
         entry_price=levels["entry_price"],
         stop_loss=_resolve_stop_loss(ticker, decision, levels["stop_loss"], price),
         win_probability=levels["win_probability"],
@@ -324,7 +467,7 @@ async def run_analyses(
 def answer_question(context: str, question: str) -> str:
     """One-shot Q&A over stored analysis text using the shared quick-think
     LLM client. Blocking — run from a thread."""
-    response = _qa_graph.quick_thinking_llm.invoke(
+    response = _quick_think_llm().invoke(
         [
             (
                 "system",

@@ -31,6 +31,7 @@ export interface Signal {
   outcome_vs_benchmark: 'pass' | 'fail' | null;
   price_target_hit: boolean | null;
   horizon: string | null; // "swing" | "position"
+  model: string | null; // the LLM that produced it; null on rows predating the column
   // The trade plan, from TradingAgents' trader stage. Null means the model did
   // not state it — never zero.
   entry_price: number | null;
@@ -117,6 +118,7 @@ export interface Scorecard {
   target_total: number;
   target_hits: number;
   by_decision: Record<string, DecisionStats>;
+  by_model: Record<string, DecisionStats>;
   by_ticker: Record<string, [number, number]>;
 }
 
@@ -206,6 +208,11 @@ export interface Regime {
 
 export interface Settings {
   horizon: string; // "swing" | "position"
+  llm_model: string;
+  /** Everything the LLM endpoint serves. Empty when it couldn't be reached —
+   * the settings page then falls back to a text field. Read-only: it isn't
+   * part of SettingsPatch. */
+  llm_model_choices: string[];
   paper_notional: number;
   risk_equity: number | null;
   risk_pct: number;
@@ -218,7 +225,7 @@ export interface Settings {
   daily_sweep_enabled: boolean;
 }
 
-export type SettingsPatch = Partial<Settings>;
+export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;
 
 export interface TransactionRequest {
   ticker: string;

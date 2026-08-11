@@ -5,7 +5,7 @@ import datetime
 import pytest
 
 from backend.database.models import Signal
-from backend.services.scorecard import aggregate, format_scorecard_embed
+from backend.services.scorecard import UNKNOWN_MODEL, aggregate, format_scorecard_embed
 
 
 def _signal(
@@ -17,6 +17,7 @@ def _signal(
     outcome_vs_benchmark=None,
     alpha_pct=None,
     price_target_hit=None,
+    model=None,
 ):
     return Signal(
         ticker=ticker,
@@ -30,6 +31,7 @@ def _signal(
         outcome_vs_benchmark=outcome_vs_benchmark,
         alpha_pct=alpha_pct,
         price_target_hit=price_target_hit,
+        model=model,
     )
 
 
@@ -70,6 +72,38 @@ def test_target_hit_rate_counts_only_graded_rows():
     stats = aggregate(resolved)
     assert stats.target_total == 2
     assert stats.target_hits == 1
+
+
+def test_each_model_keeps_its_own_record():
+    """The point of being able to switch models: a new one's win rate has to be
+    readable on its own, not blended into the incumbent's."""
+    resolved = [
+        _signal(model="old:latest"),
+        _signal(model="old:latest", outcome="fail", price_at_evaluation=90.0),
+        _signal(model="new:latest", outcome="fail", price_at_evaluation=90.0),
+    ]
+    stats = aggregate(resolved)
+
+    assert stats.by_model["old:latest"].total == 2
+    assert stats.by_model["old:latest"].passes == 1
+    assert stats.by_model["new:latest"].total == 1
+    assert stats.by_model["new:latest"].passes == 0
+    assert stats.by_model["old:latest"].avg_move_pct == pytest.approx(0.0)
+
+
+def test_signals_predating_the_model_column_are_named_not_dropped():
+    stats = aggregate([_signal(), _signal(model="new:latest")])
+
+    assert stats.by_model[UNKNOWN_MODEL].total == 1
+    assert sum(row.total for row in stats.by_model.values()) == stats.resolved
+
+
+def test_by_model_appears_in_the_embed_only_once_there_are_two():
+    one_model = aggregate([_signal(model="old:latest")])
+    assert "By model" not in [f.name for f in format_scorecard_embed(one_model).fields]
+
+    two_models = aggregate([_signal(model="old:latest"), _signal(model="new:latest")])
+    assert "By model" in [f.name for f in format_scorecard_embed(two_models).fields]
 
 
 def test_embed_renders_without_error():

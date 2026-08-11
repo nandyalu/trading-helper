@@ -80,4 +80,7 @@ REDDIT_CLIENT_SECRET=...
 `LLM_PROVIDER` defaults to a self-hosted Ollama pool.
 This needs no credentials beyond running Ollama somewhere reachable — set `OLLAMA_BASE_URL` to point at it.
 Google Gemini is available as a paid alternative: set `GOOGLE_API_KEY` and `LLM_PROVIDER=google`.
+
+`LLM_MODEL` sets which model the provider runs, but only as the starting value.
+The settings page and `/model` change it afterwards without a redeploy, choosing from whatever the endpoint has pulled — see [the model section of the overview](overview.md#the-analysis-model) for what to watch when you switch.
 If you run this stack yourself, this repo's maintainer docs (`CLAUDE.md`, not part of this site) have provider-specific notes.

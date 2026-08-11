@@ -43,6 +43,7 @@ This keeps the bot responsive.
 | `/ignore ticker:AILEQ` | Skip a ticker entirely: no price fetches, no alerts, no scheduled analysis. Use it for a delisted holding, or one you simply do not want spending analysis time on. A position you hold still appears in `/portfolio`. Add `skip:False` to force a ticker to be followed even if it looks dead. |
 | `/unignore ticker:AILEQ` | Hand a ticker back to automatic detection, which skips it only if it stops producing price bars for seven trading days. |
 | `/horizon horizon:swing` | Set the trade horizon every analysis runs at. `swing` aims at 1 to 2 weeks and grades a signal after 14 days; `position` aims at a multi-month hold and grades after 30. The horizon also sets how far price may drift before a Hold counts as wrong: ±4% for swing, ±10% for position. Signals already recorded keep the horizon they were made under. |
+| `/model model:gemma4-e2b-96k` | Choose the LLM every analysis runs on. The options are whatever the configured endpoint has pulled, offered as you type. Run it with no argument to see the current model and the alternatives. Each signal records the model it was made with, so `/scorecard` can compare a new model against the one it replaced. |
 
 ## Alerts & automation
 

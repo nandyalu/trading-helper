@@ -6,6 +6,8 @@ import { SettingsView } from './settings-view';
 
 const SERVER_SETTINGS: Settings = {
   horizon: 'position',
+  llm_model: 'gemma4-e2b-96k',
+  llm_model_choices: ['gemma4-e2b-96k', 'adityakale/kotakneo:latest'],
   paper_notional: 1000,
   risk_equity: 2800,
   risk_pct: 1,
@@ -23,16 +25,19 @@ const SERVER_SETTINGS: Settings = {
 class SettingsServiceStub {
   settingsValue: Settings | null = null;
   patches: Partial<Settings>[] = [];
+  /** What load() will report — a test that needs a different server state
+   * replaces this before creating the component. */
+  serverSettings: Settings = SERVER_SETTINGS;
 
   readonly settings = () => this.settingsValue;
 
   async load(): Promise<void> {
-    this.settingsValue = SERVER_SETTINGS;
+    this.settingsValue = this.serverSettings;
   }
 
   async update(patch: Partial<Settings>): Promise<void> {
     this.patches.push(patch);
-    this.settingsValue = { ...SERVER_SETTINGS, ...patch } as Settings;
+    this.settingsValue = { ...this.serverSettings, ...patch } as Settings;
   }
 
   async webullSync() {
@@ -86,6 +91,31 @@ describe('SettingsView', () => {
     expect(patch.max_position_pct).toBe(20);
     expect(patch.max_positions).toBe(5);
     expect(patch.horizon).toBe('position');
+  });
+
+  it('lists the models the endpoint serves, with the current one selected', async () => {
+    const fixture = TestBed.createComponent(SettingsView);
+    await fixture.whenStable();
+    const selects = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('select'),
+    ) as HTMLSelectElement[];
+    const modelSelect = selects.find((s) =>
+      Array.from(s.options).some((o) => o.value === 'adityakale/kotakneo:latest'),
+    );
+    expect(modelSelect).toBeTruthy();
+    expect(modelSelect!.value).toBe('gemma4-e2b-96k');
+  });
+
+  it('falls back to a text field when the endpoint could not be listed', async () => {
+    // An unreachable Ollama pool must not leave the page with no way to name a
+    // model — the setting is still perfectly changeable.
+    service.serverSettings = { ...SERVER_SETTINGS, llm_model_choices: [] };
+    const fixture = TestBed.createComponent(SettingsView);
+    await fixture.whenStable();
+    const input = (fixture.nativeElement as HTMLElement).querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('gemma4-e2b-96k');
   });
 
   it('renders inputs for both sizing caps', async () => {

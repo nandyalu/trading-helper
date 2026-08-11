@@ -44,6 +44,7 @@ class SignalOut(OrmModel):
     outcome_vs_benchmark: str | None
     price_target_hit: bool | None
     horizon: str | None
+    model: str | None
     entry_price: float | None
     stop_loss: float | None
     win_probability: float | None
@@ -128,6 +129,7 @@ class ScorecardOut(OrmModel):
     target_total: int
     target_hits: int
     by_decision: dict[str, DecisionStatsOut]
+    by_model: dict[str, DecisionStatsOut]
     by_ticker: dict[str, tuple[int, int]]
 
 
@@ -226,6 +228,11 @@ class RegimeOut(OrmModel):
 
 class SettingsOut(BaseModel):
     horizon: str  # "swing" | "position"
+    llm_model: str  # the LLM every analysis runs on
+    # Everything the LLM endpoint currently serves. Empty when it couldn't be
+    # reached, which the UI shows as a plain text field rather than a dropdown
+    # of one — see backend/services/analysis.py list_models().
+    llm_model_choices: list[str]
     paper_notional: float
     risk_equity: float | None
     risk_pct: float
@@ -240,6 +247,7 @@ class SettingsOut(BaseModel):
 
 class SettingsPatchIn(BaseModel):
     horizon: str | None = None
+    llm_model: str | None = None
     paper_notional: float | None = None
     risk_equity: float | None = None
     risk_pct: float | None = None

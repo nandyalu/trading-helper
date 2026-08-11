@@ -1,0 +1,11 @@
+# aceptriana/alma-trader at its full 128k context, sized to stay entirely on
+# one 8 GiB card. See README.md for the measurements behind both numbers.
+#
+# The base model sets num_ctx 8192 in its own Modelfile, so raising it here is
+# an override rather than a default. Its sampling parameters (temperature 0.3,
+# top_p 0.85, repeat_penalty 1.1) and its Indonesian system prompt are
+# inherited untouched — TradingAgents supplies its own system message anyway,
+# and the model answers in English under it.
+FROM aceptriana/alma-trader:latest
+PARAMETER num_ctx 131072
+PARAMETER num_batch 64

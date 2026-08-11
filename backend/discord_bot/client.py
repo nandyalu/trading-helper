@@ -440,6 +440,43 @@ async def horizon(interaction: discord.Interaction, horizon: app_commands.Choice
     )
 
 
+async def _model_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete rather than fixed choices: the list is whatever the LLM
+    endpoint has pulled, which changes without a redeploy. Discord caps a
+    response at 25 options."""
+    models = await asyncio.to_thread(analysis.list_models)
+    matches = [name for name in models if current.lower() in name.lower()]
+    return [app_commands.Choice(name=name[:100], value=name) for name in matches[:25]]
+
+
+@bot.tree.command(description="Choose the LLM every analysis runs on")
+@app_commands.describe(model="Leave blank to see the current model and what else is available")
+@app_commands.autocomplete(model=_model_autocomplete)
+async def model(interaction: discord.Interaction, model: str | None = None):
+    await interaction.response.defer()
+    if model is None:
+        available = await asyncio.to_thread(analysis.list_models)
+        current = await asyncio.to_thread(analysis.get_model)
+        lines = [f"Analysis runs on **{current}**."]
+        if available:
+            lines.append("Available: " + ", ".join(f"`{name}`" for name in available))
+        else:
+            lines.append("Couldn't reach the LLM endpoint to list the alternatives.")
+        await interaction.followup.send("\n".join(lines))
+        return
+    try:
+        await asyncio.to_thread(analysis.set_model, model)
+    except ValueError as exc:
+        await interaction.followup.send(str(exc))
+        return
+    await interaction.followup.send(
+        f"Analysis now runs on **{model}**. Signals already recorded keep the model "
+        "they were made with, so /scorecard can compare the two."
+    )
+
+
 async def start_discord() -> None:
     """No-op if DISCORD_BOT_TOKEN is unset — the rest of the app runs the
     same either way. Runs the bot as a background task on the caller's loop
