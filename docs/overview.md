@@ -153,6 +153,10 @@ An intraday trigger is the opposite: it arrives while the market is open, and a 
 **No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
 The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.
 
+When it opens a position it also rests two real orders at the broker: a stop where the analysis says the thesis is wrong, and a take-profit at the analysis's price target.
+They go in as one pair, so whichever fills cancels the other — and the broker enforces both whether or not this app is running.
+Either level may be missing, since the analysis states them only when it has a view, and the one that exists is placed on its own.
+
 The model chooses what to buy and how much. The app only refuses orders that cannot be executed as stated — spending cash that is not there, selling shares that are not held, fractional shares.
 An order that costs more than the cash left is dropped rather than resized, because resizing would quietly turn its decision into a different one.
 

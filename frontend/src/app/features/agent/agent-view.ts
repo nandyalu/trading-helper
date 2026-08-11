@@ -25,7 +25,7 @@ export class AgentView {
     this.trades().filter((t) => t.status === 'pending' && !t.is_stop),
   );
 
-  /** Protective stops resting at the broker. Listed apart from pending
+  /** Stops and take-profits resting at the broker. Listed apart from pending
    * orders because they are supposed to sit unfilled — that is the job. */
   protected readonly restingStops = computed(() =>
     this.trades().filter((t) => t.status === 'pending' && t.is_stop),

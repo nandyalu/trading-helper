@@ -183,3 +183,25 @@ def test_a_settle_failure_does_not_kill_the_watchdog_tick(monkeypatch):
 
     monkeypatch.setattr(scheduler.agent, "settle_pending", boom)
     asyncio.run(scheduler._settle_agent_fills())  # must not raise
+
+
+def test_a_filled_take_profit_is_announced_as_a_target_hit(monkeypatch):
+    """A stop and a target both close the position, but one is good news and
+    the other is not — reporting both as "stop triggered" would be a lie."""
+    posted = []
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(
+        scheduler.agent, "settle_pending",
+        lambda: [{"ticker": "ZBH", "side": "sell", "quantity": 10.0, "price": 101.5,
+                  "was_stop": True, "reason": "take-profit resting at $101.50",
+                  "status": "filled"}],
+    )
+
+    async def fake_notify(*args, **kwargs):
+        posted.append(args[0] if args else kwargs)
+
+    monkeypatch.setattr(scheduler, "notify", fake_notify)
+    asyncio.run(scheduler._settle_agent_fills())
+
+    assert "Target reached" in posted[0]
+    assert "at a profit" in posted[0]

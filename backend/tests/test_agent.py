@@ -212,7 +212,7 @@ def test_a_filled_order_is_settled_with_its_real_price(monkeypatch):
 
     class Trade:
         client_order_id = "8a19ed7a58094353a96cbaf92877547d"
-        ticker, side, quantity, is_stop = "ZBH", "buy", 10.0, False
+        ticker, side, quantity, is_stop, reason = "ZBH", "buy", 10.0, False, None
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(
@@ -241,7 +241,7 @@ def test_a_partial_fill_records_what_filled_not_what_was_asked(monkeypatch):
 
     class Trade:
         client_order_id = "abc"
-        ticker, side, quantity, is_stop = "AAA", "buy", 4.0, False
+        ticker, side, quantity, is_stop, reason = "AAA", "buy", 4.0, False, None
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(agent.sandbox_broker, "get_order_detail", lambda _id: partial)
@@ -259,7 +259,7 @@ def test_a_rejected_order_is_marked_not_left_pending(monkeypatch):
 
     class Trade:
         client_order_id = "abc"
-        ticker, side, quantity, is_stop = "AAA", "buy", 4.0, False
+        ticker, side, quantity, is_stop, reason = "AAA", "buy", 4.0, False, None
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(
@@ -525,51 +525,72 @@ def test_the_record_reaches_the_prompt():
 # --- resting stops -------------------------------------------------------------
 
 
-def test_a_buy_arms_a_stop_at_the_signals_level(monkeypatch):
+def test_a_buy_arms_both_exits(monkeypatch):
     placed = {}
     monkeypatch.setattr(
-        agent.sandbox_broker, "place_stop_loss",
-        lambda t, q, p: placed.update(ticker=t, qty=q, stop=p)
-        or {"client_order_id": "s1", "placed_at": None},
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda t, q, stop, target: placed.update(ticker=t, qty=q, stop=stop, target=target)
+        or [
+            {"client_order_id": "s1", "kind": "stop", "price": stop, "placed_at": None},
+            {"client_order_id": "t1", "kind": "target", "price": target, "placed_at": None},
+        ],
     )
-    recorded = {}
-    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: recorded.update(kw) or 1)
+    recorded = []
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: recorded.append(kw) or 1)
 
-    agent._arm_stop({"ticker": "AAA", "quantity": 10, "side": "buy"}, 90.0)
+    agent._arm_exits({"ticker": "AAA", "quantity": 10, "side": "buy"}, 90.0, 120.0)
 
-    assert placed == {"ticker": "AAA", "qty": 10, "stop": 90.0}
-    assert recorded["side"] == "sell"
-    assert "90.00" in recorded["reason"]
+    assert placed == {"ticker": "AAA", "qty": 10, "stop": 90.0, "target": 120.0}
+    assert [r["reason"] for r in recorded] == [
+        "stop-loss resting at $90.00",
+        "take-profit resting at $120.00",
+    ]
+    assert all(r["side"] == "sell" and r["is_stop"] for r in recorded)
 
 
-def test_a_buy_with_no_stop_level_gets_no_stop(monkeypatch):
+def test_a_buy_with_neither_level_gets_no_exits(monkeypatch):
     """Inventing one would be inventing the exit price of a real trade."""
     called = []
-    monkeypatch.setattr(
-        agent.sandbox_broker, "place_stop_loss", lambda *a: called.append(a)
-    )
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
 
-    agent._arm_stop({"ticker": "AAA", "quantity": 10, "side": "buy"}, None)
+    agent._arm_exits({"ticker": "AAA", "quantity": 10, "side": "buy"}, None, None)
 
     assert called == []
 
 
-def test_a_failed_stop_does_not_undo_the_buy(monkeypatch):
+def test_only_the_level_that_exists_is_placed(monkeypatch):
+    """The trader states each only when it has a view."""
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda t, q, stop, target: [
+            {"client_order_id": "t1", "kind": "target", "price": target, "placed_at": None}
+        ],
+    )
+    recorded = []
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: recorded.append(kw) or 1)
+
+    agent._arm_exits({"ticker": "AAA", "quantity": 10, "side": "buy"}, None, 120.0)
+
+    assert [r["reason"] for r in recorded] == ["take-profit resting at $120.00"]
+
+
+def test_a_failed_exit_does_not_undo_the_buy(monkeypatch):
     """The shares are already owned either way; raising here would leave the
     ledger disagreeing with the account."""
     def boom(*a):
         raise RuntimeError("broker said no")
 
-    monkeypatch.setattr(agent.sandbox_broker, "place_stop_loss", boom)
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", boom)
     monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: 1)
 
-    agent._arm_stop({"ticker": "AAA", "quantity": 10, "side": "buy"}, 90.0)  # must not raise
+    agent._arm_exits({"ticker": "AAA", "quantity": 10, "side": "buy"}, 90.0, 120.0)
 
 
-def test_a_sell_does_not_arm_a_stop(monkeypatch):
-    """A stop under a position being exited would try to sell shares twice."""
+def test_a_sell_does_not_arm_exits(monkeypatch):
+    """An exit under a position being closed would try to sell shares twice."""
     called = []
-    monkeypatch.setattr(agent.sandbox_broker, "place_stop_loss", lambda *a: called.append(a))
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 0)
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: [])

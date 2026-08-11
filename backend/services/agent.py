@@ -480,10 +480,10 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
     return embed
 
 
-def _cancel_stops(ticker: str) -> int:
-    """Cancel every resting stop on a ticker the agent is selling.
+def _cancel_resting_exits(ticker: str) -> int:
+    """Cancel every resting exit on a ticker the agent is selling.
 
-    A stop left behind after the position closes is not merely untidy: it is a
+    An exit left behind after the position closes is not merely untidy: it is a
     live order to sell shares that are no longer owned, which the broker would
     either reject later or fill into a short.
     """
@@ -495,42 +495,50 @@ def _cancel_stops(ticker: str) -> int:
             db.settle_agent_trade(trade.client_order_id, status="rejected")
             cancelled += 1
     if cancelled:
-        log.info("Cancelled %d resting stop(s) on %s", cancelled, ticker)
+        log.info("Cancelled %d resting exit(s) on %s", cancelled, ticker)
     return cancelled
 
 
-def _arm_stop(order: dict, stop_price: float | None) -> None:
-    """Rest a GTC stop under a position the agent just opened.
+def _arm_exits(order: dict, stop_price: float | None, target_price: float | None) -> None:
+    """Rest the exits under a position the agent just opened: a stop where the
+    thesis is wrong, a take-profit where it has played out.
 
-    Best-effort on purpose: a failed stop must not undo a filled buy, because
-    the shares are already owned either way and raising here would leave the
-    ledger disagreeing with the account. It is logged loudly instead — a
-    position running without its stop is worth knowing about.
+    Both come from the analysis, and both are optional — the trader states them
+    only when it has a view, and an implausible level was already discarded
+    when the signal was recorded. Whichever exists is placed; inventing the
+    missing one would be inventing the exit price of a real trade.
 
-    A buy with no stop level simply gets none. Inventing one would be inventing
-    the exit price of a real trade.
+    Best-effort on purpose: a failed exit must not undo a filled buy, because
+    the shares are owned either way and raising here would leave the ledger
+    disagreeing with the account. It is logged loudly instead — a position
+    running naked is worth knowing about.
     """
-    if not stop_price:
-        log.info("No stop level for %s — the position rests without one", order["ticker"])
+    if not stop_price and not target_price:
+        log.info("No stop or target for %s — the position rests unguarded", order["ticker"])
         return
     try:
-        result = sandbox_broker.place_stop_loss(
-            order["ticker"], order["quantity"], stop_price
+        legs = sandbox_broker.place_exit_bracket(
+            order["ticker"], order["quantity"], stop_price, target_price
         )
     except Exception:
-        log.exception("Couldn't arm a stop for %s at %.2f", order["ticker"], stop_price)
+        log.exception("Couldn't arm exits for %s", order["ticker"])
         return
-    db.record_agent_trade(
-        ticker=order["ticker"],
-        side="sell",
-        quantity=order["quantity"],
-        client_order_id=result["client_order_id"],
-        placed_at=result["placed_at"],
-        reason=f"stop-loss resting at ${stop_price:,.2f}",
-        signal_id=None,
-        is_stop=True,
+    for leg in legs:
+        label = "stop-loss" if leg["kind"] == "stop" else "take-profit"
+        db.record_agent_trade(
+            ticker=order["ticker"],
+            side="sell",
+            quantity=order["quantity"],
+            client_order_id=leg["client_order_id"],
+            placed_at=leg["placed_at"],
+            reason=f"{label} resting at ${leg['price']:,.2f}",
+            signal_id=None,
+            is_stop=True,
+        )
+    log.info(
+        "Armed %d exit(s) for %s: %s",
+        len(legs), order["ticker"], ", ".join(l["kind"] for l in legs),
     )
-    log.info("Stop armed for %s at %.2f", order["ticker"], stop_price)
 
 
 def settle_pending() -> list[dict]:
@@ -571,6 +579,7 @@ def settle_pending() -> list[dict]:
                 "quantity": filled_qty,
                 "price": price,
                 "was_stop": trade.is_stop,
+                "reason": trade.reason,
                 "status": "filled",
             })
         elif status in ("CANCELLED", "REJECTED", "FAILED", "EXPIRED"):
@@ -631,6 +640,9 @@ def run_once() -> AgentRun:
     # plausibility when the signal was recorded (see analysis._trade_plan_levels),
     # with an ATR-derived fallback, so a level here is one worth resting on.
     stops = {s.ticker: s.stop_loss for s in signals if s.stop_loss}
+    # The level the analysis expects it to reach. Same provenance as the stop:
+    # stated by the trader, discarded if implausible against the traded price.
+    targets = {s.ticker: s.price_target for s in signals if s.price_target}
     for order in accepted:
         try:
             result = sandbox_broker.place_market_order(
@@ -651,11 +663,11 @@ def run_once() -> AgentRun:
         )
         run.placed.append(order)
         if order["side"] == "buy":
-            _arm_stop(order, stops.get(order["ticker"]))
+            _arm_exits(order, stops.get(order["ticker"]), targets.get(order["ticker"]))
         else:
-            # The position is being exited, so any stop under it would try to
-            # sell shares that are no longer held.
-            _cancel_stops(order["ticker"])
+            # The position is being exited, so any resting exit on it would
+            # try to sell shares that are no longer held.
+            _cancel_resting_exits(order["ticker"])
 
     # Settle again on the way out, and re-read the book. A market order placed
     # in session hours fills in well under a second, but nothing would notice
@@ -669,9 +681,16 @@ def run_once() -> AgentRun:
 
 
 def format_stop_fill(fill: dict) -> str:
-    """A stop triggering is the one event here the user did not ask for and
+    """A resting exit triggering is the one event here nobody asked for and
     would most want to hear about — a position was sold without anyone
-    deciding to sell it."""
+    deciding to sell it that day."""
+    hit_target = (fill.get("reason") or "").startswith("take-profit")
+    if hit_target:
+        return (
+            f"🎯 Target reached: sold {fill['quantity']:g} {fill['ticker']} "
+            f"at ${fill['price']:,.2f}. The analysis's price target was hit, so the "
+            "paper position is closed at a profit."
+        )
     return (
         f"🛑 Stop triggered: sold {fill['quantity']:g} {fill['ticker']} "
         f"at ${fill['price']:,.2f}. The thesis level from the analysis was reached, "

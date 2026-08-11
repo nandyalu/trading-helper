@@ -191,23 +191,36 @@ def place_market_order(ticker: str, side: str, quantity: float) -> dict:
     }
 
 
-def place_stop_loss(ticker: str, quantity: float, stop_price: float) -> dict:
-    """A GTC stop-loss sell resting at the broker.
+def place_exit_bracket(
+    ticker: str,
+    quantity: float,
+    stop_price: float | None = None,
+    target_price: float | None = None,
+) -> list[dict]:
+    """Rest the exits for a position: a stop below and a take-profit above.
 
-    This is why it beats watching prices ourselves: the broker enforces it
-    whether or not this app is running, whether or not the watchdog's 15-minute
-    tick has come round, and without the minutes of latency an analysis takes.
-    A stop that depends on our polling is not really a stop.
+    Placed as one OCO combo when both levels exist, so the broker cancels the
+    other leg the moment one fills. Two independent orders would leave a window
+    where both are live — a gap through the target could fill the limit and
+    leave a stop still trying to sell shares that are gone.
 
-    Verified against the live sandbox: order_type STOP_LOSS with a stop_price
-    is accepted, as is TRAILING_STOP_LOSS — whose PERCENTAGE step is a *ratio*
-    (0.05 means 5%), not a percentage number.
+    The accepted pairing is combo_type STOP_LOSS + STOP_PROFIT, found by
+    testing: OCO+OCO and MASTER+OCO are both rejected, though the docs list
+    every one of those as a valid combo_type.
+
+    Either level may be missing — the analysis states them only when it has a
+    view — and whichever exists is placed on its own. Returns one entry per leg
+    actually placed.
     """
     _assert_sandbox()
     if quantity <= 0:
         raise ValueError(f"quantity must be positive, got {quantity}")
-    if stop_price <= 0:
+    if stop_price is not None and stop_price <= 0:
         raise ValueError(f"stop price must be positive, got {stop_price}")
+    if target_price is not None and target_price <= 0:
+        raise ValueError(f"target price must be positive, got {target_price}")
+    if stop_price is None and target_price is None:
+        return []
 
     client = quotes.get_api_client()
     account_id = get_paper_account_id()
@@ -216,31 +229,58 @@ def place_stop_loss(ticker: str, quantity: float, stop_price: float) -> dict:
 
     from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
 
-    client_order_id = uuid.uuid4().hex
-    order = {
-        "client_order_id": client_order_id,
-        "combo_type": "NORMAL",
+    bracket = stop_price is not None and target_price is not None
+    base = {
         "instrument_type": "EQUITY",
         "entrust_type": "QTY",
         "symbol": ticker.upper().strip(),
         "market": "US",
         "side": "SELL",
-        "order_type": "STOP_LOSS",
-        # GTC, not DAY: a stop that expires at tonight's close would protect
-        # the position for an afternoon and then quietly stop existing.
+        # GTC: an exit that expired at tonight's close would protect the
+        # position for an afternoon and then quietly stop existing.
         "time_in_force": "GTC",
         "quantity": str(int(quantity)),
-        "stop_price": f"{stop_price:.2f}",
         "support_trading_session": "CORE",
     }
-    log.info("Placing simulated STOP_LOSS %s x%s at %.2f", order["symbol"], quantity, stop_price)
-    response = OrderOperationV3(client).place_order(account_id, [order])
-    body = response.json() if hasattr(response, "json") else response
-    return {
-        "client_order_id": client_order_id,
-        "placed_at": datetime.datetime.now(datetime.timezone.utc),
-        "response": body,
-    }
+
+    legs: list[dict] = []
+    if stop_price is not None:
+        legs.append({
+            **base,
+            "client_order_id": uuid.uuid4().hex,
+            "combo_type": "STOP_LOSS" if bracket else "NORMAL",
+            "order_type": "STOP_LOSS",
+            "stop_price": f"{stop_price:.2f}",
+        })
+    if target_price is not None:
+        legs.append({
+            **base,
+            "client_order_id": uuid.uuid4().hex,
+            "combo_type": "STOP_PROFIT" if bracket else "NORMAL",
+            "order_type": "LIMIT",
+            "limit_price": f"{target_price:.2f}",
+        })
+
+    combo_id = uuid.uuid4().hex if bracket else None
+    log.info(
+        "Placing simulated exits for %s x%s — stop %s, target %s",
+        base["symbol"], quantity, stop_price, target_price,
+    )
+    if bracket:
+        OrderOperationV3(client).place_order(account_id, legs, combo_id)
+    else:
+        OrderOperationV3(client).place_order(account_id, legs)
+
+    placed_at = datetime.datetime.now(datetime.timezone.utc)
+    return [
+        {
+            "client_order_id": leg["client_order_id"],
+            "kind": "stop" if leg["order_type"] == "STOP_LOSS" else "target",
+            "price": stop_price if leg["order_type"] == "STOP_LOSS" else target_price,
+            "placed_at": placed_at,
+        }
+        for leg in legs
+    ]
 
 
 def cancel_order(client_order_id: str) -> bool:

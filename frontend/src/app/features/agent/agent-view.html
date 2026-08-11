@@ -166,11 +166,12 @@
     @if (restingStops().length) {
       <section class="card">
         <div class="card-head">
-          <h2>Protective stops</h2>
+          <h2>Resting exits</h2>
           <p class="hint">
-            Real stop orders resting at the broker, placed when each position was opened. The broker
-            enforces them whether or not this app is running — a stop that depended on our polling
-            would not really be a stop.
+            Real orders resting at the broker, placed when each position was opened: a stop where
+            the thesis is wrong, a take-profit where it has played out. Placed as one pair, so
+            whichever fills cancels the other. The broker enforces them whether or not this app is
+            running — an exit that depended on our polling would not really be an exit.
           </p>
         </div>
         <div class="card-body">
