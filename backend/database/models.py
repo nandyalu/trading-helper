@@ -105,6 +105,40 @@ class SignalReport(SQLModel, table=True):
     content: str
 
 
+class AgentTrade(SQLModel, table=True):
+    """One order the autonomous agent placed on the Webull simulated account.
+
+    This table is the agent's book of record, not the broker's. The simulated
+    account is funded with $1,000,000 while the agent runs on a budget of a
+    few hundred, so its buying power says nothing about what the agent may
+    spend — cash has to be derived from these rows (budget − buys + sells).
+    The broker's own positions are read only to check this ledger against, and
+    a disagreement means a bug here.
+
+    ``status`` is the broker's, not ours: a market order placed outside
+    session hours sits ``pending`` until the open, and only a ``filled`` row
+    may count toward cash or holdings. ``price`` stays NULL until then — a
+    market order has no price at submission, and guessing one would put a
+    fictional cost basis in the book.
+
+    ``reason`` is the model's own words for why it placed this trade, kept so
+    a losing streak can be read back rather than merely counted.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    side: str  # "buy" | "sell"
+    quantity: float
+    price: float | None = None  # fill price; NULL until the order fills
+    placed_at: datetime.datetime
+    filled_at: datetime.datetime | None = None
+    client_order_id: str = Field(unique=True, index=True)  # ours, echoed by the broker
+    broker_order_id: str | None = None
+    status: str = Field(default="pending", index=True)  # "pending" | "filled" | "rejected"
+    reason: str | None = None  # the model's stated rationale
+    signal_id: int | None = Field(default=None, foreign_key="signal.id", index=True)
+
+
 class PaperSnapshot(SQLModel, table=True):
     """End-of-day valuation of the paper book, recorded by the daily task —
     the series behind the equity curve in /paper. One row per day (re-runs

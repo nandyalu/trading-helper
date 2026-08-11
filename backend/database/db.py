@@ -7,6 +7,7 @@ from sqlmodel import Session, func, select
 
 from backend.database.engine import read_session, write_session
 from backend.database.models import (
+    AgentTrade,
     Alert,
     BotSetting,
     DailyBar,
@@ -546,4 +547,81 @@ def record_alert(
             created_at=datetime.datetime.now(datetime.timezone.utc),
         )
     )
+    _session.commit()
+
+
+@read_session
+def get_agent_trades(*, _session: Session = None) -> list[AgentTrade]:
+    """Every order the agent has placed, oldest first — the order FIFO needs."""
+    return list(_session.exec(select(AgentTrade).order_by(AgentTrade.id)).all())
+
+
+@read_session
+def get_pending_agent_trades(*, _session: Session = None) -> list[AgentTrade]:
+    """Orders still awaiting a fill. A market order placed outside session
+    hours stays here until the open, so this is polled rather than assumed
+    empty."""
+    return list(_session.exec(select(AgentTrade).where(AgentTrade.status == "pending")).all())
+
+
+@write_session
+def record_agent_trade(
+    ticker: str,
+    side: str,
+    quantity: float,
+    client_order_id: str,
+    placed_at: datetime.datetime,
+    broker_order_id: str | None = None,
+    reason: str | None = None,
+    signal_id: int | None = None,
+    *,
+    _session: Session = None,
+) -> int:
+    """Records an order as placed, never as filled — price and fill time are
+    only known once the broker reports them (see settle_agent_trade)."""
+    row = AgentTrade(
+        ticker=ticker,
+        side=side,
+        quantity=quantity,
+        client_order_id=client_order_id,
+        placed_at=placed_at,
+        broker_order_id=broker_order_id,
+        reason=reason,
+        signal_id=signal_id,
+        status="pending",
+    )
+    _session.add(row)
+    _session.commit()
+    _session.refresh(row)
+    return row.id
+
+
+@write_session
+def settle_agent_trade(
+    client_order_id: str,
+    status: str,
+    price: float | None = None,
+    filled_at: datetime.datetime | None = None,
+    broker_order_id: str | None = None,
+    *,
+    _session: Session = None,
+) -> None:
+    """Apply the broker's verdict to a placed order. A filled row without a
+    price is refused: agent_book derives cash from price × quantity, so that
+    combination would silently drop the trade's cost."""
+    if status == "filled" and price is None:
+        raise ValueError(f"{client_order_id} cannot be filled without a price")
+    row = _session.exec(
+        select(AgentTrade).where(AgentTrade.client_order_id == client_order_id)
+    ).first()
+    if row is None:
+        return
+    row.status = status
+    if price is not None:
+        row.price = price
+    if filled_at is not None:
+        row.filled_at = filled_at
+    if broker_order_id:
+        row.broker_order_id = broker_order_id
+    _session.add(row)
     _session.commit()
