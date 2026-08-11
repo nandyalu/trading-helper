@@ -63,6 +63,56 @@
       </div>
     </div>
 
+    @if (performance(); as p) {
+      @if (p.strategies.length) {
+        <section class="card">
+          <div class="card-head">
+            <h2>Is the model earning its keep?</h2>
+            <p class="hint">
+              The agent against the two things it could be replaced by, all starting from its first
+              trade on {{ p.since }} with the same {{ money(p.budget) }}. The mechanical follower
+              buys every Buy signal in equal weight and needs no model at all — if it wins, the
+              agent is costing you money for nothing.
+            </p>
+          </div>
+          <div class="card-body">
+            <p class="notice notice-info">{{ p.verdict }}</p>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table data-table--stack">
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th class="num">Equity</th>
+                  <th class="num">Return</th>
+                  <th class="num">Trades</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of p.strategies; track s.name) {
+                  <tr>
+                    <td data-label="">{{ s.name }}</td>
+                    <td class="num" data-label="Equity">{{ money(s.equity) }}</td>
+                    <td
+                      class="num"
+                      data-label="Return"
+                      [class.pass]="s.equity >= p.budget"
+                      [class.fail]="s.equity < p.budget"
+                    >
+                      {{ returnPct(s.equity, p.budget) }}
+                    </td>
+                    <td class="num" data-label="Trades">{{ s.trades }}</td>
+                    <td data-label="Note">{{ s.note || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+    }
+
     <section class="card">
       <div class="card-head">
         <h2>Holdings</h2>

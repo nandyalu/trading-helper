@@ -330,3 +330,23 @@ class AgentRunOut(BaseModel):
     placed: list[AgentOrderOut]
     rejected: list[AgentOrderOut]
     failed: list[AgentOrderOut]
+
+
+class StrategyOut(OrmModel):
+    name: str
+    equity: float
+    invested: float
+    cash: float
+    trades: int
+    note: str
+
+
+class AgentComparisonOut(BaseModel):
+    """The agent against the two things it could be replaced by. The verdict is
+    plain language on purpose — the point is being able to read "switch it off"
+    without doing arithmetic."""
+
+    budget: float
+    since: date | None
+    verdict: str
+    strategies: list[StrategyOut]

@@ -7,9 +7,14 @@ dashboard place an order of its own.
 """
 from fastapi import APIRouter, HTTPException
 
-from backend.api.schemas import AgentBookOut, AgentRunOut, AgentTradeOut
+from backend.api.schemas import (
+    AgentBookOut,
+    AgentComparisonOut,
+    AgentRunOut,
+    AgentTradeOut,
+)
 from backend.database import db
-from backend.services import agent, agent_book, quotes
+from backend.services import agent, agent_book, agent_performance, quotes
 from backend.services.positions import get_current_price
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -70,5 +75,27 @@ def run_now():
         failed=[
             {"ticker": o["ticker"], "side": o["side"], "quantity": o["quantity"], "why": why}
             for o, why in run.failed
+        ],
+    )
+
+
+@router.get("/performance", response_model=AgentComparisonOut)
+def get_performance():
+    """Whether the model is beating the rules that need no model."""
+    result = agent_performance.compare()
+    return AgentComparisonOut(
+        budget=result.budget,
+        since=result.since,
+        verdict=result.verdict,
+        strategies=[
+            {
+                "name": s.name,
+                "equity": s.equity,
+                "invested": s.invested,
+                "cash": s.cash,
+                "trades": s.trades,
+                "note": s.note,
+            }
+            for s in result.strategies
         ],
     )

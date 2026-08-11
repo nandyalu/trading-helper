@@ -296,3 +296,21 @@ export interface AgentRun {
   rejected: AgentOrder[];
   failed: AgentOrder[];
 }
+
+export interface Strategy {
+  name: string;
+  equity: number;
+  invested: number;
+  cash: number;
+  trades: number;
+  note: string;
+}
+
+/** The agent against the two things it could be replaced by. If the mechanical
+ * follower wins, the model is costing money for nothing. */
+export interface AgentComparison {
+  budget: number;
+  since: string | null;
+  verdict: string;
+  strategies: Strategy[];
+}

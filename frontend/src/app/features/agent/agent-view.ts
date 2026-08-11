@@ -14,6 +14,7 @@ export class AgentView {
   private readonly agentService = inject(AgentService);
   protected readonly book = this.agentService.book;
   protected readonly trades = this.agentService.trades;
+  protected readonly performance = this.agentService.performance;
 
   protected readonly running = signal(false);
   protected readonly message = signal<string | null>(null);
@@ -44,6 +45,14 @@ export class AgentView {
     } finally {
       this.running.set(false);
     }
+  }
+
+  /** Signed percentage against the budget, so the row reads the same way as
+   * the equity tile above it. */
+  protected returnPct(equity: number, budget: number): string {
+    if (!budget) return '—';
+    const pct = (equity / budget - 1) * 100;
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
   }
 
   protected money(value: number | null): string {

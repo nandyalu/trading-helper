@@ -18,6 +18,7 @@ from backend.discord_bot import notify
 from backend.services import (
     agent,
     agent_book,
+    agent_performance,
     analysis,
     ask,
     broker,
@@ -519,6 +520,18 @@ async def agent_command(
         for h in book.holdings:
             price = f"${h.price:,.2f}" if h.price is not None else "unpriced"
             lines.append(f"- {h.ticker}: {h.quantity:g} @ ${h.avg_cost:,.2f} avg, now {price}")
+        # The comparison is the point of the whole exercise, so it goes in the
+        # default view rather than behind another command.
+        comparison = await asyncio.to_thread(agent_performance.compare)
+        if comparison.strategies:
+            lines.append("")
+            lines.append(f"**{comparison.verdict}**")
+            for strategy in comparison.strategies:
+                lines.append(
+                    f"- {strategy.name}: ${strategy.equity:,.2f} "
+                    f"({strategy.return_pct(comparison.budget):+.1f}%, "
+                    f"{strategy.trades} trade(s))"
+                )
         await interaction.followup.send("\n".join(lines))
         return
 
