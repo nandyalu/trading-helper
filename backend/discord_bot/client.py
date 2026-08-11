@@ -489,18 +489,21 @@ async def model(interaction: discord.Interaction, model: str | None = None):
 @app_commands.describe(
     action="Leave blank to see the book. on/off switches the agent; run decides now.",
     budget="Set the agent's budget in dollars (only with action:on)",
+    confirm="Required for action:reset — it closes every position and erases the record",
 )
 @app_commands.choices(
     action=[
         app_commands.Choice(name="on — let it trade each morning", value="on"),
         app_commands.Choice(name="off — stop trading", value="off"),
         app_commands.Choice(name="run — decide right now", value="run"),
+        app_commands.Choice(name="reset — sell up and start fresh", value="reset"),
     ]
 )
 async def agent_command(
     interaction: discord.Interaction,
     action: app_commands.Choice[str] | None = None,
     budget: float | None = None,
+    confirm: bool = False,
 ):
     await interaction.response.defer()
     if budget is not None:
@@ -509,6 +512,27 @@ async def agent_command(
         except ValueError as exc:
             await interaction.followup.send(str(exc))
             return
+
+    if action is not None and action.value == "reset":
+        # Destructive and irreversible, so it needs saying out loud rather than
+        # being one mis-click in an autocomplete list away.
+        if not confirm:
+            await interaction.followup.send(
+                "That closes every open position and erases the agent's whole record. "
+                "Run it again with `confirm:True` if that is what you want."
+            )
+            return
+        result = await asyncio.to_thread(agent.reset_book)
+        if result.refused:
+            await interaction.followup.send(result.refused)
+            return
+        closed = ", ".join(result.closed) if result.closed else "nothing to close"
+        await interaction.followup.send(
+            f"Agent reset. Closed: {closed}. Cancelled {result.cancelled} resting exit(s), "
+            f"cleared {result.cleared} ledger row(s). It starts again with the full budget "
+            "and no history."
+        )
+        return
 
     if action is None or action.value not in ("on", "off", "run"):
         book = await asyncio.to_thread(agent_book.build_book, get_current_price)

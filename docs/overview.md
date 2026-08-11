@@ -172,6 +172,22 @@ The second is the one that matters. If a rule with nothing in it beats the agent
 
 It refuses to draw any conclusion under ten trades. Three trades of hindsight is not evidence, and a confident verdict on it would be worse than no verdict at all.
 
+### Starting it over
+
+`/agent action:reset confirm:True` closes every open position, cancels the exits resting under them, and erases the agent's record so it begins again with the full budget and no history.
+
+**Reset when the agent has changed, not when it has lost money.**
+A new prompt, new rules, or exits it did not have before all mean its record describes a system that no longer exists, and comparing the new one against it measures a mixture.
+Resetting after a bad week is a different thing entirely: it is how you arrive a year later with no evidence at all, which is precisely what the baselines exist to prevent.
+
+The order is not arbitrary, and the command will refuse rather than do half of it:
+
+- **Closing a position needs a market order, so the market has to be open.** Started after the close it would cancel the exits, fail to sell, and leave the positions unguarded overnight — so it checks the hours before touching anything.
+- **Exits are cancelled one position at a time, immediately before that position is sold.** Cancelling all of them up front means one failed sell leaves the whole book unprotected instead of the single position being closed.
+- **The record is only erased once the broker confirms the account is empty.** Erasing it first would leave the app believing it holds nothing while the account still held stock, which is the one disagreement nothing downstream can recover from.
+
+If you would rather reset the simulated account from Webull's own site, do that first and then run the command: it asks the broker before it does anything, so an account already flat needs nothing sold and the market's hours stop mattering.
+
 ### What it remembers
 
 Each morning the agent is shown how its own past trades turned out: how many closed, how many made money, the net result, the average holding period, and the last six with what the analyst had said at entry.

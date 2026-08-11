@@ -35,7 +35,7 @@ This keeps the bot responsive.
 | `/paper` | Show the paper portfolio: positions, P&L, and a Performance section with an equity-curve sparkline, the max drawdown, and the result against SPY. |
 | `/paperclose ticker:NVDA` | Close an open paper position at the current price, without waiting for a Sell signal. |
 | `/papersize amount:1000` | Set the dollar amount each paper buy uses (the default is $1,000). |
-| `/agent` | The auto trader — a simulated Webull account the model trades on its own, inside a budget. With no arguments it reports the book: budget, equity, cash, and holdings. `action:on` lets it trade each weekday just after the US open, `action:off` stops it, and `action:run` makes one decision immediately. `budget:1000` sets the limit. It can never reach a real account. |
+| `/agent` | The auto trader — a simulated Webull account the model trades on its own, inside a budget. With no arguments it reports the book: budget, equity, cash, and holdings. `action:on` lets it trade each weekday just after the US open, `action:off` stops it, and `action:run` makes one decision immediately. `budget:1000` sets the limit. `action:reset confirm:True` sells up and starts the record fresh. It can never reach a real account. |
 
 ## Risk & sizing
 
