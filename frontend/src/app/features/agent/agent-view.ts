@@ -21,7 +21,15 @@ export class AgentView {
 
   /** Orders still waiting on the open. Shown apart from the rest because they
    * have moved no money yet — a pending buy has not spent its cash. */
-  protected readonly pending = computed(() => this.trades().filter((t) => t.status === 'pending'));
+  protected readonly pending = computed(() =>
+    this.trades().filter((t) => t.status === 'pending' && !t.is_stop),
+  );
+
+  /** Protective stops resting at the broker. Listed apart from pending
+   * orders because they are supposed to sit unfilled — that is the job. */
+  protected readonly restingStops = computed(() =>
+    this.trades().filter((t) => t.status === 'pending' && t.is_stop),
+  );
 
   constructor() {
     void this.agentService.load();

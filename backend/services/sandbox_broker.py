@@ -191,6 +191,76 @@ def place_market_order(ticker: str, side: str, quantity: float) -> dict:
     }
 
 
+def place_stop_loss(ticker: str, quantity: float, stop_price: float) -> dict:
+    """A GTC stop-loss sell resting at the broker.
+
+    This is why it beats watching prices ourselves: the broker enforces it
+    whether or not this app is running, whether or not the watchdog's 15-minute
+    tick has come round, and without the minutes of latency an analysis takes.
+    A stop that depends on our polling is not really a stop.
+
+    Verified against the live sandbox: order_type STOP_LOSS with a stop_price
+    is accepted, as is TRAILING_STOP_LOSS — whose PERCENTAGE step is a *ratio*
+    (0.05 means 5%), not a percentage number.
+    """
+    _assert_sandbox()
+    if quantity <= 0:
+        raise ValueError(f"quantity must be positive, got {quantity}")
+    if stop_price <= 0:
+        raise ValueError(f"stop price must be positive, got {stop_price}")
+
+    client = quotes.get_api_client()
+    account_id = get_paper_account_id()
+    if client is None or account_id is None:
+        raise RuntimeError("No simulated account available to trade")
+
+    from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
+
+    client_order_id = uuid.uuid4().hex
+    order = {
+        "client_order_id": client_order_id,
+        "combo_type": "NORMAL",
+        "instrument_type": "EQUITY",
+        "entrust_type": "QTY",
+        "symbol": ticker.upper().strip(),
+        "market": "US",
+        "side": "SELL",
+        "order_type": "STOP_LOSS",
+        # GTC, not DAY: a stop that expires at tonight's close would protect
+        # the position for an afternoon and then quietly stop existing.
+        "time_in_force": "GTC",
+        "quantity": str(int(quantity)),
+        "stop_price": f"{stop_price:.2f}",
+        "support_trading_session": "CORE",
+    }
+    log.info("Placing simulated STOP_LOSS %s x%s at %.2f", order["symbol"], quantity, stop_price)
+    response = OrderOperationV3(client).place_order(account_id, [order])
+    body = response.json() if hasattr(response, "json") else response
+    return {
+        "client_order_id": client_order_id,
+        "placed_at": datetime.datetime.now(datetime.timezone.utc),
+        "response": body,
+    }
+
+
+def cancel_order(client_order_id: str) -> bool:
+    """Cancel a resting order. Used when a position is closed by other means —
+    a stop left behind would try to sell shares that are no longer held."""
+    _assert_sandbox()
+    client = quotes.get_api_client()
+    account_id = get_paper_account_id()
+    if client is None or account_id is None:
+        return False
+    from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
+
+    try:
+        OrderOperationV3(client).cancel_order(account_id, client_order_id)
+        return True
+    except Exception:
+        log.exception("Couldn't cancel %s", client_order_id)
+        return False
+
+
 def get_order_detail(client_order_id: str) -> dict | None:
     """The order itself, so the fill price can be recorded — placed at market,
     the price is only knowable after the fact.

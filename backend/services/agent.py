@@ -422,6 +422,59 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
     return embed
 
 
+def _cancel_stops(ticker: str) -> int:
+    """Cancel every resting stop on a ticker the agent is selling.
+
+    A stop left behind after the position closes is not merely untidy: it is a
+    live order to sell shares that are no longer owned, which the broker would
+    either reject later or fill into a short.
+    """
+    cancelled = 0
+    for trade in db.get_pending_agent_trades():
+        if not trade.is_stop or trade.ticker != ticker:
+            continue
+        if sandbox_broker.cancel_order(trade.client_order_id):
+            db.settle_agent_trade(trade.client_order_id, status="rejected")
+            cancelled += 1
+    if cancelled:
+        log.info("Cancelled %d resting stop(s) on %s", cancelled, ticker)
+    return cancelled
+
+
+def _arm_stop(order: dict, stop_price: float | None) -> None:
+    """Rest a GTC stop under a position the agent just opened.
+
+    Best-effort on purpose: a failed stop must not undo a filled buy, because
+    the shares are already owned either way and raising here would leave the
+    ledger disagreeing with the account. It is logged loudly instead — a
+    position running without its stop is worth knowing about.
+
+    A buy with no stop level simply gets none. Inventing one would be inventing
+    the exit price of a real trade.
+    """
+    if not stop_price:
+        log.info("No stop level for %s — the position rests without one", order["ticker"])
+        return
+    try:
+        result = sandbox_broker.place_stop_loss(
+            order["ticker"], order["quantity"], stop_price
+        )
+    except Exception:
+        log.exception("Couldn't arm a stop for %s at %.2f", order["ticker"], stop_price)
+        return
+    db.record_agent_trade(
+        ticker=order["ticker"],
+        side="sell",
+        quantity=order["quantity"],
+        client_order_id=result["client_order_id"],
+        placed_at=result["placed_at"],
+        reason=f"stop-loss resting at ${stop_price:,.2f}",
+        signal_id=None,
+        is_stop=True,
+    )
+    log.info("Stop armed for %s at %.2f", order["ticker"], stop_price)
+
+
 def settle_pending() -> int:
     """Ask the broker about every order still awaiting a fill and apply the
     answer. Returns how many changed state.
@@ -497,6 +550,10 @@ def run_once() -> AgentRun:
 
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
     signal_by_ticker = {s.ticker: s.id for s in signals}
+    # The stop the analysis named, per ticker. Already checked for
+    # plausibility when the signal was recorded (see analysis._trade_plan_levels),
+    # with an ATR-derived fallback, so a level here is one worth resting on.
+    stops = {s.ticker: s.stop_loss for s in signals if s.stop_loss}
     for order in accepted:
         try:
             result = sandbox_broker.place_market_order(
@@ -516,6 +573,12 @@ def run_once() -> AgentRun:
             signal_id=signal_by_ticker.get(order["ticker"]),
         )
         run.placed.append(order)
+        if order["side"] == "buy":
+            _arm_stop(order, stops.get(order["ticker"]))
+        else:
+            # The position is being exited, so any stop under it would try to
+            # sell shares that are no longer held.
+            _cancel_stops(order["ticker"])
 
     # Settle again on the way out, and re-read the book. A market order placed
     # in session hours fills in well under a second, but nothing would notice

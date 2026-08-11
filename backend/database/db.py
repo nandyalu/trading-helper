@@ -574,6 +574,7 @@ def record_agent_trade(
     broker_order_id: str | None = None,
     reason: str | None = None,
     signal_id: int | None = None,
+    is_stop: bool = False,
     *,
     _session: Session = None,
 ) -> int:
@@ -588,6 +589,7 @@ def record_agent_trade(
         broker_order_id=broker_order_id,
         reason=reason,
         signal_id=signal_id,
+        is_stop=is_stop,
         status="pending",
     )
     _session.add(row)

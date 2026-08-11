@@ -135,6 +135,10 @@ class AgentTrade(SQLModel, table=True):
     client_order_id: str = Field(unique=True, index=True)  # ours, echoed by the broker
     broker_order_id: str | None = None
     status: str = Field(default="pending", index=True)  # "pending" | "filled" | "rejected"
+    # A protective stop resting at the broker, not an order waiting to fill.
+    # It is *meant* to sit pending indefinitely, so the UI and the exit path
+    # both need to tell it apart from a market order that never filled.
+    is_stop: bool = Field(default=False)
     reason: str | None = None  # the model's stated rationale
     signal_id: int | None = Field(default=None, foreign_key="signal.id", index=True)
 

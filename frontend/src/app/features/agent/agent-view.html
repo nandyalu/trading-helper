@@ -163,6 +163,26 @@
       }
     </section>
 
+    @if (restingStops().length) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Protective stops</h2>
+          <p class="hint">
+            Real stop orders resting at the broker, placed when each position was opened. The broker
+            enforces them whether or not this app is running — a stop that depended on our polling
+            would not really be a stop.
+          </p>
+        </div>
+        <div class="card-body">
+          <ul class="plain-list">
+            @for (t of restingStops(); track t.id) {
+              <li>{{ t.ticker }} — {{ t.quantity }} shares, {{ t.reason }}</li>
+            }
+          </ul>
+        </div>
+      </section>
+    }
+
     @if (pending().length) {
       <section class="card">
         <div class="card-head">

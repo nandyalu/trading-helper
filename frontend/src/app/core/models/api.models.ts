@@ -278,6 +278,9 @@ export interface AgentTrade {
   placed_at: string;
   filled_at: string | null;
   status: string; // "pending" | "filled" | "rejected"
+  /** A protective stop resting at the broker. It is meant to sit pending
+   * indefinitely, so it is listed apart from orders awaiting a fill. */
+  is_stop: boolean;
   reason: string | null;
   signal_id: number | null;
 }

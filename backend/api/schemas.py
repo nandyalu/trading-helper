@@ -313,6 +313,7 @@ class AgentTradeOut(OrmModel):
     placed_at: datetime
     filled_at: datetime | None
     status: str
+    is_stop: bool
     reason: str | None
     signal_id: int | None
 
