@@ -37,6 +37,10 @@ class Holding:
     quantity: float
     avg_cost: float
     price: float | None = None  # current market price, None when unavailable
+    # When the oldest still-open lot was bought. The trade horizon is one to
+    # two weeks, so a position's age is the difference between holding it and
+    # forgetting about it — nothing else in the book says a thesis has expired.
+    opened: datetime.date | None = None
 
     @property
     def market_value(self) -> float | None:
@@ -50,6 +54,11 @@ class Holding:
     def unrealized_pnl(self) -> float | None:
         value = self.market_value
         return None if value is None else value - self.cost_basis
+
+    def held_days(self, today: datetime.date | None = None) -> int | None:
+        if self.opened is None:
+            return None
+        return ((today or datetime.date.today()) - self.opened).days
 
 
 @dataclass
@@ -79,6 +88,16 @@ class Book:
     @property
     def return_pct(self) -> float:
         return (self.equity / self.budget - 1) * 100 if self.budget else 0.0
+
+    def weight_pct(self, holding: Holding) -> float | None:
+        """What share of the whole account one position is.
+
+        Shown to the model rather than capped, because allocation is its call —
+        but it put 98% of the budget into one stock without ever being told
+        that was what it was doing.
+        """
+        value = holding.market_value if holding.market_value is not None else holding.cost_basis
+        return (value / self.equity * 100) if self.equity else None
 
 
 def get_budget() -> float:
@@ -129,12 +148,20 @@ def build_book(price_lookup=None) -> Book:
         position = compute_position(transactions)
         realized += position.realized_pnl
         if position.quantity > _QUANTITY_EPSILON:
+            # The oldest open lot: a position topped up last week is still a
+            # position opened a month ago, and the thesis is that old too.
+            opened = min(
+                (lot.date for lot in position.open_lots if lot.date), default=None
+            )
+            if isinstance(opened, str):
+                opened = datetime.date.fromisoformat(opened)
             holdings.append(
                 Holding(
                     ticker=ticker,
                     quantity=position.quantity,
                     avg_cost=position.avg_cost,
                     price=price_lookup(ticker) if price_lookup else None,
+                    opened=opened,
                 )
             )
 

@@ -591,3 +591,64 @@ def test_a_sell_does_not_arm_a_stop(monkeypatch):
     agent.run_once()
 
     assert called == []
+
+
+# --- context the model was previously missing ----------------------------------
+
+
+def _priced_book(cash=100.0, holdings=None):
+    import datetime
+
+    book = _book(cash=cash, holdings=holdings or [("AAA", 10, 90.0)])
+    for h in book.holdings:
+        h.price = 100.0
+        h.opened = datetime.date.today() - datetime.timedelta(days=21)
+    return book
+
+
+def test_a_holding_shows_what_share_of_the_account_it_is():
+    """It put 98% of the budget into one stock without ever being told that was
+    what it was doing."""
+    prompt = agent.build_prompt(_priced_book(), [], {})
+    assert "% of the account" in prompt
+
+
+def test_concentration_is_measured_against_equity_not_cost():
+    book = _priced_book(cash=0.0, holdings=[("AAA", 10, 50.0)])
+    # 10 shares now worth $100 each = $1,000 of a $1,000 book.
+    assert book.weight_pct(book.holdings[0]) == pytest.approx(100.0)
+
+
+def test_a_holding_shows_how_long_it_has_been_held():
+    """Nothing else in the book says a thesis has expired."""
+    assert "held 21 day(s)" in agent.build_prompt(_priced_book(), [], {})
+
+
+def test_the_intended_holding_window_is_stated():
+    prompt = agent.build_prompt(_priced_book(), [], {}, horizon_days=14)
+    assert "meant to be 14-day trades" in prompt
+    assert "outlived the thesis" in prompt
+
+
+def test_no_horizon_means_no_holding_rule():
+    """Better silent than asserting a window that was never configured."""
+    assert "meant to be" not in agent.build_prompt(_priced_book(), [], {})
+
+
+def test_the_regime_line_leads_the_prompt():
+    prompt = agent.build_prompt(_book(), [], {}, regime_line="Market conditions today: risk-off.")
+    assert prompt.index("risk-off") < prompt.index("Your account is")
+
+
+def test_a_missing_regime_adds_no_line():
+    """A failed fetch must drop the line, not the decision."""
+    assert "Market conditions" not in agent.build_prompt(_book(), [], {})
+
+
+def test_an_unreadable_regime_does_not_break_the_run(monkeypatch):
+    import backend.services.regime as regime_module
+
+    monkeypatch.setattr(
+        regime_module, "fetch_regime", lambda: (_ for _ in ()).throw(RuntimeError("no data"))
+    )
+    assert agent.current_regime_line() is None

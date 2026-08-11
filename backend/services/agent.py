@@ -107,6 +107,8 @@ def build_prompt(
     prices: dict[str, float | None],
     rejected: list[agent_book.Rejection] | None = None,
     closed: list[agent_book.ClosedTrade] | None = None,
+    regime_line: str | None = None,
+    horizon_days: int | None = None,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -126,6 +128,10 @@ def build_prompt(
     lines = [
         "You manage a small paper-trading account. Decide what to trade today.",
         "",
+    ]
+    if regime_line:
+        lines += [regime_line, ""]
+    lines += [
         f"Your account is ${book.budget:,.2f} in total. That is all you will ever have —",
         "there is no more money coming.",
         f"Of it, ${book.cash:,.2f} is uninvested and available to spend right now.",
@@ -144,6 +150,12 @@ def build_prompt(
                 f"- {h.ticker}: {h.quantity:g} shares, average cost ${h.avg_cost:,.2f}, "
                 f"now {price} each, worth {value}, unrealized {pnl}"
             )
+            weight = book.weight_pct(h)
+            if weight is not None:
+                line += f", {weight:.0f}% of the account"
+            held_days = h.held_days()
+            if held_days is not None:
+                line += f", held {held_days} day(s)"
             if h.market_value:
                 line += f". Selling all {h.quantity:g} would raise about ${h.market_value:,.2f}"
             lines.append(line)
@@ -203,6 +215,15 @@ def build_prompt(
         "  they expect it to fall, so exit it if you hold it. Hold means no action is",
         "  recommended — if you do not own it, a Hold is not a reason to buy it.",
         "- Doing nothing is a valid answer, and often the right one.",
+        *(
+            [
+                f"- These are meant to be {horizon_days}-day trades. A position held much",
+                "  longer than that has outlived the thesis it was opened on, whether or",
+                "  not anything has told you to sell it.",
+            ]
+            if horizon_days
+            else []
+        ),
         "- Before answering, add up what your buys cost and check it against your cash.",
         "",
         "Reply with JSON only, in this exact shape:",
@@ -288,6 +309,42 @@ def screen(orders: list[dict], book: agent_book.Book, prices: dict[str, float | 
     return accepted, rejected
 
 
+def current_regime_line() -> str | None:
+    """One line of market context — VIX, SPY against its 200-day, the yield
+    curve — already computed for the 12:45 post.
+
+    How aggressively to deploy cash is exactly the kind of judgement this
+    should inform, and the numbers were being thrown away every morning. Best
+    effort: a failed fetch drops the line rather than the decision.
+    """
+    from backend.services import regime
+
+    try:
+        data = regime.fetch_regime()
+        label, emoji = regime.classify_regime(
+            data.vix, data.spy_vs_ma_pct, data.curve_spread_pct
+        )
+    except Exception:
+        log.warning("Couldn't read the market regime for the agent prompt", exc_info=True)
+        return None
+    line = f"Market conditions today: {label}."
+    if data.vix is not None:
+        line += f" VIX {data.vix:.1f}."
+    if data.spy_vs_ma_pct is not None:
+        line += f" The S&P is {data.spy_vs_ma_pct:+.1f}% against its 200-day average."
+    return line
+
+
+def _horizon_days() -> int | None:
+    """How long a position is meant to be held, from the configured horizon."""
+    from backend.services.signals import horizon_params
+
+    try:
+        return horizon_params(analysis.get_horizon())["eval_days"]
+    except Exception:
+        return None
+
+
 def _price_map(tickers) -> dict[str, float | None]:
     return {ticker: get_current_price(ticker) for ticker in sorted(set(tickers))}
 
@@ -310,7 +367,7 @@ def _ask(prompt: str) -> str:
     return str(content)
 
 
-def _decide(book: agent_book.Book, signals: list, prices: dict[str, float | None], closed=None):
+def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=None):
     """(reasoning, accepted, rejected), with one correction pass.
 
     A refused order is information the model never sees otherwise: it proposed
@@ -325,14 +382,15 @@ def _decide(book: agent_book.Book, signals: list, prices: dict[str, float | None
     than merging, because nothing has been placed yet and two half-adopted plans
     are harder to reason about than one.
     """
-    reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices, closed=closed)))
+    reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices, closed=closed, regime_line=regime_line, horizon_days=horizon_days)))
     accepted, rejected = screen(proposed, book, prices)
     if not rejected:
         return reasoning, accepted, rejected
 
     log.info("Re-asking after %d refused order(s): %s", len(rejected), [r.why for r in rejected])
     retry_reasoning, retry_proposed = parse_decision(
-        _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed))
+        _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed,
+                     regime_line=regime_line, horizon_days=horizon_days))
     )
     if not retry_proposed:
         # A retry that proposes nothing is a decision to stand pat; keep the
@@ -562,7 +620,10 @@ def run_once() -> AgentRun:
     # naming.
     decisions = {s.id: s.decision for s in db.get_recent_signals(limit=200) if s.id}
     closed = agent_book.closed_trades(decisions=decisions)
-    reasoning, accepted, rejected = _decide(book, signals, prices, closed=closed)
+    reasoning, accepted, rejected = _decide(
+        book, signals, prices, closed=closed,
+        regime_line=current_regime_line(), horizon_days=_horizon_days(),
+    )
 
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
     signal_by_ticker = {s.ticker: s.id for s in signals}
