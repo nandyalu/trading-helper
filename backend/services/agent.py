@@ -513,8 +513,29 @@ def _arm_exits(order: dict, stop_price: float | None, target_price: float | None
     disagreeing with the account. It is logged loudly instead — a position
     running naked is worth knowing about.
     """
+    # Levels on the wrong side of the market execute the instant they are
+    # armed: a limit sell below the price fills at market, and a stop above it
+    # triggers at once. Either would liquidate the position the moment it was
+    # opened — and the take-profit would be announced as a profit while booking
+    # a loss. This is not hypothetical: a live signal produced a $95.96 target
+    # on a stock trading at $97.57.
+    price = get_current_price(order["ticker"])
+    if price is not None:
+        if stop_price is not None and stop_price >= price:
+            log.warning(
+                "Refusing a stop at %.2f on %s trading at %.2f — it would trigger at once",
+                stop_price, order["ticker"], price,
+            )
+            stop_price = None
+        if target_price is not None and target_price <= price:
+            log.warning(
+                "Refusing a target at %.2f on %s trading at %.2f — it would fill at once",
+                target_price, order["ticker"], price,
+            )
+            target_price = None
+
     if not stop_price and not target_price:
-        log.info("No stop or target for %s — the position rests unguarded", order["ticker"])
+        log.info("No usable stop or target for %s — the position rests unguarded", order["ticker"])
         return
     try:
         legs = sandbox_broker.place_exit_bracket(

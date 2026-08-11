@@ -527,6 +527,7 @@ def test_the_record_reaches_the_prompt():
 
 def test_a_buy_arms_both_exits(monkeypatch):
     placed = {}
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
     monkeypatch.setattr(
         agent.sandbox_broker, "place_exit_bracket",
         lambda t, q, stop, target: placed.update(ticker=t, qty=q, stop=stop, target=target)
@@ -559,6 +560,7 @@ def test_a_buy_with_neither_level_gets_no_exits(monkeypatch):
 
 
 def test_only_the_level_that_exists_is_placed(monkeypatch):
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
     """The trader states each only when it has a view."""
     monkeypatch.setattr(
         agent.sandbox_broker, "place_exit_bracket",
@@ -575,6 +577,7 @@ def test_only_the_level_that_exists_is_placed(monkeypatch):
 
 
 def test_a_failed_exit_does_not_undo_the_buy(monkeypatch):
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
     """The shares are already owned either way; raising here would leave the
     ledger disagreeing with the account."""
     def boom(*a):
@@ -673,3 +676,60 @@ def test_an_unreadable_regime_does_not_break_the_run(monkeypatch):
         regime_module, "fetch_regime", lambda: (_ for _ in ()).throw(RuntimeError("no data"))
     )
     assert agent.current_regime_line() is None
+
+
+def test_a_target_below_the_market_is_refused(monkeypatch):
+    """A limit sell below the price fills at market, so arming it liquidates
+    the position at once — and reports a loss as a profit. A live signal really
+    did produce a $95.96 target on a stock trading at $97.57."""
+    placed = {}
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 97.57)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda t, q, stop, target: placed.update(stop=stop, target=target) or [],
+    )
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: 1)
+
+    agent._arm_exits({"ticker": "ZBH", "quantity": 10, "side": "buy"}, 90.15, 95.96)
+
+    assert placed == {"stop": 90.15, "target": None}
+
+
+def test_a_stop_above_the_market_is_refused(monkeypatch):
+    placed = {}
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 97.57)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda t, q, stop, target: placed.update(stop=stop, target=target) or [],
+    )
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: 1)
+
+    agent._arm_exits({"ticker": "AAA", "quantity": 1, "side": "buy"}, 99.0, 110.0)
+
+    assert placed == {"stop": None, "target": 110.0}
+
+
+def test_both_levels_on_the_wrong_side_arms_nothing(monkeypatch):
+    called = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
+
+    agent._arm_exits({"ticker": "AAA", "quantity": 1, "side": "buy"}, 105.0, 95.0)
+
+    assert called == []
+
+
+def test_an_unknown_price_does_not_block_arming(monkeypatch):
+    """The check is a guard against a bad level, not a reason to leave a
+    position unguarded when the quote feed is down."""
+    placed = {}
+    monkeypatch.setattr(agent, "get_current_price", lambda t: None)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda t, q, stop, target: placed.update(stop=stop, target=target) or [],
+    )
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: 1)
+
+    agent._arm_exits({"ticker": "AAA", "quantity": 1, "side": "buy"}, 90.0, 110.0)
+
+    assert placed == {"stop": 90.0, "target": 110.0}
