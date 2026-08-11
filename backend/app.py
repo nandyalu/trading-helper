@@ -29,6 +29,7 @@ from backend.api.routes import (
     watchlist,
 )
 from backend.discord_bot.client import start_discord, stop_discord
+from backend.services import trade_stream
 from backend.tasks.scheduler import register_jobs, scheduler
 
 log = logging.getLogger("trading-bot.app")
@@ -45,7 +46,11 @@ async def lifespan(app: FastAPI):
     register_jobs()
     scheduler.start()
     await start_discord()
+    # Best effort, and never fatal: without it a resting stop or take-profit
+    # is noticed by the 15-minute poll instead of within a second.
+    trade_stream.start()
     yield
+    trade_stream.stop()
     await stop_discord()
     scheduler.shutdown()  # mandatory per quiv's own docs — cancels jobs, deletes its temp DB
 
