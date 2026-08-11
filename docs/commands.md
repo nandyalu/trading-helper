@@ -64,6 +64,8 @@ This keeps the bot responsive.
 | 12:35 | Webull sync summary, posted only when something changed |
 | 12:45 | 🟢/🟡/🔴 regime line |
 | 13:00 | "📅 X reports earnings soon" plus a fresh analysis, for tickers that report within 2 days |
-| every 15 min, market hours | 📊 big moves, 📊 unusual volume, 🛑 stop breaches, and 🎯 target touches. Each alert posts at most once a day (a target alert posts once ever, per signal). Plus ⚡ triggered analyses |
+| 13:35 | The auto trader decides, five minutes after the US open. Posts only when it placed, refused, or failed an order |
+| every 15 min, market hours | 📊 big moves, 📊 unusual volume, 🛑 stop breaches, and 🎯 target touches. Each alert posts at most once a day (a target alert posts once ever, per signal). Plus ⚡ triggered analyses, and the auto trader deciding on them |
+| whenever one fills | 🛑 the auto trader stopped out, or 🎯 it reached its target. These arrive within a second of the fill |
 | 21:30 | Graded signals ("PASS/FAIL, vs SPY, target hit"), then new analyses from the watchlist sweep |
-| Fri 23:00 | 🗞️ weekly digest |
+| Fri 23:00 | 🗞️ weekly digest, then the week's screened candidates |

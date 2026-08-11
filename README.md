@@ -4,6 +4,7 @@ Trading Helper is a self-hosted Discord bot and web dashboard.
 It runs a multi-agent AI analysis ([TradingAgents](TradingAgents/README.md)) on the stocks you hold and watch.
 It tracks every call the analysis makes, and it grades each call against reality and against a simple SPY buy-and-hold.
 It also gives you tools to act on the calls with intent: paper trading, risk-based position sizing, intraday alerts, and a synced view of your real Webull account.
+And it can trade the calls itself, on a simulated brokerage account with a fixed budget, so you can watch what the signals would actually have done to a book before any real money is involved.
 
 **Core idea: an AI signal has no value until you know its track record.**
 Every part of this bot does one of three jobs: it generates signals, it measures signals, or it helps you act on signals that have earned your trust.
@@ -14,6 +15,10 @@ Every weekday, the bot analyzes your watchlist and holdings with a local LLM pip
 The bot records each decision with the price at signal time and a parsed time horizon, then grades the decision automatically once that time horizon arrives, in three ways: against reality, against SPY, and against its own price target.
 You can follow any signal with one ✅ reaction to start paper trading, ask a question about it with `/ask`, and watch your win rate build in `/scorecard`.
 Between analyses, a rule-based watchdog checks prices, volume, stops, and targets, and each morning the bot syncs your real Webull holdings in automatically.
+
+An optional auto trader takes it one step further: it decides what to buy and sell from those signals, inside a budget it cannot exceed, on a simulated account that no real order can reach.
+It rests a real stop and take-profit under every position it opens, and it is measured against two things that need no model at all — buying and holding SPY, and a mechanical rule that follows every Buy signal.
+If it cannot beat those, the dashboard says so.
 
 ## Documentation
 

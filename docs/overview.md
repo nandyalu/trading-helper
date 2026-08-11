@@ -160,10 +160,36 @@ Either level may be missing, since the analysis states them only when it has a v
 The model chooses what to buy and how much. The app only refuses orders that cannot be executed as stated — spending cash that is not there, selling shares that are not held, fractional shares.
 An order that costs more than the cash left is dropped rather than resized, because resizing would quietly turn its decision into a different one.
 
+### Is the model earning its keep?
+
+The agent picks stocks with an LLM, which is only worth doing if it beats the two things it could be replaced by tomorrow.
+The Auto trader page measures it against both, from the day it placed its first order, with the same budget:
+
+- **SPY buy-and-hold** — did picking anything beat picking nothing?
+- **A mechanical signal-follower** — a rule that buys every Buy signal in equal weight and sells on a Sell signal. No model, no GPU, no prompt.
+
+The second is the one that matters. If a rule with nothing in it beats the agent, the model is costing you money and attention for no return, and the page says so in those words.
+
+It refuses to draw any conclusion under ten trades. Three trades of hindsight is not evidence, and a confident verdict on it would be worse than no verdict at all.
+
+### What it remembers
+
+Each morning the agent is shown how its own past trades turned out: how many closed, how many made money, the net result, the average holding period, and the last six with what the analyst had said at entry.
+Once it has bought on a Hold signal twice, it is told how that worked out specifically.
+
+Without this it woke every day with a book and no idea that the last thing it bought had lost money.
+A model that cannot see its outcomes cannot avoid repeating them — and neither can you tell whether it is improving.
+
+It is also shown what share of the account each position is, how long it has been held, and the day's market regime. Those are stated, not enforced: allocation is its decision, but it was making that decision blind.
+
 Two details worth knowing when reading the page:
 
 - **The simulated account holds far more than the budget.** Webull funds it with $1,000,000, so the budget is enforced by the app, from the agent's own filled orders, and the account's buying power is never consulted.
 - **A pending order has moved no money.** Orders placed while the market is shut fill at the next open, and until they do the cash is still counted as available.
+- **Resting exits are not pending orders.** A stop or take-profit is meant to sit unfilled, so they are listed apart from orders still waiting to fill.
+
+Fills are reported over a live event stream, so a stop that triggers is recorded and posted within a second.
+The fifteen-minute poll behind it is deliberately kept: a stream that silently stops looks exactly like a quiet market, so the stream is a speed improvement over a guarantee rather than a replacement for it.
 
 Why the open rather than straight after the sweep: the sweep runs at 21:30 UTC, which is 17:30 in New York, ninety minutes after the close. Webull rejects a market order outright at that hour, so an agent chained to the sweep would look healthy and never fill anything.
 
