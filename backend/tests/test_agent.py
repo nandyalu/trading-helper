@@ -212,6 +212,7 @@ def test_a_filled_order_is_settled_with_its_real_price(monkeypatch):
 
     class Trade:
         client_order_id = "8a19ed7a58094353a96cbaf92877547d"
+        ticker, side, quantity, is_stop = "ZBH", "buy", 10.0, False
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(
@@ -221,7 +222,7 @@ def test_a_filled_order_is_settled_with_its_real_price(monkeypatch):
         agent.db, "settle_agent_trade", lambda order_id, **kw: settled.update(kw)
     )
 
-    assert agent.settle_pending() == 1
+    assert len(agent.settle_pending()) == 1
     assert settled["status"] == "filled"
     assert settled["price"] == 97.83
     assert settled["quantity"] == 10.0
@@ -240,6 +241,7 @@ def test_a_partial_fill_records_what_filled_not_what_was_asked(monkeypatch):
 
     class Trade:
         client_order_id = "abc"
+        ticker, side, quantity, is_stop = "AAA", "buy", 4.0, False
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(agent.sandbox_broker, "get_order_detail", lambda _id: partial)
@@ -257,6 +259,7 @@ def test_a_rejected_order_is_marked_not_left_pending(monkeypatch):
 
     class Trade:
         client_order_id = "abc"
+        ticker, side, quantity, is_stop = "AAA", "buy", 4.0, False
 
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [Trade()])
     monkeypatch.setattr(
@@ -266,7 +269,7 @@ def test_a_rejected_order_is_marked_not_left_pending(monkeypatch):
         agent.db, "settle_agent_trade", lambda order_id, **kw: settled.update(kw)
     )
 
-    assert agent.settle_pending() == 1
+    assert len(agent.settle_pending()) == 1
     assert settled["status"] == "rejected"
 
 
@@ -405,7 +408,7 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
-    monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or 0)
+    monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
     monkeypatch.setattr(agent.agent_book, "closed_trades", lambda decisions=None: [])
@@ -437,7 +440,7 @@ def test_a_run_that_places_nothing_does_not_settle_twice(monkeypatch):
     calls = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
-    monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or 0)
+    monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
     monkeypatch.setattr(agent.agent_book, "closed_trades", lambda decisions=None: [])
@@ -569,7 +572,7 @@ def test_a_sell_does_not_arm_a_stop(monkeypatch):
     monkeypatch.setattr(agent.sandbox_broker, "place_stop_loss", lambda *a: called.append(a))
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
-    monkeypatch.setattr(agent, "settle_pending", lambda: 0)
+    monkeypatch.setattr(agent, "settle_pending", lambda: [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
     monkeypatch.setattr(agent.agent_book, "closed_trades", lambda decisions=None: [])

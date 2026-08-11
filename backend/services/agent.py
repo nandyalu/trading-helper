@@ -475,14 +475,16 @@ def _arm_stop(order: dict, stop_price: float | None) -> None:
     log.info("Stop armed for %s at %.2f", order["ticker"], stop_price)
 
 
-def settle_pending() -> int:
+def settle_pending() -> list[dict]:
     """Ask the broker about every order still awaiting a fill and apply the
-    answer. Returns how many changed state.
+    answer. Returns what changed, so a caller can announce it.
 
-    Run before deciding, so the book the model sees includes last night's
-    fills rather than treating them as still-pending cash.
+    Resting stops are included deliberately. A stop that triggers is a sale
+    the app did not initiate, and it is the one fill nobody is waiting for —
+    so if this only ran when the agent next decided, the book would show a
+    position that had already been sold, sometimes for a whole day.
     """
-    settled = 0
+    settled: list[dict] = []
     for trade in db.get_pending_agent_trades():
         detail = sandbox_broker.get_order_detail(trade.client_order_id)
         if not detail:
@@ -505,10 +507,24 @@ def settle_pending() -> int:
                 filled_at=datetime.datetime.now(datetime.timezone.utc),
                 broker_order_id=str(detail.get("order_id") or "") or None,
             )
-            settled += 1
+            settled.append({
+                "ticker": trade.ticker,
+                "side": trade.side,
+                "quantity": filled_qty,
+                "price": price,
+                "was_stop": trade.is_stop,
+                "status": "filled",
+            })
         elif status in ("CANCELLED", "REJECTED", "FAILED", "EXPIRED"):
             db.settle_agent_trade(trade.client_order_id, status="rejected")
-            settled += 1
+            settled.append({
+                "ticker": trade.ticker,
+                "side": trade.side,
+                "quantity": trade.quantity,
+                "price": None,
+                "was_stop": trade.is_stop,
+                "status": "rejected",
+            })
     return settled
 
 
@@ -534,7 +550,7 @@ def run_once() -> AgentRun:
 
     settled = settle_pending()
     if settled:
-        log.info("Settled %d pending order(s) before deciding", settled)
+        log.info("Settled %d pending order(s) before deciding", len(settled))
 
     signals = _recent_signals()
     book = agent_book.build_book(price_lookup=get_current_price)
@@ -589,3 +605,14 @@ def run_once() -> AgentRun:
         settle_pending()
         run.book = agent_book.build_book(price_lookup=prices.get)
     return run
+
+
+def format_stop_fill(fill: dict) -> str:
+    """A stop triggering is the one event here the user did not ask for and
+    would most want to hear about — a position was sold without anyone
+    deciding to sell it."""
+    return (
+        f"🛑 Stop triggered: sold {fill['quantity']:g} {fill['ticker']} "
+        f"at ${fill['price']:,.2f}. The thesis level from the analysis was reached, "
+        "so the paper position is closed."
+    )

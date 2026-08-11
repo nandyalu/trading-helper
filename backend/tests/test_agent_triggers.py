@@ -106,3 +106,80 @@ def test_the_batch_job_arms_the_same_cooldown(agent_stub, monkeypatch):
     before = len(agent_stub)
     asyncio.run(scheduler._maybe_run_agent())
     assert len(agent_stub) == before, "the batch should have armed the cooldown"
+
+
+# --- noticing a stop that fired ------------------------------------------------
+
+
+def test_the_watchdog_settles_agent_fills(agent_stub, monkeypatch):
+    """A resting stop can trigger at any moment and nobody is waiting for that
+    fill. Settled only when the agent next decides, the book would show a
+    position that had already been sold — for the rest of the day."""
+    called = []
+    monkeypatch.setattr(scheduler.agent, "settle_pending", lambda: called.append(1) or [])
+    monkeypatch.setattr(scheduler, "notify", lambda *a, **kw: asyncio.sleep(0))
+
+    asyncio.run(scheduler._settle_agent_fills())
+
+    assert called == [1]
+
+
+def test_a_triggered_stop_is_announced(monkeypatch):
+    posted = []
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(
+        scheduler.agent, "settle_pending",
+        lambda: [{"ticker": "ZBH", "side": "sell", "quantity": 10.0, "price": 92.0,
+                  "was_stop": True, "status": "filled"}],
+    )
+
+    async def fake_notify(*args, **kwargs):
+        posted.append(args[0] if args else kwargs)
+
+    monkeypatch.setattr(scheduler, "notify", fake_notify)
+    asyncio.run(scheduler._settle_agent_fills())
+
+    assert len(posted) == 1
+    assert "Stop triggered" in posted[0]
+    assert "ZBH" in posted[0] and "92.00" in posted[0]
+
+
+def test_an_ordinary_fill_is_not_announced_again(monkeypatch):
+    """The run that placed it already reported it."""
+    posted = []
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(
+        scheduler.agent, "settle_pending",
+        lambda: [{"ticker": "ZBH", "side": "buy", "quantity": 10.0, "price": 97.8,
+                  "was_stop": False, "status": "filled"}],
+    )
+
+    async def fake_notify(*args, **kwargs):
+        posted.append(args)
+
+    monkeypatch.setattr(scheduler, "notify", fake_notify)
+    asyncio.run(scheduler._settle_agent_fills())
+
+    assert posted == []
+
+
+def test_a_disabled_agent_is_not_polled(monkeypatch):
+    called = []
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: False)
+    monkeypatch.setattr(scheduler.agent, "settle_pending", lambda: called.append(1) or [])
+
+    asyncio.run(scheduler._settle_agent_fills())
+
+    assert called == []
+
+
+def test_a_settle_failure_does_not_kill_the_watchdog_tick(monkeypatch):
+    """This runs before the price alerts; an exception here would take them
+    down with it."""
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+
+    def boom():
+        raise RuntimeError("broker down")
+
+    monkeypatch.setattr(scheduler.agent, "settle_pending", boom)
+    asyncio.run(scheduler._settle_agent_fills())  # must not raise

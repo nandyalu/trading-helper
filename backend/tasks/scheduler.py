@@ -119,6 +119,24 @@ _AGENT_COOLDOWN = datetime.timedelta(minutes=30)
 _last_agent_run: datetime.datetime | None = None
 
 
+async def _settle_agent_fills() -> None:
+    """Bring the agent's ledger up to date with the broker, and say so when a
+    stop fired. Cheap — one request per still-open order, usually none."""
+    if not agent.is_enabled():
+        return
+    try:
+        settled = await asyncio.to_thread(agent.settle_pending)
+    except Exception:
+        log.exception("Couldn't settle agent orders")
+        return
+    for fill in settled:
+        # A stop firing is the only trade here nobody chose to make, so it is
+        # the one worth interrupting for. Ordinary fills already showed up in
+        # the run that placed them.
+        if fill["was_stop"] and fill["status"] == "filled":
+            await notify(agent.format_stop_fill(fill))
+
+
 async def _maybe_run_agent() -> None:
     """Let the agent act on fresh intraday signals, but only when it could
     actually trade on them.
@@ -192,6 +210,11 @@ async def _alert_watchdog_job() -> None:
     tick, which doubles as backpressure on the shared GPU."""
     if not watchdog.is_us_market_hours():
         return
+    # Before the scan: a resting stop can trigger at any moment, and it is the
+    # one fill nobody is waiting for. Settled only when the agent next decided,
+    # the book would show a position that had already been sold — for the rest
+    # of the day, and into the next morning's decision.
+    await _settle_agent_fills()
     try:
         alerts, to_analyze = await asyncio.to_thread(watchdog.scan_for_alerts)
     except Exception:
