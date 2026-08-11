@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from backend.database import db
 from backend.services.positions import ESTIMATED_DATE_NOTE, compute_position
+from backend.services import quotes
 from backend.services.quotes import get_api_client
 
 log = logging.getLogger("trading-bot.broker")
@@ -459,7 +460,24 @@ def plan_sync(
 
 def run_sync() -> str | None:
     """Fetch, reconcile, apply. Returns a Discord-ready summary, or None when
-    the broker isn't configured/reachable."""
+    the broker isn't configured/reachable.
+
+    Refuses to run against the sandbox. This function reconciles the *real*
+    transaction log — the one carrying reconstructed purchase dates going back
+    to 2021 — and its reconciliation is additive: an unknown holding becomes a
+    synthetic buy, a quantity difference becomes a delta transaction. Pointed
+    at the simulated account it would therefore write paper positions into the
+    real book and silently corrupt both the portfolio page and the vs-SPY
+    comparison. Nothing would be deleted, which is what makes it dangerous —
+    the damage would look like data.
+    """
+    if quotes.is_sandbox():
+        log.warning("Refusing to sync the real transaction log from the sandbox account")
+        return (
+            "Webull is pointed at the sandbox, so the real portfolio sync is off — "
+            "syncing simulated positions into the real book would corrupt it. "
+            "Paper trading is unaffected."
+        )
     positions = fetch_broker_positions()
     if positions is None:
         return None

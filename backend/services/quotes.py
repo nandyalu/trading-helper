@@ -25,6 +25,16 @@ _PRICE_KEYS = ("price", "last_price", "last", "close", "pre_close")
 _LIST_KEYS = ("snapshots", "data", "result", "list")
 
 
+def is_sandbox() -> bool:
+    """Whether the client talks to Webull's simulated environment.
+
+    Read from the environment rather than remembered from client construction
+    so it answers the same before the client is built, and so a caller that
+    needs to refuse an action in sandbox (see broker.run_sync) never depends on
+    the client having been initialized first."""
+    return os.environ.get("WEBULL_SANDBOX", "").lower() in ("1", "true", "yes")
+
+
 def get_api_client():
     """Shared, token-initialized Webull ApiClient (also used by backend/services/broker.py);
     None when keys aren't configured or initialization failed."""
@@ -46,7 +56,7 @@ def get_api_client():
         logging.getLogger("webull").setLevel(logging.WARNING)
 
         api_client = ApiClient(app_key, app_secret, "us")
-        if os.environ.get("WEBULL_SANDBOX", "").lower() in ("1", "true", "yes"):
+        if is_sandbox():
             api_client.add_endpoint("us", _SANDBOX_ENDPOINT)
             log.info("Webull client enabled (sandbox endpoint)")
         else:
