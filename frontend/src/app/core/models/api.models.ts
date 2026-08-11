@@ -228,6 +228,8 @@ export interface Settings {
   alert_volume_mult: number;
   alerts_enabled: boolean;
   daily_sweep_enabled: boolean;
+  agent_enabled: boolean;
+  agent_budget: number;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;
@@ -240,4 +242,57 @@ export interface TransactionRequest {
 
 export interface AskRequest {
   question: string;
+}
+
+export interface AgentHolding {
+  ticker: string;
+  quantity: number;
+  avg_cost: number;
+  price: number | null;
+  market_value: number | null;
+  cost_basis: number;
+  unrealized_pnl: number | null;
+}
+
+export interface AgentBook {
+  enabled: boolean;
+  /** False means the app holds production credentials, where the agent refuses
+   * to trade at all. The page says so rather than showing an idle agent. */
+  sandbox: boolean;
+  budget: number;
+  cash: number;
+  invested: number;
+  market_value: number;
+  equity: number;
+  realized_pnl: number;
+  return_pct: number;
+  holdings: AgentHolding[];
+}
+
+export interface AgentTrade {
+  id: number;
+  ticker: string;
+  side: string;
+  quantity: number;
+  price: number | null; // null until the order fills
+  placed_at: string;
+  filled_at: string | null;
+  status: string; // "pending" | "filled" | "rejected"
+  reason: string | null;
+  signal_id: number | null;
+}
+
+export interface AgentOrder {
+  ticker: string;
+  side: string;
+  quantity: number;
+  reason: string | null;
+  why: string | null;
+}
+
+export interface AgentRun {
+  reasoning: string;
+  placed: AgentOrder[];
+  rejected: AgentOrder[];
+  failed: AgentOrder[];
 }

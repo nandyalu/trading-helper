@@ -203,6 +203,38 @@
 
     <section class="card">
       <div class="card-head">
+        <h2>Auto trader</h2>
+        <p class="hint">
+          Lets the model trade a simulated account on its own, each weekday just after the US open.
+          It decides what to buy and how much; the budget is a hard limit it cannot exceed. Orders
+          only ever reach the simulated account — see <a routerLink="/agent">Auto trader</a>.
+        </p>
+      </div>
+      <div class="card-body stack">
+        <label class="field-row">
+          <input
+            type="checkbox"
+            [checked]="agentEnabled()"
+            (change)="onAgentEnabledChange($event)"
+          />
+          Let the agent trade on its own
+        </label>
+        <label class="field narrow">
+          Budget ($)
+          <input
+            type="number"
+            inputmode="decimal"
+            min="1"
+            step="50"
+            [value]="agentBudget()"
+            (input)="onAgentBudgetInput($event)"
+          />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h2>Daily sweep</h2>
       </div>
       <div class="card-body">

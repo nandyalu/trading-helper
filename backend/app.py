@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
+    agent,
     alerts,
     digest,
     jobs,
@@ -74,6 +75,7 @@ app.include_router(settings.router)
 app.include_router(transactions.router)
 app.include_router(alerts.router)
 app.include_router(jobs.router)
+app.include_router(agent.router)
 
 if _SITE_DIR.is_dir():
     app.mount("/docs", StaticFiles(directory=_SITE_DIR, html=True), name="docs")

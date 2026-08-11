@@ -247,6 +247,8 @@ class SettingsOut(BaseModel):
     alert_volume_mult: float
     alerts_enabled: bool
     daily_sweep_enabled: bool
+    agent_enabled: bool
+    agent_budget: float
 
 
 class SettingsPatchIn(BaseModel):
@@ -262,6 +264,8 @@ class SettingsPatchIn(BaseModel):
     alert_volume_mult: float | None = None
     alerts_enabled: bool | None = None
     daily_sweep_enabled: bool | None = None
+    agent_enabled: bool | None = None
+    agent_budget: float | None = None
 
 
 class TransactionIn(BaseModel):
@@ -272,3 +276,57 @@ class TransactionIn(BaseModel):
 
 class AskIn(BaseModel):
     question: str
+
+
+class AgentHoldingOut(BaseModel):
+    ticker: str
+    quantity: float
+    avg_cost: float
+    price: float | None
+    market_value: float | None
+    cost_basis: float
+    unrealized_pnl: float | None
+
+
+class AgentBookOut(BaseModel):
+    enabled: bool
+    # False means the app is pointed at production credentials, where the agent
+    # refuses to trade at all. The dashboard says so loudly rather than showing
+    # an idle agent with no explanation.
+    sandbox: bool
+    budget: float
+    cash: float
+    invested: float
+    market_value: float
+    equity: float
+    realized_pnl: float
+    return_pct: float
+    holdings: list[AgentHoldingOut]
+
+
+class AgentTradeOut(OrmModel):
+    id: int
+    ticker: str
+    side: str
+    quantity: float
+    price: float | None  # NULL until the order fills
+    placed_at: datetime
+    filled_at: datetime | None
+    status: str
+    reason: str | None
+    signal_id: int | None
+
+
+class AgentOrderOut(BaseModel):
+    ticker: str
+    side: str
+    quantity: float
+    reason: str | None = None
+    why: str | None = None  # why it was rejected or failed, when it was
+
+
+class AgentRunOut(BaseModel):
+    reasoning: str
+    placed: list[AgentOrderOut]
+    rejected: list[AgentOrderOut]
+    failed: list[AgentOrderOut]

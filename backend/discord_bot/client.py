@@ -16,6 +16,8 @@ from discord.ext import commands
 from backend.database import db
 from backend.discord_bot import notify
 from backend.services import (
+    agent,
+    agent_book,
     analysis,
     ask,
     broker,
@@ -23,6 +25,7 @@ from backend.services import (
     listings,
     paper,
     portfolio,
+    quotes,
     regime,
     signals,
     sizing,
@@ -474,6 +477,68 @@ async def model(interaction: discord.Interaction, model: str | None = None):
     await interaction.followup.send(
         f"Analysis now runs on **{model}**. Signals already recorded keep the model "
         "they were made with, so /scorecard can compare the two."
+    )
+
+
+# Named explicitly: the handler can't be called `agent` because the module of
+# that name is imported above, and discord.py takes the command name from the
+# function otherwise.
+@bot.tree.command(name="agent", description="The paper-trading agent's book, or run/stop it")
+@app_commands.describe(
+    action="Leave blank to see the book. on/off switches the agent; run decides now.",
+    budget="Set the agent's budget in dollars (only with action:on)",
+)
+@app_commands.choices(
+    action=[
+        app_commands.Choice(name="on — let it trade each morning", value="on"),
+        app_commands.Choice(name="off — stop trading", value="off"),
+        app_commands.Choice(name="run — decide right now", value="run"),
+    ]
+)
+async def agent_command(
+    interaction: discord.Interaction,
+    action: app_commands.Choice[str] | None = None,
+    budget: float | None = None,
+):
+    await interaction.response.defer()
+    if budget is not None:
+        try:
+            await asyncio.to_thread(agent_book.set_budget, budget)
+        except ValueError as exc:
+            await interaction.followup.send(str(exc))
+            return
+
+    if action is None or action.value not in ("on", "off", "run"):
+        book = await asyncio.to_thread(agent_book.build_book, get_current_price)
+        state = "on" if await asyncio.to_thread(agent.is_enabled) else "off"
+        lines = [
+            f"Paper agent is **{state}** on a ${book.budget:,.0f} budget.",
+            f"Equity **${book.equity:,.2f}** ({book.return_pct:+.1f}%) · "
+            f"cash ${book.cash:,.2f} · realized ${book.realized_pnl:+,.2f}",
+        ]
+        for h in book.holdings:
+            price = f"${h.price:,.2f}" if h.price is not None else "unpriced"
+            lines.append(f"- {h.ticker}: {h.quantity:g} @ ${h.avg_cost:,.2f} avg, now {price}")
+        await interaction.followup.send("\n".join(lines))
+        return
+
+    if action.value == "run":
+        run = await asyncio.to_thread(agent.run_once)
+        await interaction.followup.send(embed=agent.format_run_embed(run))
+        return
+
+    enabled = action.value == "on"
+    if enabled and not quotes.is_sandbox():
+        await interaction.followup.send(
+            "Webull is not in sandbox mode, so the agent would refuse every order. "
+            "Not switching it on."
+        )
+        return
+    await asyncio.to_thread(agent.set_enabled, enabled)
+    await interaction.followup.send(
+        f"Paper agent **{'on' if enabled else 'off'}**"
+        + (f", budget ${budget:,.0f}." if budget is not None else ".")
+        + (" It decides each weekday at 13:35 UTC, just after the US open." if enabled else "")
     )
 
 

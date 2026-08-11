@@ -5,7 +5,7 @@ this just gives them one JSON shape instead of four Discord commands."""
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.services import analysis, broker, paper, sizing, watchdog
+from backend.services import agent, agent_book, analysis, broker, paper, quotes, sizing, watchdog
 from backend.api.schemas import ActionResultOut, SettingsOut, SettingsPatchIn
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -28,6 +28,8 @@ def _current_settings() -> SettingsOut:
         alert_volume_mult=alerts.volume_mult,
         alerts_enabled=alerts.enabled,
         daily_sweep_enabled=db.get_setting("daily_sweep") != "off",
+        agent_enabled=agent.is_enabled(),
+        agent_budget=agent_book.get_budget(),
     )
 
 
@@ -85,6 +87,22 @@ def update_settings(payload: SettingsPatchIn):
         db.set_setting("alerts_enabled", "on" if payload.alerts_enabled else "off")
     if payload.daily_sweep_enabled is not None:
         db.set_setting("daily_sweep", "on" if payload.daily_sweep_enabled else "off")
+
+    if payload.agent_budget is not None:
+        try:
+            agent_book.set_budget(payload.agent_budget)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload.agent_enabled is not None:
+        # Switching the agent on outside the sandbox would arm something that
+        # refuses every order anyway; saying so beats an agent that silently
+        # never trades.
+        if payload.agent_enabled and not quotes.is_sandbox():
+            raise HTTPException(
+                status_code=400,
+                detail="Webull is not in sandbox mode — the agent would refuse every order.",
+            )
+        agent.set_enabled(payload.agent_enabled)
 
     return _current_settings()
 

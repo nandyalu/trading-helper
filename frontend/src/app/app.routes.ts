@@ -31,6 +31,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/paper/paper-dashboard').then((m) => m.PaperDashboard),
   },
   {
+    path: 'agent',
+    loadComponent: () => import('./features/agent/agent-view').then((m) => m.AgentView),
+  },
+  {
     path: 'portfolio',
     loadComponent: () =>
       import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),

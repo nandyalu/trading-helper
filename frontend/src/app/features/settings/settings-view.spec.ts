@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { Settings } from '../../core/models/api.models';
 import { SettingsService } from '../../core/services/settings.service';
@@ -18,6 +19,8 @@ const SERVER_SETTINGS: Settings = {
   alert_volume_mult: 2,
   alerts_enabled: true,
   daily_sweep_enabled: true,
+  agent_enabled: false,
+  agent_budget: 1000,
 };
 
 /** Stands in for the HTTP-backed service: records what was sent, and lets a
@@ -52,7 +55,9 @@ describe('SettingsView', () => {
     service = new SettingsServiceStub();
     await TestBed.configureTestingModule({
       imports: [SettingsView],
-      providers: [{ provide: SettingsService, useValue: service }],
+      // The page links to /agent, so RouterLink needs a router even though no
+      // test navigates.
+      providers: [{ provide: SettingsService, useValue: service }, provideRouter([])],
     }).compileComponents();
   });
 

@@ -139,6 +139,24 @@ Recording both, per run, from the provider's own accounting rather than an estim
 
 A run that was never measured stores nothing rather than zero, and shows nothing rather than a free run.
 
+## The auto trader
+
+A simulated Webull account the model trades on its own, inside a budget you set (default $1,000).
+It runs each weekday at 13:35 UTC — five minutes after the US open — on the signals produced by the previous evening's sweep.
+
+**No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
+The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.
+
+The model chooses what to buy and how much. The app only refuses orders that cannot be executed as stated — spending cash that is not there, selling shares that are not held, fractional shares.
+An order that costs more than the cash left is dropped rather than resized, because resizing would quietly turn its decision into a different one.
+
+Two details worth knowing when reading the page:
+
+- **The simulated account holds far more than the budget.** Webull funds it with $1,000,000, so the budget is enforced by the app, from the agent's own filled orders, and the account's buying power is never consulted.
+- **A pending order has moved no money.** Orders placed while the market is shut fill at the next open, and until they do the cash is still counted as available.
+
+Why the open rather than straight after the sweep: the sweep runs at 21:30 UTC, which is 17:30 in New York, ninety minutes after the close. Webull rejects a market order outright at that hour, so an agent chained to the sweep would look healthy and never fill anything.
+
 ## The daily schedule (all times UTC, weekdays)
 
 | Time | What happens |

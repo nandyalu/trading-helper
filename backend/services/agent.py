@@ -39,6 +39,10 @@ _ENABLED_SETTING_KEY = "agent_enabled"
 _SIGNAL_LOOKBACK_DAYS = 3
 _MAX_SIGNALS = 12
 
+# Discord's embed limits, same as backend/services/analysis.py.
+_DESCRIPTION_MAX = 4096
+_FIELD_MAX = 1024
+
 
 def is_enabled() -> bool:
     return db.get_setting(_ENABLED_SETTING_KEY) == "on"
@@ -204,6 +208,70 @@ class AgentRun:
     @property
     def acted(self) -> bool:
         return bool(self.placed)
+
+
+def format_run_embed(run: AgentRun) -> "discord.Embed":
+    """What the agent did, for Discord. Rejections are shown, not hidden — a
+    decision the model made that could not be executed is the most useful
+    thing on the page when the budget is the binding constraint."""
+    import discord
+
+    if run.skipped:
+        return discord.Embed(
+            title="Paper agent — skipped", description=run.skipped, color=discord.Color.greyple()
+        )
+
+    book = run.book
+    color = discord.Color.blue() if run.acted else discord.Color.greyple()
+    embed = discord.Embed(
+        title="Paper agent" + (" — traded" if run.acted else " — no trades"),
+        description=run.reasoning[:_DESCRIPTION_MAX] or "(no reasoning given)",
+        color=color,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+
+    if book is not None:
+        embed.add_field(
+            name="Book",
+            value=(
+                f"Equity **${book.equity:,.2f}** ({book.return_pct:+.1f}% vs "
+                f"${book.budget:,.0f} budget)\n"
+                f"Cash ${book.cash:,.2f} · invested ${book.invested:,.2f} · "
+                f"realized ${book.realized_pnl:+,.2f}"
+            ),
+            inline=False,
+        )
+
+    if run.placed:
+        embed.add_field(
+            name="Placed",
+            value="\n".join(
+                f"{o['side'].upper()} {o['quantity']:g} {o['ticker']}"
+                + (f" — {o['reason']}" if o.get("reason") else "")
+                for o in run.placed
+            )[:_FIELD_MAX],
+            inline=False,
+        )
+    if run.rejected:
+        embed.add_field(
+            name="Rejected",
+            value="\n".join(
+                f"{r.side.upper()} {r.quantity:g} {r.ticker} — {r.why}" for r in run.rejected
+            )[:_FIELD_MAX],
+            inline=False,
+        )
+    if run.failed:
+        embed.add_field(
+            name="Failed at the broker",
+            value="\n".join(
+                f"{o['side'].upper()} {o['quantity']:g} {o['ticker']} — {why}"
+                for o, why in run.failed
+            )[:_FIELD_MAX],
+            inline=False,
+        )
+
+    embed.set_footer(text="Simulated account — no real money")
+    return embed
 
 
 def settle_pending() -> int:

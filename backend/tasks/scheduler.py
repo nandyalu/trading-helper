@@ -21,7 +21,7 @@ import os
 from quiv import Quiv, run_on_main
 
 from backend.database import db
-from backend.services import analysis, broker, listings, paper, regime, watchdog
+from backend.services import agent, analysis, broker, listings, paper, regime, watchdog
 from backend.services.digest import build_weekly_digest_embed
 from backend.discord_bot.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
@@ -249,8 +249,41 @@ def weekly_digest() -> None:
     run_on_main(_weekly_digest_job)
 
 
+async def _paper_agent_job() -> None:
+    """13:35 UTC — 09:35 ET, five minutes after the open.
+
+    Deliberately *not* chained to the 21:30 sweep that produces the signals.
+    21:30 UTC is 17:30 ET, ninety minutes after the close, and Webull rejects
+    a market order then outright (``CAN_NOT_TRADING_FOR_FIXGW_NOT_READY_NIGHT``).
+    An agent wired to run after the sweep would look healthy and never fill a
+    single order. So the sweep decides overnight and the agent acts at the next
+    open, which is also how the trade would really be placed.
+
+    The five-minute delay past 09:30 lets the opening auction settle, so the
+    price the agent is shown is a traded price rather than the first print.
+    """
+    if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
+        return
+    if not agent.is_enabled():
+        return
+    try:
+        run = await asyncio.to_thread(agent.run_once)
+    except Exception:
+        log.exception("Paper agent run failed")
+        return
+    # A quiet day is the common case and posting it every morning would train
+    # you to ignore the channel. Rejections and broker failures are worth
+    # hearing about even when nothing was placed.
+    if run.acted or run.rejected or run.failed:
+        await notify(embed=agent.format_run_embed(run))
+
+
+def paper_agent() -> None:
+    run_on_main(_paper_agent_job)
+
+
 def register_jobs() -> None:
-    """Registers all 6 scheduled jobs on the shared `scheduler`. Called once
+    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
     across restarts."""
@@ -260,3 +293,4 @@ def register_jobs() -> None:
     scheduler.add_task(task_name="broker_sync", func=broker_sync, interval=86400, delay=_seconds_until(12, 35))
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
+    scheduler.add_task(task_name="paper_agent", func=paper_agent, interval=86400, delay=_seconds_until(13, 35))

@@ -43,6 +43,7 @@ export class App {
   protected readonly bookNav: NavItem[] = [
     { path: '/portfolio', label: 'Portfolio', icon: 'briefcase' },
     { path: '/paper', label: 'Paper book', icon: 'file' },
+    { path: '/agent', label: 'Auto trader', icon: 'zap' },
   ];
 
   protected readonly recordNav: NavItem[] = [
