@@ -21,7 +21,17 @@ import os
 from quiv import Quiv, run_on_main
 
 from backend.database import db
-from backend.services import agent, analysis, broker, listings, paper, quotes, regime, watchdog
+from backend.services import (
+    agent,
+    analysis,
+    broker,
+    candidates,
+    listings,
+    paper,
+    quotes,
+    regime,
+    watchdog,
+)
 from backend.services.digest import build_weekly_digest_embed
 from backend.discord_bot.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
@@ -313,6 +323,16 @@ async def _weekly_digest_job() -> None:
         log.exception("Weekly digest failed")
         return
     await notify(embed=embed)
+    # Once a week, with the digest. Following a ticker costs about seven
+    # minutes of GPU on every sweep from then on, so this is a decision to
+    # make deliberately rather than a feed to skim daily.
+    try:
+        found = await asyncio.to_thread(candidates.fetch_candidates)
+    except Exception:
+        log.exception("Candidate screen failed")
+        return
+    if found:
+        await notify(candidates.format_candidates(found))
 
 
 def weekly_digest() -> None:

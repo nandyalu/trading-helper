@@ -351,3 +351,15 @@ class AgentComparisonOut(BaseModel):
     since: date | None
     verdict: str
     strategies: list[StrategyOut]
+
+
+class CandidateOut(OrmModel):
+    """A screened ticker worth considering. Never followed automatically —
+    each one added costs about seven minutes of GPU on every later sweep."""
+
+    ticker: str
+    name: str
+    price: float
+    volume: float
+    change_pct: float | None
+    source: str

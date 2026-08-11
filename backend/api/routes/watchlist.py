@@ -3,7 +3,8 @@
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.api.schemas import ActionResultOut
+from backend.api.schemas import ActionResultOut, CandidateOut
+from backend.services import candidates
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
@@ -29,3 +30,10 @@ def remove_ticker(ticker: str):
         raise HTTPException(status_code=404, detail=f"{ticker} isn't tracked.")
     db.remove_from_watchlist(ticker)
     return ActionResultOut(message=f"Stopped tracking {ticker}.")
+
+
+@router.get("/candidates", response_model=list[CandidateOut])
+def get_candidates():
+    """Screened names not already tracked. Read-only on purpose: following one
+    is a POST to the watchlist, made deliberately."""
+    return [CandidateOut.model_validate(c) for c in candidates.fetch_candidates()]

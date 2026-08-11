@@ -19,6 +19,7 @@ from backend.services import (
     agent,
     agent_book,
     agent_performance,
+    candidates as candidates_service,
     analysis,
     ask,
     broker,
@@ -553,6 +554,13 @@ async def agent_command(
         + (f", budget ${budget:,.0f}." if budget is not None else ".")
         + (" It decides each weekday at 13:35 UTC, just after the US open." if enabled else "")
     )
+
+
+@bot.tree.command(name="candidates", description="Screened tickers worth considering following")
+async def candidates_command(interaction: discord.Interaction):
+    await interaction.response.defer()
+    found = await asyncio.to_thread(candidates_service.fetch_candidates)
+    await interaction.followup.send(candidates_service.format_candidates(found))
 
 
 async def start_discord() -> None:

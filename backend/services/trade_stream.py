@@ -20,10 +20,9 @@ The subscription is blocking, so it runs on its own daemon thread; callbacks
 arrive on that thread and must not touch the event loop directly.
 """
 import asyncio
-import contextlib
-import io
 import logging
 import os
+import sys
 import threading
 
 from backend.services import quotes, sandbox_broker
@@ -37,6 +36,34 @@ log = logging.getLogger("trading-bot.trade_stream")
 # why nothing here can place an order.
 _SANDBOX_EVENTS_HOST = "events-api.sandbox.webull.com"
 
+class _MuteThisThread:
+    """A stdout proxy that drops writes from the stream thread only.
+
+    The SDK prints its connection parameters — including the app key and the
+    request signature — straight to stdout on every connect, for the same
+    reason quotes.py has to silence its token logging: credential material has
+    no business in routine logs.
+
+    Redirecting stdout wholesale was the obvious fix and the wrong one. sys.stdout
+    is global, so for as long as the stream ran, *everything* that printed
+    anywhere in the process vanished. Filtering by thread keeps the rest of the
+    program's output intact.
+    """
+
+    def __init__(self, wrapped, muted_thread_name: str):
+        self._wrapped = wrapped
+        self._muted = muted_thread_name
+
+    def write(self, text):
+        if threading.current_thread().name == self._muted:
+            return len(text)
+        return self._wrapped.write(text)
+
+    def __getattr__(self, name):
+        return getattr(self._wrapped, name)
+
+
+_STREAM_THREAD_NAME = "webull-trade-events"
 _thread: threading.Thread | None = None
 _loop: asyncio.AbstractEventLoop | None = None
 _client = None
@@ -99,15 +126,7 @@ def _run(account_id: str, app_key: str, app_secret: str) -> None:
             _client.on_connect = _on_connect
             _client.on_events_message = _on_event
             _client.on_log = lambda level, text: log.debug("stream: %s", str(text)[:300])
-            # The SDK prints its connection parameters — including the app
-            # key and the request signature — straight to stdout on every
-            # connect. Same reason quotes.py silences its token logging:
-            # credential material has no business in routine logs. Logging
-            # handlers captured the real stream when they were created, so
-            # this only swallows bare print() calls, of which the app has
-            # none.
-            with contextlib.redirect_stdout(io.StringIO()):
-                _client.do_subscribe([account_id])
+            _client.do_subscribe([account_id])
         except Exception:
             log.exception("Trade event stream dropped")
         # do_subscribe returns when the stream ends, retries exhausted included.
@@ -151,8 +170,10 @@ def start() -> bool:
     except RuntimeError:
         _loop = None
     _stop.clear()
+    if not isinstance(sys.stdout, _MuteThisThread):
+        sys.stdout = _MuteThisThread(sys.stdout, _STREAM_THREAD_NAME)
     _thread = threading.Thread(
-        target=_run, args=(account_id, app_key, app_secret), name="webull-trade-events", daemon=True
+        target=_run, args=(account_id, app_key, app_secret), name=_STREAM_THREAD_NAME, daemon=True
     )
     _thread.start()
     log.info("Trade event stream starting for %s", account_id)
