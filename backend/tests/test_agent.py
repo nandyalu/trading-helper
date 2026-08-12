@@ -408,6 +408,7 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
@@ -440,6 +441,7 @@ def test_a_run_that_places_nothing_does_not_settle_twice(monkeypatch):
     calls = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
@@ -596,6 +598,7 @@ def test_a_sell_does_not_arm_exits(monkeypatch):
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 0)
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: [])
     monkeypatch.setattr(agent, "_recent_signals", lambda: [])
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda limit=200: [])
@@ -905,3 +908,21 @@ def test_the_normal_reset_still_refuses_a_held_account(monkeypatch):
     agent.reset_book()
 
     assert cleared == []
+
+
+def test_a_run_outside_market_hours_is_refused_before_the_model_is_asked(monkeypatch):
+    """Orders go in at market, and the venue refuses those outside the session.
+    Deciding first spends a couple of minutes of GPU producing orders that
+    cannot be placed — which is exactly what happened at 17:48 ET: it decided
+    to buy 6 VT and the broker returned FIXGW_NOT_READY_MARKET."""
+    asked = []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(agent, "_decide", lambda *a, **kw: asked.append(1) or ("", [], []))
+
+    run = agent.run_once()
+
+    assert asked == [], "the model must not be asked when nothing could be placed"
+    assert "market is closed" in run.skipped
+    assert "13:35" in run.skipped, "it should say when it will run on its own"

@@ -40,12 +40,18 @@ export class AgentView {
     this.message.set(null);
     try {
       const run = await this.agentService.runNow();
-      const placed = run.placed.length;
-      const rejected = run.rejected.length;
+      const parts: string[] = [];
+      if (run.placed.length) parts.push(`${run.placed.length} order(s) placed`);
+      if (run.rejected.length) parts.push(`${run.rejected.length} rejected`);
+      // Failures were previously left out entirely, so an order the broker
+      // refused rendered as "No trades" — the agent looked idle when it had in
+      // fact decided and been turned down.
+      if (run.failed.length) {
+        const why = run.failed[0].why ?? 'the broker refused it';
+        parts.push(`${run.failed.length} failed at the broker (${why})`);
+      }
       this.message.set(
-        placed || rejected
-          ? `${placed} order(s) placed, ${rejected} rejected. ${run.reasoning}`
-          : `No trades. ${run.reasoning}`,
+        parts.length ? `${parts.join(', ')}. ${run.reasoning}` : `No trades. ${run.reasoning}`,
       );
     } catch (err) {
       const detail = (err as { error?: { detail?: string } })?.error?.detail;

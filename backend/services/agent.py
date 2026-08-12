@@ -635,6 +635,18 @@ def run_once() -> AgentRun:
         return AgentRun(skipped="Webull is not in sandbox mode — refusing to trade.")
     if not is_enabled():
         return AgentRun(skipped="The trading agent is switched off.")
+    # Checked before the model is asked, not after. Orders are placed at market,
+    # and the venue refuses those outside the session
+    # (CAN_NOT_TRADING_FOR_FIXGW_NOT_READY_MARKET), so deciding first spends a
+    # couple of minutes of GPU to produce orders that cannot be placed — and a
+    # decision made on a closed market's prices is stale by the next open
+    # anyway, which is why the 13:35 batch re-decides rather than replaying it.
+    if not watchdog.is_us_market_hours():
+        return AgentRun(
+            skipped="The US market is closed, so no order could be placed. "
+            "The agent decides automatically each weekday at 13:35 UTC, "
+            "five minutes after the open."
+        )
 
     settled = settle_pending()
     if settled:
