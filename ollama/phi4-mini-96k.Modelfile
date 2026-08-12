@@ -1,0 +1,10 @@
+# phi4-mini at 96k, which is its ceiling on an 8 GiB card — not 128k.
+#
+# It behaves differently from the llama-3.2-3B builds here. At 128k it needs
+# 8.9 GiB and spills 12% to the CPU, and dropping num_batch to 32 changes
+# nothing, because at that context the KV cache dominates rather than the
+# compute graph. 96k is the largest that loads fully on the GPU (7.3 GiB), and
+# happens to match gemma4-e2b-96k exactly, which makes the two comparable.
+FROM phi4-mini
+PARAMETER num_ctx 98304
+PARAMETER num_batch 64

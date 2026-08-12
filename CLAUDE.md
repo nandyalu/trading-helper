@@ -51,6 +51,17 @@ sequential — analysts run one after another, then the debate, then the trader 
 so a single `propagate()` never has more than one LLM request in flight. Extra
 GPUs are only used by running *several analyses at once*.
 
+That is about concurrency, not stickiness. The proxy balances **per request**,
+so one analysis's ~20 calls scatter across whichever backends are idle, and the
+model ends up loaded on several cards. Harmless in production — the 4-minute
+keep-alive means it loads once per backend, not once per call — but it makes
+benchmarking meaningless, because a model can land on a card that still holds
+another and run mostly on CPU. To measure a model, bypass the proxy: the pool
+containers' docker-bridge IPs are reachable from the host
+(`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+ollama-pool-a`), so pointing `OLLAMA_BASE_URL` at `http://<ip>:11434/v1` pins a
+run to one card.
+
 That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` (currently 4) the knob that
 decides GPU utilization, and it should equal the backend count. Anything above
 it just queues in the proxy.
@@ -117,6 +128,25 @@ minutes, against roughly 15 for `qwen3:latest`. That is 23 LLM calls spending
 roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured
 2026-08-11). An earlier "2-3 minutes" figure here was wrong: 7 matches both
 that run and days of observed sweeps.
+
+**Four small models have now been tested against this pipeline and all four
+failed the same way** (kotakneo and alma-trader 2026-08-11; `llama3.2:3b` and
+`phi4-mini` 2026-08-12). They cannot drive TradingAgents' tool-calling loop:
+either they print the tool call as text and invent its output, or they never
+retrieve the data and answer anyway. Measured on one AAPL run each, against
+gemma4-e2b-96k's 7m15s / 21 calls / 123k tokens / **0** structured-output
+failures:
+
+| Model | Time | Tokens | Structured-output failures | What the market report contained |
+|---|---|---|---|---|
+| `llama3.2:3b` @128k | 3m23s | 52k | 4 | "no available market data for AAPL" — then issued a Buy anyway |
+| `phi4-mini` @96k | 4m10s | 49k | 4 | the raw tool call as text, plus fabricated 2023 OHLCV around $130 for a stock at $308 |
+
+They are faster because they do **half the work** — 42-45k prompt tokens against
+gemma4's 103k — having never fetched the data there was to reason over. Treat a
+sharp drop in prompt tokens as a symptom, not a win. Raising context to 128k
+does not help, because it was never a context problem; don't retest these
+without a fix for tool calling.
 
 This supersedes an earlier "known-bad model" note about `gemma4:e2b`. Stock
 `gemma4:e2b` did hit a `GraphRecursionError` on ZBH — its reasoning loop never

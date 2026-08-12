@@ -1,0 +1,7 @@
+# llama3.2:3b at its full 128k context, sized to stay entirely on one 8 GiB
+# card. Same shape as the other llama-3.2-3B builds here: the compute graph at
+# the default batch is what pushes layers onto the CPU, not the KV cache, so
+# num_batch is the setting that decides whether it fits.
+FROM llama3.2:3b
+PARAMETER num_ctx 131072
+PARAMETER num_batch 64
