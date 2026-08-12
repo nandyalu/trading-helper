@@ -286,6 +286,7 @@ def test_the_prompt_states_what_is_affordable_rather_than_implying_it():
         signal_date = "2026-08-11"
         decision = "Buy"
         entry_price = stop_loss = price_target = None
+        win_probability = risk_reward = expected_value_r = None
 
     prompt = agent.build_prompt(book, [S()], {"AAA": 30.0})
 
@@ -300,6 +301,7 @@ def test_the_prompt_says_when_nothing_is_affordable():
         signal_date = "2026-08-11"
         decision = "Buy"
         entry_price = stop_loss = price_target = None
+        win_probability = risk_reward = expected_value_r = None
 
     assert "cannot afford any" in agent.build_prompt(book, [S()], {"AAA": 97.83})
 
@@ -926,3 +928,60 @@ def test_a_run_outside_market_hours_is_refused_before_the_model_is_asked(monkeyp
     assert asked == [], "the model must not be asked when nothing could be placed"
     assert "market is closed" in run.skipped
     assert "13:35" in run.skipped, "it should say when it will run on its own"
+
+
+# --- conviction ----------------------------------------------------------------
+
+
+class _Sig:
+    ticker = "AAA"
+    signal_date = "2026-08-12"
+    decision = "Buy"
+    entry_price = 100.0
+    stop_loss = 90.0
+    price_target = 130.0
+    win_probability = None
+    risk_reward = None
+    expected_value_r = None
+
+
+def test_a_signal_carries_how_good_the_bet_was():
+    """Without these every Buy reads as equally good and the choice between
+    them comes down to what happens to be affordable."""
+    sig = _Sig()
+    sig.win_probability, sig.risk_reward, sig.expected_value_r = 64.0, 2.4, 0.81
+
+    prompt = agent.build_prompt(_book(), [sig], {"AAA": 100.0})
+
+    assert "64% chance of working" in prompt
+    assert "risk/reward 2.4 to 1" in prompt
+    assert "expected value +0.81R" in prompt
+
+
+def test_a_negative_expected_value_keeps_its_sign():
+    """A bet that does not pay at its own stated odds must not read as one that
+    does."""
+    sig = _Sig()
+    sig.expected_value_r = -0.35
+
+    assert "expected value -0.35R" in agent.build_prompt(_book(), [sig], {"AAA": 100.0})
+
+
+def test_a_signal_without_conviction_numbers_says_nothing_about_them():
+    """They are optional on the schema — the trader states them only when it
+    has a view — and an absent number must not read as a zero."""
+    prompt = agent.build_prompt(_book(), [_Sig()], {"AAA": 100.0})
+
+    assert "chance of working" not in prompt
+    assert "expected value" not in prompt.split("Rules:")[0]
+
+
+def test_the_rules_explain_what_the_numbers_mean():
+    sig = _Sig()
+    sig.expected_value_r = 0.5
+    prompt = agent.build_prompt(_book(), [sig], {"AAA": 100.0})
+
+    assert "one R is the amount risked" in prompt
+    # Defining them is information; ranking by them would be taking the
+    # allocation decision away from the model, which is its to make.
+    assert "prefer" not in prompt.lower()

@@ -171,6 +171,16 @@ def build_prompt(
             entry = f", suggested entry ${s.entry_price:,.2f}" if s.entry_price else ""
             stop = f", stop ${s.stop_loss:,.2f}" if s.stop_loss else ""
             target = f", target ${s.price_target:,.2f}" if s.price_target else ""
+            # How good the analyst thought the bet was, not merely which way it
+            # pointed. Without these every Buy reads as equally good and the
+            # choice between them comes down to what happens to be affordable.
+            conviction = ""
+            if s.win_probability is not None:
+                conviction += f", {s.win_probability:.0f}% chance of working"
+            if s.risk_reward is not None:
+                conviction += f", risk/reward {s.risk_reward:.1f} to 1"
+            if s.expected_value_r is not None:
+                conviction += f", expected value {s.expected_value_r:+.2f}R"
             # Computed here, not left to the model: the affordable count is the
             # arithmetic it actually got wrong.
             if price:
@@ -184,7 +194,7 @@ def build_prompt(
                 afford_text = " No price, so it cannot be bought today."
             lines.append(
                 f"- {s.ticker} on {s.signal_date}: {s.decision} — now {price_text}"
-                f"{entry}{stop}{target}.{afford_text}"
+                f"{entry}{stop}{target}{conviction}.{afford_text}"
             )
     else:
         lines.append("No new signals today.")
@@ -214,6 +224,12 @@ def build_prompt(
         "- What the analysts' decisions mean: Buy means they expect it to rise. Sell means",
         "  they expect it to fall, so exit it if you hold it. Hold means no action is",
         "  recommended — if you do not own it, a Hold is not a reason to buy it.",
+        "- Some signals carry how good the analyst thought the bet was. The chance of",
+        "  working is their own estimate. Risk/reward compares what is gained if the",
+        "  target is reached against what is lost if the stop is hit. Expected value is",
+        "  in R-multiples, where one R is the amount risked: positive means the bet pays",
+        "  at the stated odds, negative means it does not. Signals without these numbers",
+        "  are not worse bets, only ones where the analyst did not say.",
         "- Doing nothing is a valid answer, and often the right one.",
         *(
             [
