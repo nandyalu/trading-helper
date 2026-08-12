@@ -463,13 +463,13 @@ def test_a_run_that_places_nothing_does_not_settle_twice(monkeypatch):
 def _closed(ticker="AAA", entry=100.0, exit=110.0, days=5, decision=None, qty=2):
     import datetime
 
-    return agent_book.ClosedTrade(
+    return agent_book.TradeRow(
         ticker=ticker,
         quantity=qty,
         entry=entry,
+        entry_at=datetime.datetime(2026, 8, 1, 14, 30),
         exit=exit,
-        opened=datetime.date(2026, 8, 1),
-        closed=datetime.date(2026, 8, 1) + datetime.timedelta(days=days),
+        exit_at=datetime.datetime(2026, 8, 1, 14, 30) + datetime.timedelta(days=days),
         signal_decision=decision,
     )
 

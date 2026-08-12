@@ -328,3 +328,18 @@ export interface Candidate {
   change_pct: number | null;
   source: string;
 }
+
+/** One lot's life: bought, and sold or still held. Exit and P/L stay null
+ * while it is open — an unrealized number there would read as booked. */
+export interface AgentTradeRow {
+  ticker: string;
+  quantity: number;
+  entry: number;
+  entry_at: string;
+  exit: number | null;
+  exit_at: string | null;
+  pnl: number | null;
+  return_pct: number | null;
+  held_days: number;
+  is_open: boolean;
+}

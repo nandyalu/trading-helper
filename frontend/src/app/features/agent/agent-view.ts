@@ -15,6 +15,7 @@ export class AgentView {
   protected readonly book = this.agentService.book;
   protected readonly trades = this.agentService.trades;
   protected readonly performance = this.agentService.performance;
+  protected readonly history = this.agentService.history;
 
   protected readonly running = signal(false);
   protected readonly message = signal<string | null>(null);
@@ -69,6 +70,12 @@ export class AgentView {
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
   }
 
+  /** Date and time, trimmed to the minute. Empty for a position still open —
+   * a blank exit is the signal that it has not been sold. */
+  protected when(value: string | null): string {
+    return value ? value.replace('T', ' ').slice(0, 16) : '—';
+  }
+
   protected money(value: number | null): string {
     return value === null ? '—' : `$${value.toFixed(2)}`;
   }
@@ -78,7 +85,7 @@ export class AgentView {
     return `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
   }
 
-  protected when(trade: AgentTrade): string {
+  protected whenPlaced(trade: AgentTrade): string {
     return (trade.filled_at ?? trade.placed_at).replace('T', ' ').slice(0, 16);
   }
 }

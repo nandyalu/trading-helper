@@ -172,6 +172,15 @@ The second is the one that matters. If a rule with nothing in it beats the agent
 
 It refuses to draw any conclusion under ten trades. Three trades of hindsight is not evidence, and a confident verdict on it would be worse than no verdict at all.
 
+### Watching the trades
+
+The Auto trader page lists every lot the agent has bought and what became of it: entry price and time, quantity, exit price and time, days held, and the profit or loss.
+
+A position still open shows no exit and no profit, because its result is not decided yet — but the days held keep counting, which is what tells you a thesis has outlived its window.
+The unrealized figure for those lives in the holdings table above it, so a blank in this table always means "not booked" rather than "nothing happened".
+
+Selling part of a position splits it: the shares sold appear as a closed row with their own result, and the rest stays open. Both come from the same FIFO matching the book uses, so the two can never disagree about the same shares.
+
 ### Starting it over
 
 `/agent action:reset confirm:True` closes every open position, cancels the exits resting under them, and erases the agent's record so it begins again with the full budget and no history.

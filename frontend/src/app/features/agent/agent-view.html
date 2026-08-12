@@ -197,13 +197,80 @@
           <ul class="plain-list">
             @for (t of pending(); track t.id) {
               <li>
-                {{ t.side | uppercase }} {{ t.quantity }} {{ t.ticker }} — placed {{ when(t) }}
+                {{ t.side | uppercase }} {{ t.quantity }} {{ t.ticker }} — placed
+                {{ whenPlaced(t) }}
               </li>
             }
           </ul>
         </div>
       </section>
     }
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Positions taken</h2>
+        <p class="hint">
+          Every lot the agent has bought, and what became of it. A position still open shows no exit
+          and no profit — its result is not decided yet — but the days held keep counting.
+        </p>
+      </div>
+      @if (history().length) {
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th class="num">Shares</th>
+                <th class="num">Entry</th>
+                <th>Bought</th>
+                <th class="num">Exit</th>
+                <th>Sold</th>
+                <th class="num">Days held</th>
+                <th class="num">Profit / loss</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of history(); track $index) {
+                <tr>
+                  <td class="ticker-cell" data-label="">
+                    <a [routerLink]="['/tickers', r.ticker]">{{ r.ticker }}</a>
+                    @if (r.is_open) {
+                      <span class="muted"> still held</span>
+                    }
+                  </td>
+                  <td class="num" data-label="Shares">{{ r.quantity }}</td>
+                  <td class="num" data-label="Entry">{{ money(r.entry) }}</td>
+                  <td data-label="Bought">{{ when(r.entry_at) }}</td>
+                  <td class="num" data-label="Exit">{{ r.exit === null ? '—' : money(r.exit) }}</td>
+                  <td data-label="Sold">{{ when(r.exit_at) }}</td>
+                  <td class="num" data-label="Days held">{{ r.held_days }}</td>
+                  <td
+                    class="num"
+                    data-label="Profit / loss"
+                    [class.pass]="(r.pnl ?? 0) > 0"
+                    [class.fail]="(r.pnl ?? 0) < 0"
+                  >
+                    @if (r.pnl === null) {
+                      —
+                    } @else {
+                      {{ signed(r.pnl) }}
+                      <span class="muted">({{ r.return_pct!.toFixed(1) }}%)</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="card-body">
+          <p class="empty">
+            Nothing bought yet. Once the agent opens a position it appears here, and stays with its
+            result once it is closed.
+          </p>
+        </div>
+      }
+    </section>
 
     <section class="card">
       <div class="card-head">
@@ -233,7 +300,7 @@
                   <td data-label="Side">{{ t.side | uppercase }}</td>
                   <td class="num" data-label="Shares">{{ t.quantity }}</td>
                   <td class="num" data-label="Price">{{ money(t.price) }}</td>
-                  <td data-label="When">{{ when(t) }}</td>
+                  <td data-label="When">{{ whenPlaced(t) }}</td>
                   <td data-label="Status">{{ t.status }}</td>
                   <td data-label="Why">{{ t.reason ?? '—' }}</td>
                 </tr>

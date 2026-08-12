@@ -207,3 +207,81 @@ def test_pending_orders_are_not_counted_as_round_trips():
         _trade(side="sell", quantity=2, price=None, status="pending", order_id="s1"),
     ]
     assert agent_book.closed_trades(trades) == []
+
+
+# --- trade history (open and closed in one walk) -------------------------------
+
+
+def test_a_still_held_lot_appears_as_open():
+    """The point of the table: a position you are still in has no exit and no
+    booked P/L, but it has been held for a number of days."""
+    rows = agent_book.trade_history([_trade(quantity=3, price=100.0)])
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.is_open
+    assert row.exit is None and row.exit_at is None
+    assert row.pnl is None and row.return_pct is None
+    assert row.entry == 100.0 and row.quantity == 3
+
+
+def test_days_held_on_an_open_lot_counts_to_today():
+    import datetime
+
+    trade = _trade(quantity=1, price=10.0)
+    trade.filled_at = datetime.datetime.now() - datetime.timedelta(days=6)
+
+    assert agent_book.trade_history([trade])[0].held_days == 6
+
+
+def test_a_closed_lot_carries_its_exit_and_pnl():
+    rows = agent_book.trade_history([
+        _trade(quantity=2, price=100.0, order_id="b1"),
+        _trade(side="sell", quantity=2, price=120.0, order_id="s1"),
+    ])
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert not row.is_open
+    assert row.exit == 120.0 and row.exit_at is not None
+    assert row.pnl == pytest.approx(40.0)
+    assert row.return_pct == pytest.approx(20.0)
+
+
+def test_a_partly_sold_position_shows_both_halves():
+    """Selling half leaves half still held — one closed row and one open one,
+    from the same lot."""
+    rows = agent_book.trade_history([
+        _trade(quantity=10, price=100.0, order_id="b1"),
+        _trade(side="sell", quantity=4, price=110.0, order_id="s1"),
+    ])
+
+    closed = [r for r in rows if not r.is_open]
+    still_open = [r for r in rows if r.is_open]
+    assert [r.quantity for r in closed] == [4.0]
+    assert [r.quantity for r in still_open] == [6.0]
+    assert closed[0].pnl == pytest.approx(40.0)
+
+
+def test_history_is_oldest_first():
+    import datetime
+
+    old = _trade(ticker="OLD", quantity=1, price=10.0, order_id="o")
+    old.filled_at = datetime.datetime(2026, 8, 1, 10, 0)
+    new = _trade(ticker="NEW", quantity=1, price=10.0, order_id="n")
+    new.filled_at = datetime.datetime(2026, 8, 9, 10, 0)
+
+    assert [r.ticker for r in agent_book.trade_history([new, old])] == ["OLD", "NEW"]
+
+
+def test_closed_trades_is_the_history_without_the_open_rows():
+    """One FIFO walk feeds both, so the table and the agent's own record cannot
+    disagree about the same shares."""
+    trades = [
+        _trade(quantity=2, price=100.0, order_id="b1"),
+        _trade(side="sell", quantity=2, price=120.0, order_id="s1"),
+        _trade(ticker="OPEN", quantity=1, price=50.0, order_id="b2"),
+    ]
+
+    assert len(agent_book.trade_history(trades)) == 2
+    assert [r.ticker for r in agent_book.closed_trades(trades)] == ["AAPL"]

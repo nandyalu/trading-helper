@@ -12,6 +12,7 @@ from backend.api.schemas import (
     AgentComparisonOut,
     AgentRunOut,
     AgentTradeOut,
+    AgentTradeRowOut,
 )
 from backend.database import db
 from backend.services import agent, agent_book, agent_performance, quotes
@@ -99,3 +100,12 @@ def get_performance():
             for s in result.strategies
         ],
     )
+
+
+@router.get("/history", response_model=list[AgentTradeRowOut])
+def get_history():
+    """Every lot the agent has opened, newest first — still-held ones included,
+    so an open position is visible next to the closed trades rather than only
+    in the holdings table."""
+    rows = agent_book.trade_history()
+    return [AgentTradeRowOut.model_validate(r) for r in reversed(rows)]

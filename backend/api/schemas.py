@@ -363,3 +363,19 @@ class CandidateOut(OrmModel):
     volume: float
     change_pct: float | None
     source: str
+
+
+class AgentTradeRowOut(OrmModel):
+    """One lot's life. Exit and P/L stay null while the position is open — an
+    unrealized number here would read as a booked one."""
+
+    ticker: str
+    quantity: float
+    entry: float
+    entry_at: datetime
+    exit: float | None
+    exit_at: datetime | None
+    pnl: float | None
+    return_pct: float | None
+    held_days: int
+    is_open: bool

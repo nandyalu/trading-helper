@@ -217,53 +217,72 @@ def validate(order: dict, book: Book, price: float | None) -> Rejection | None:
 
 
 @dataclass
-class ClosedTrade:
-    """One completed round trip: bought, then sold."""
+class TradeRow:
+    """One lot's life: bought, and sold or still held.
+
+    Open and closed rows come from the same FIFO walk deliberately. Computing
+    them separately is how a "still holding" table and a realized-P/L table end
+    up disagreeing about the same shares.
+    """
 
     ticker: str
     quantity: float
     entry: float
-    exit: float
-    opened: datetime.date
-    closed: datetime.date
+    entry_at: datetime.datetime
+    exit: float | None = None
+    exit_at: datetime.datetime | None = None
     signal_decision: str | None = None  # what the analyst said when it bought
 
     @property
-    def pnl(self) -> float:
-        return (self.exit - self.entry) * self.quantity
+    def is_open(self) -> bool:
+        return self.exit is None
 
     @property
-    def return_pct(self) -> float:
-        return (self.exit / self.entry - 1) * 100 if self.entry else 0.0
+    def pnl(self) -> float | None:
+        """None while open. An unrealized number here would be mistaken for a
+        booked one — the holdings table above already shows unrealized."""
+        return None if self.is_open else (self.exit - self.entry) * self.quantity
+
+    @property
+    def return_pct(self) -> float | None:
+        if self.is_open or not self.entry:
+            return None
+        return (self.exit / self.entry - 1) * 100
 
     @property
     def held_days(self) -> int:
-        return (self.closed - self.opened).days
+        """To the exit, or to today while it is still held."""
+        end = self.exit_at.date() if self.exit_at else datetime.date.today()
+        return (end - self.entry_at.date()).days
 
     @property
     def won(self) -> bool:
-        return self.pnl > 0
+        return (self.pnl or 0) > 0
 
 
-def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[ClosedTrade]:
-    """Completed round trips, oldest first, matched FIFO.
+# The old name, kept because the prompt and its tests read closed rows.
+ClosedTrade = TradeRow
 
-    The agent has no memory otherwise: every morning it wakes with a book and
-    no idea that the last four things it bought on a Hold signal all lost
-    money. This is the raw material for telling it — see agent.build_prompt.
+
+def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[TradeRow]:
+    """Every lot the agent has opened, closed ones and still-held ones, oldest
+    first.
 
     Matching is FIFO to agree with compute_position, so the realized P/L summed
-    here equals the realized P/L on the book rather than diverging from it.
+    here equals the realized P/L on the book rather than drifting from it.
     """
     rows = trades if trades is not None else db.get_agent_trades()
     decisions = decisions or {}
-    open_lots: dict[str, list[list]] = {}  # ticker -> [[qty, price, date, decision], ...]
-    closed: list[ClosedTrade] = []
+    # ticker -> [[remaining_qty, price, filled_at, decision], ...]
+    open_lots: dict[str, list[list]] = {}
+    history: list[TradeRow] = []
 
     for trade in rows:
         if trade.status != "filled" or trade.price is None:
             continue
-        when = (trade.filled_at or trade.placed_at).date()
+        # A resting stop or take-profit that filled is a real exit and must be
+        # matched like any other sell.
+        when = trade.filled_at or trade.placed_at
         if trade.side == "buy":
             open_lots.setdefault(trade.ticker, []).append(
                 [trade.quantity, trade.price, when, decisions.get(trade.signal_id)]
@@ -274,14 +293,14 @@ def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[
         while remaining > _QUANTITY_EPSILON and lots:
             lot = lots[0]
             matched = min(lot[0], remaining)
-            closed.append(
-                ClosedTrade(
+            history.append(
+                TradeRow(
                     ticker=trade.ticker,
                     quantity=matched,
                     entry=lot[1],
+                    entry_at=lot[2],
                     exit=trade.price,
-                    opened=lot[2],
-                    closed=when,
+                    exit_at=when,
                     signal_decision=lot[3],
                 )
             )
@@ -289,4 +308,25 @@ def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[
             remaining -= matched
             if lot[0] <= _QUANTITY_EPSILON:
                 lots.pop(0)
-    return closed
+
+    for ticker, lots in open_lots.items():
+        for quantity, price, when, decision in lots:
+            if quantity > _QUANTITY_EPSILON:
+                history.append(
+                    TradeRow(
+                        ticker=ticker,
+                        quantity=quantity,
+                        entry=price,
+                        entry_at=when,
+                        signal_decision=decision,
+                    )
+                )
+
+    history.sort(key=lambda r: r.entry_at)
+    return history
+
+
+def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[TradeRow]:
+    """Completed round trips only — what the agent is shown about its own
+    record. An open lot has no outcome to learn from yet."""
+    return [row for row in trade_history(trades, decisions) if not row.is_open]
