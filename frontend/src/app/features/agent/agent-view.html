@@ -116,6 +116,11 @@
     <section class="card">
       <div class="card-head">
         <h2>Holdings</h2>
+        <p class="hint">
+          Stop and target are real orders resting at the broker, placed as one pair when the
+          position was opened, so whichever fills cancels the other. The broker enforces them
+          whether or not this app is running. A dash means nothing is protecting that position.
+        </p>
       </div>
       @if (b.holdings.length) {
         <div class="table-wrap">
@@ -126,6 +131,8 @@
                 <th class="num">Shares</th>
                 <th class="num">Avg cost</th>
                 <th class="num">Price</th>
+                <th class="num">Stop</th>
+                <th class="num">Target</th>
                 <th class="num">Value</th>
                 <th class="num">Unrealized</th>
               </tr>
@@ -139,6 +146,10 @@
                   <td class="num" data-label="Shares">{{ h.quantity }}</td>
                   <td class="num" data-label="Avg cost">{{ money(h.avg_cost) }}</td>
                   <td class="num" data-label="Price">{{ money(h.price) }}</td>
+                  <td class="num" data-label="Stop">{{ money(exitLevel(h.ticker, 'stop')) }}</td>
+                  <td class="num" data-label="Target">
+                    {{ money(exitLevel(h.ticker, 'target')) }}
+                  </td>
                   <td class="num" data-label="Value">{{ money(h.market_value) }}</td>
                   <td
                     class="num"
@@ -163,20 +174,18 @@
       }
     </section>
 
-    @if (restingStops().length) {
+    @if (unmatchedExits().length) {
       <section class="card">
         <div class="card-head">
-          <h2>Resting exits</h2>
+          <h2>Exits with no holding</h2>
           <p class="hint">
-            Real orders resting at the broker, placed when each position was opened: a stop where
-            the thesis is wrong, a take-profit where it has played out. Placed as one pair, so
-            whichever fills cancels the other. The broker enforces them whether or not this app is
-            running — an exit that depended on our polling would not really be an exit.
+            Orders resting on shares this book does not show. Every other exit appears on its own
+            holding above, so a line here means the ledger and the broker disagree — check it.
           </p>
         </div>
         <div class="card-body">
           <ul class="plain-list">
-            @for (t of restingStops(); track t.id) {
+            @for (t of unmatchedExits(); track t.id) {
               <li>{{ t.ticker }} — {{ t.quantity }} shares, {{ t.reason }}</li>
             }
           </ul>

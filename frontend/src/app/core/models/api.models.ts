@@ -285,6 +285,11 @@ export interface AgentTrade {
   /** A protective stop resting at the broker. It is meant to sit pending
    * indefinitely, so it is listed apart from orders awaiting a fill. */
   is_stop: boolean;
+  /** Where a resting exit is armed. NULL on a market order, whose price is
+   * only known once it fills. */
+  limit_price: number | null;
+  /** Which leg of the bracket: "stop" | "target". NULL on a market order. */
+  exit_kind: string | null;
   reason: string | null;
   signal_id: number | null;
 }

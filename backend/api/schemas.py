@@ -318,6 +318,8 @@ class AgentTradeOut(OrmModel):
     filled_at: datetime | None
     status: str
     is_stop: bool
+    limit_price: float | None  # where a resting exit is armed; NULL on a market order
+    exit_kind: str | None  # "stop" | "target"; NULL on a market order
     reason: str | None
     signal_id: int | None
 

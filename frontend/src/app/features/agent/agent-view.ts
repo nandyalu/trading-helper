@@ -32,6 +32,37 @@ export class AgentView {
     this.trades().filter((t) => t.status === 'pending' && t.is_stop),
   );
 
+  /** The levels protecting each holding, keyed by ticker. The exits are real
+   * orders at the broker and the holdings come from our own ledger, so they
+   * arrive on two endpoints and are joined here — which is the point: a
+   * holding whose cell is blank has nothing resting under it, and that is
+   * worth seeing on the position's own row rather than inferred from the
+   * absence of a line in a card further down the page. */
+  protected readonly exitLevels = computed(() => {
+    const levels = new Map<string, { stop: number | null; target: number | null }>();
+    for (const exit of this.restingStops()) {
+      const entry = levels.get(exit.ticker) ?? { stop: null, target: null };
+      if (exit.exit_kind === 'stop') entry.stop = exit.limit_price;
+      if (exit.exit_kind === 'target') entry.target = exit.limit_price;
+      levels.set(exit.ticker, entry);
+    }
+    return levels;
+  });
+
+  protected exitLevel(ticker: string, kind: 'stop' | 'target'): number | null {
+    return this.exitLevels().get(ticker)?.[kind] ?? null;
+  }
+
+  /** Exits resting on something the book does not hold. Normally empty — but
+   * on 2026-08-13 a bracket was placed against a position the ledger had no
+   * row for, and nothing on the page would have shown it. Now that the levels
+   * sit on the holding's own row, this is the only case the list still has to
+   * cover, so it lists that case and nothing else. */
+  protected readonly unmatchedExits = computed(() => {
+    const held = new Set(this.book()?.holdings.map((h) => h.ticker) ?? []);
+    return this.restingStops().filter((t) => !held.has(t.ticker));
+  });
+
   constructor() {
     void this.agentService.load();
   }

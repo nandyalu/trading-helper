@@ -575,6 +575,8 @@ def record_agent_trade(
     reason: str | None = None,
     signal_id: int | None = None,
     is_stop: bool = False,
+    limit_price: float | None = None,
+    exit_kind: str | None = None,
     *,
     _session: Session = None,
 ) -> int:
@@ -590,6 +592,8 @@ def record_agent_trade(
         reason=reason,
         signal_id=signal_id,
         is_stop=is_stop,
+        limit_price=limit_price,
+        exit_kind=exit_kind,
         status="pending",
     )
     _session.add(row)

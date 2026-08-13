@@ -616,6 +616,8 @@ def _arm_exits(
             reason=f"{label} resting at ${leg['price']:,.2f}",
             signal_id=None,
             is_stop=True,
+            limit_price=leg["price"],
+            exit_kind="stop" if leg["kind"] == "stop" else "target",
         )
     log.info(
         "Armed %d exit(s) for %s: %s",

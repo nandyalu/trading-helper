@@ -139,6 +139,15 @@ class AgentTrade(SQLModel, table=True):
     # It is *meant* to sit pending indefinitely, so the UI and the exit path
     # both need to tell it apart from a market order that never filled.
     is_stop: bool = Field(default=False)
+    # Where a resting exit is armed. ``price`` cannot carry it: that column is
+    # the fill price and stays NULL until the order actually triggers, so
+    # without this the level a position is protected at is knowable only by
+    # reading it back out of ``reason``'s display text.
+    limit_price: float | None = None
+    # Which leg of the bracket this is: "stop" or "target". ``is_stop`` says
+    # only that a row is a resting exit — both legs carry it — so without this
+    # the two are told apart by reading ``reason``'s wording.
+    exit_kind: str | None = None
     reason: str | None = None  # the model's stated rationale
     signal_id: int | None = Field(default=None, foreign_key="signal.id", index=True)
 
