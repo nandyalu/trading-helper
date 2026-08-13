@@ -9,7 +9,7 @@ Pure — no LLM, no broker, no DB.
 """
 import pytest
 
-from backend.services import agent, agent_book
+from backend.services import agent, agent_book, sandbox_broker
 
 
 def _book(cash=1000.0, holdings=None, budget=1000.0):
@@ -1043,3 +1043,191 @@ def test_a_rejected_buy_stops_the_wait_immediately(monkeypatch):
     )
 
     assert armed == []
+
+
+# --- placing the buy and its exits together -----------------------------------
+
+
+def _order(ticker="ZBH", side="buy", quantity=3):
+    return {"ticker": ticker, "side": side, "quantity": quantity}
+
+
+def test_a_buy_with_levels_goes_out_as_one_bracket(monkeypatch):
+    """The whole point: the broker holds the exits and activates them on the
+    fill, so the shares are never owned with nothing protecting them."""
+    calls = []
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: calls.append(a) or {"client_order_id": "x", "exits": []},
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_market_order",
+        lambda *a: pytest.fail("a bracketable buy must not go out as a bare market order"),
+    )
+
+    agent._place(_order(), 98.41, {"ZBH": 95.30}, {"ZBH": 101.50})
+
+    assert calls == [("ZBH", 3, 98.41, 95.30, 101.50)]
+
+
+def test_a_refused_bracket_still_buys(monkeypatch):
+    """A combo is refused outright while the cash is unsettled, and selling to
+    fund a buy in the same pass is something the agent is told it can do — so
+    this refusal is routine. Failing the trade over it would leave the agent
+    unable to act on its own decision."""
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: (_ for _ in ()).throw(RuntimeError("CANT_USE_UNSETTLE_FUNDS_FOR_COMBO_ORDER")),
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_market_order", lambda *a: {"client_order_id": "fallback"}
+    )
+
+    result = agent._place(_order(), 98.41, {"ZBH": 95.30}, {"ZBH": 101.50})
+
+    # No "exits" key, which is what tells run_once to arm them the slow way.
+    assert result == {"client_order_id": "fallback"}
+
+
+def test_a_buy_with_no_usable_level_is_a_plain_market_order(monkeypatch):
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: pytest.fail("nothing to bracket with"),
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_market_order", lambda *a: {"client_order_id": "plain"}
+    )
+
+    assert agent._place(_order(), 98.41, {}, {})["client_order_id"] == "plain"
+
+
+def test_a_wrong_side_level_is_dropped_before_it_reaches_the_bracket(monkeypatch):
+    """The broker takes the whole combo down — buy included — over a stop it
+    does not like, so a level that would execute at once must never be sent."""
+    calls = []
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: calls.append(a) or {"client_order_id": "x", "exits": []},
+    )
+
+    # ZBH on 2026-08-12: a $92.00 target on a stock trading at $97.89.
+    agent._place(_order(), 97.89, {"ZBH": 95.30}, {"ZBH": 92.00})
+
+    assert calls == [("ZBH", 3, 97.89, 95.30, None)]
+
+
+def test_a_sell_is_never_bracketed(monkeypatch):
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order", lambda *a: pytest.fail("a sell is the exit")
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_market_order", lambda *a: {"client_order_id": "sell"}
+    )
+
+    agent._place(_order(side="sell"), 98.41, {"ZBH": 95.30}, {"ZBH": 101.50})
+
+
+def test_bracketed_exits_are_written_to_the_ledger(monkeypatch):
+    """They rest at the broker either way; without a row the dashboard cannot
+    show them and settlement cannot notice one filling."""
+    rows = []
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: rows.append(kw) or 1)
+
+    agent._record_exits("ZBH", [
+        {"client_order_id": "a", "kind": "stop", "price": 95.30, "quantity": 3, "placed_at": None},
+        {"client_order_id": "b", "kind": "target", "price": 101.50, "quantity": 3, "placed_at": None},
+    ])
+
+    assert [r["exit_kind"] for r in rows] == ["stop", "target"]
+    assert [r["limit_price"] for r in rows] == [95.30, 101.50]
+    assert all(r["is_stop"] and r["side"] == "sell" and r["quantity"] == 3 for r in rows)
+
+
+# --- the bracket payload -------------------------------------------------------
+
+# The broker rejects a MASTER leg priced at MARKET, and rejects a stop that is
+# not below the entry limit — taking the buy down with it, since the legs are
+# one submission. Both were found against the live sandbox; preview_order
+# accepts either.
+
+
+def _bracket_legs(monkeypatch, **kwargs):
+    """Capture the legs place_bracket_order would send."""
+    sent = {}
+
+    class Op:
+        def __init__(self, _client):
+            pass
+
+        def place_order(self, account_id, legs, combo_id=None):
+            sent["legs"], sent["combo_id"] = legs, combo_id
+            return {"combo_order_id": "X"}
+
+    monkeypatch.setattr(sandbox_broker.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(sandbox_broker.quotes, "get_api_client", lambda: object())
+    monkeypatch.setattr(sandbox_broker, "get_paper_account_id", lambda: "DEM1")
+    import webull.trade.trade.v3.order_opration_v3 as module
+
+    monkeypatch.setattr(module, "OrderOperationV3", Op)
+    sandbox_broker.place_bracket_order(**kwargs)
+    return sent
+
+
+def test_the_entry_is_a_marketable_limit_not_a_market_order(monkeypatch):
+    sent = _bracket_legs(
+        monkeypatch, ticker="ZBH", quantity=3, price=98.41, stop_price=95.30, target_price=101.50
+    )
+
+    entry = sent["legs"][0]
+    assert entry["combo_type"] == "MASTER"
+    assert entry["order_type"] == "LIMIT", "a MASTER leg priced at MARKET is refused"
+    assert entry["time_in_force"] == "DAY", "a MASTER leg cannot be GTC"
+    # Priced through the offer so it behaves like a market order, but caps what
+    # a fast tape can charge against an app-enforced budget.
+    assert float(entry["limit_price"]) == pytest.approx(98.90, abs=0.01)
+
+
+def test_the_exits_outlive_the_session(monkeypatch):
+    """A DAY exit would protect the position for an afternoon and then quietly
+    stop existing."""
+    sent = _bracket_legs(
+        monkeypatch, ticker="ZBH", quantity=3, price=98.41, stop_price=95.30, target_price=101.50
+    )
+
+    assert [leg["time_in_force"] for leg in sent["legs"][1:]] == ["GTC", "GTC"]
+    assert sent["combo_id"], "the legs are tied together by a shared combo id"
+
+
+def test_a_stop_above_the_entry_limit_is_refused_here(monkeypatch):
+    """The broker refuses it too, but by then it has refused the buy as well —
+    the legs are one submission, so a bad level costs the trade."""
+    with pytest.raises(ValueError, match="not below the entry limit"):
+        _bracket_legs(
+            monkeypatch, ticker="ZBH", quantity=3, price=98.41,
+            stop_price=99.00, target_price=101.50,
+        )
+
+
+def test_a_target_inside_the_entry_buffer_is_refused_here(monkeypatch):
+    """98.41 clears the wrong-side guard, which reads against the last trade —
+    but the entry limit is 98.90, so the take-profit would sit under its own
+    entry."""
+    with pytest.raises(ValueError, match="not above the entry limit"):
+        _bracket_legs(
+            monkeypatch, ticker="ZBH", quantity=3, price=98.41,
+            stop_price=95.30, target_price=98.60,
+        )
+
+
+def test_one_exit_is_enough(monkeypatch):
+    sent = _bracket_legs(
+        monkeypatch, ticker="ZBH", quantity=3, price=98.41, stop_price=95.30, target_price=None
+    )
+
+    assert len(sent["legs"]) == 2
+    assert sent["legs"][1]["combo_type"] == "STOP_LOSS"
+
+
+def test_a_bracket_with_no_exit_at_all_is_a_programming_error(monkeypatch):
+    with pytest.raises(ValueError, match="at least one exit"):
+        _bracket_legs(monkeypatch, ticker="ZBH", quantity=3, price=98.41)

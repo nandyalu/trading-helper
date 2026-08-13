@@ -355,6 +355,40 @@ What the index covers, and where each maps here:
 | Authentication — HMAC-SHA1 signature, client token lifecycle | `quotes.get_api_client`, token cached under `WEBULL_OPENAPI_TOKEN_DIR` |
 | Order Management — preview/place/replace/cancel | **not used, deliberately.** Real order execution is a standing non-goal; access here is read-only |
 
+### Combo orders: what the docs and `preview_order` both get wrong
+
+The agent buys with a **bracket** — `MASTER` entry plus `STOP_PROFIT` and
+`STOP_LOSS` legs, one `place_order` call, one shared `client_combo_order_id`.
+The broker activates the exits when the entry fills, so no position is ever
+held with nothing resting under it. Arming afterwards always had that window:
+on 2026-08-13 both buys filled and neither got its exits, because the sell legs
+were validated while the account still held nothing and read as a new short
+(`GENERATE_NEW_SHORT_POSITION`).
+
+Brackets are **not in `llms.txt`** — only the Place Order page's `combo_type`
+enum mentions them. Four rules were found by testing against the live sandbox,
+and none of them appear in the docs:
+
+- A `MASTER` leg **cannot be `MARKET`**, and cannot be `GTC`
+  (`INVALID_PARAMETER`). The entry is a marketable limit instead — 0.5% through
+  the offer, `DAY` — which behaves like a market order and caps slippage.
+- The exits **may be `GTC` under a `DAY` master**. They have to be: a `DAY`
+  exit protects the position for an afternoon and then quietly stops existing.
+- A stop at or above the entry limit is refused
+  (`TRADE_STOP_LOSS_PRICE_LT_OPENPRICE`) — and the refusal takes the **buy**
+  with it, because the legs are one submission. `agent._place` screens both
+  levels before sending, so a bad level costs nothing.
+- **Any combo is refused while the cash is unsettled**
+  (`CANT_USE_UNSETTLE_FUNDS_FOR_COMBO_ORDER`). A plain market order may be
+  placed against unsettled proceeds; a combo may not. Selling to fund a buy in
+  the same pass is something the agent's prompt explicitly permits, so this is
+  routine, not an edge case — `_place` falls back to a market order plus
+  `_arm_exits` rather than failing the trade.
+
+**`preview_order` cannot be used to check a combo.** It returned 200 for the
+`MARKET` master that `place_order` then rejected outright. Preview validates
+cost, not shape.
+
 Two things the index settles that have bitten this project:
 
 - It confirms there is **no news or social-sentiment endpoint**, so Webull

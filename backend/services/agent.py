@@ -497,6 +497,78 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
     return embed
 
 
+def _place(
+    order: dict,
+    price: float | None,
+    stops: dict[str, float],
+    targets: dict[str, float],
+) -> dict:
+    """Place one accepted order, as a bracket where that is possible.
+
+    A bracket submits the buy and its exits together and the broker activates
+    the exits itself the moment the entry fills, so there is no window in which
+    the shares are owned and nothing is protecting them. Arming afterwards
+    always had that window, however short the wait for the fill.
+
+    It is not always possible, and the fallback is not a formality:
+
+    - a sell is never bracketed — it *is* the exit;
+    - a buy with no usable level has nothing to bracket with;
+    - and a combo is refused outright while the cash is unsettled, which is
+      routine here, because selling to fund a buy in the same pass is
+      something the agent is explicitly told it can do.
+
+    So a refused bracket falls back to the plain market order rather than
+    failing the trade. The position is then armed the slower way, which is the
+    behaviour this replaced and is still correct — just briefly exposed.
+    """
+    ticker = order["ticker"]
+    if order["side"] != "buy":
+        return sandbox_broker.place_market_order(ticker, order["side"].upper(), order["quantity"])
+
+    stop, target = usable_levels(ticker, stops.get(ticker), targets.get(ticker), price)
+    if price and (stop or target):
+        try:
+            return sandbox_broker.place_bracket_order(
+                ticker, order["quantity"], price, stop, target
+            )
+        except Exception as exc:
+            log.warning(
+                "Bracket refused for %s (%s) — buying at market and arming separately",
+                ticker, str(exc)[:200],
+            )
+
+    return sandbox_broker.place_market_order(ticker, "BUY", order["quantity"])
+
+
+def _record_exits(ticker: str, exits: list[dict]) -> None:
+    """Ledger rows for exits the broker is already holding.
+
+    Separate from ``_arm_exits`` because there is nothing to arm: these legs
+    were submitted with the buy and the broker activates them on the fill. All
+    that is left is to write down what is resting, so the dashboard and the
+    settlement pass can see it.
+    """
+    for leg in exits:
+        label = "stop-loss" if leg["kind"] == "stop" else "take-profit"
+        db.record_agent_trade(
+            ticker=ticker,
+            side="sell",
+            quantity=leg.get("quantity") or 0,
+            client_order_id=leg["client_order_id"],
+            placed_at=leg["placed_at"],
+            reason=f"{label} resting at ${leg['price']:,.2f}",
+            signal_id=None,
+            is_stop=True,
+            limit_price=leg["price"],
+            exit_kind=leg["kind"],
+        )
+    log.info(
+        "Bracketed %s with %s",
+        ticker, ", ".join(f"{l['kind']} {l['price']:,.2f}" for l in exits),
+    )
+
+
 def _cancel_resting_exits(ticker: str) -> int:
     """Cancel every resting exit on a ticker the agent is selling.
 
@@ -514,6 +586,37 @@ def _cancel_resting_exits(ticker: str) -> int:
     if cancelled:
         log.info("Cancelled %d resting exit(s) on %s", cancelled, ticker)
     return cancelled
+
+
+def usable_levels(
+    ticker: str, stop_price: float | None, target_price: float | None, price: float | None
+) -> tuple[float | None, float | None]:
+    """Drop the exit levels that would execute the instant they exist.
+
+    A limit sell below the market fills at market, and a stop above it triggers
+    at once. Either liquidates the position the moment it is opened — and the
+    take-profit would be announced as a profit while booking a loss. Not
+    hypothetical: a live signal produced a $95.96 target on a stock trading at
+    $97.57.
+
+    An unknown price is not evidence against a level, so nothing is dropped
+    when the quote is missing.
+    """
+    if price is None:
+        return stop_price, target_price
+    if stop_price is not None and stop_price >= price:
+        log.warning(
+            "Refusing a stop at %.2f on %s trading at %.2f — it would trigger at once",
+            stop_price, ticker, price,
+        )
+        stop_price = None
+    if target_price is not None and target_price <= price:
+        log.warning(
+            "Refusing a target at %.2f on %s trading at %.2f — it would fill at once",
+            target_price, ticker, price,
+        )
+        target_price = None
+    return stop_price, target_price
 
 
 # How long to wait for a buy to fill before arming its exits, and how often to
@@ -565,26 +668,8 @@ def _arm_exits(
     disagreeing with the account. It is logged loudly instead — a position
     running naked is worth knowing about.
     """
-    # Levels on the wrong side of the market execute the instant they are
-    # armed: a limit sell below the price fills at market, and a stop above it
-    # triggers at once. Either would liquidate the position the moment it was
-    # opened — and the take-profit would be announced as a profit while booking
-    # a loss. This is not hypothetical: a live signal produced a $95.96 target
-    # on a stock trading at $97.57.
     price = get_current_price(order["ticker"])
-    if price is not None:
-        if stop_price is not None and stop_price >= price:
-            log.warning(
-                "Refusing a stop at %.2f on %s trading at %.2f — it would trigger at once",
-                stop_price, order["ticker"], price,
-            )
-            stop_price = None
-        if target_price is not None and target_price <= price:
-            log.warning(
-                "Refusing a target at %.2f on %s trading at %.2f — it would fill at once",
-                target_price, order["ticker"], price,
-            )
-            target_price = None
+    stop_price, target_price = usable_levels(order["ticker"], stop_price, target_price, price)
 
     if not stop_price and not target_price:
         log.info("No usable stop or target for %s — the position rests unguarded", order["ticker"])
@@ -741,9 +826,7 @@ def run_once() -> AgentRun:
     targets = {s.ticker: s.price_target for s in signals if s.price_target}
     for order in accepted:
         try:
-            result = sandbox_broker.place_market_order(
-                order["ticker"], order["side"].upper(), order["quantity"]
-            )
+            result = _place(order, prices.get(order["ticker"]), stops, targets)
         except Exception as exc:  # broker refusal, network, bad symbol
             log.exception("Order failed for %s", order["ticker"])
             run.failed.append((order, str(exc)))
@@ -759,12 +842,15 @@ def run_once() -> AgentRun:
         )
         run.placed.append(order)
         if order["side"] == "buy":
-            _arm_exits(
-                order,
-                stops.get(order["ticker"]),
-                targets.get(order["ticker"]),
-                client_order_id=result["client_order_id"],
-            )
+            if result.get("exits") is not None:
+                _record_exits(order["ticker"], result["exits"])
+            else:
+                _arm_exits(
+                    order,
+                    stops.get(order["ticker"]),
+                    targets.get(order["ticker"]),
+                    client_order_id=result["client_order_id"],
+                )
         else:
             # The position is being exited, so any resting exit on it would
             # try to sell shares that are no longer held.

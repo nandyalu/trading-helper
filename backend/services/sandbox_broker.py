@@ -191,6 +191,141 @@ def place_market_order(ticker: str, side: str, quantity: float) -> dict:
     }
 
 
+# How far above the market to set a bracket's entry limit. A MASTER leg cannot
+# be a MARKET order (the broker answers INVALID_PARAMETER) and cannot be GTC
+# either, so the entry is a marketable limit: priced through the offer, it
+# behaves like a market order while capping what a fast tape can charge. A
+# market order's slippage is unbounded, which on an app-enforced budget is the
+# worse of the two.
+ENTRY_LIMIT_BUFFER_PCT = 0.5
+
+
+def place_bracket_order(
+    ticker: str,
+    quantity: float,
+    price: float,
+    stop_price: float | None = None,
+    target_price: float | None = None,
+) -> dict:
+    """Buy, and rest the exits under it, in one submission.
+
+    The broker holds the exits inactive until the entry fills and activates
+    them itself, so there is no window in which the shares are owned and
+    nothing is protecting them. Arming afterwards always had that window: on
+    2026-08-13 both buys filled and neither got its exits, because the sell
+    legs were validated while the account still held nothing and read as a new
+    short.
+
+    Three shapes the broker rejects, all found by testing against the sandbox
+    and none of them documented:
+
+    - a ``MASTER`` leg with ``order_type`` MARKET, or with ``time_in_force``
+      GTC — hence the marketable limit above;
+    - a stop at or above the entry limit (``TRADE_STOP_LOSS_PRICE_LT_OPENPRICE``),
+      which is the broker's own version of the check the caller already makes;
+    - **any combo at all when the cash is unsettled**
+      (``CANT_USE_UNSETTLE_FUNDS_FOR_COMBO_ORDER``). A plain market order may
+      be placed against unsettled proceeds; a combo may not. Selling to fund a
+      buy in the same pass is something the agent is explicitly told it can do,
+      so this is a routine refusal rather than an edge case, and the caller
+      must have a path that still works when it happens.
+
+    ``preview_order`` accepts every one of those, so it cannot be used to check
+    a combo before placing it.
+
+    Raises on refusal, like ``place_market_order`` — a silently skipped order
+    would leave the ledger claiming a position that does not exist.
+    """
+    _assert_sandbox()
+    if quantity <= 0:
+        raise ValueError(f"quantity must be positive, got {quantity}")
+    if price <= 0:
+        raise ValueError(f"price must be positive, got {price}")
+    if stop_price is None and target_price is None:
+        raise ValueError("a bracket needs at least one exit level")
+
+    entry_limit = round(price * (1 + ENTRY_LIMIT_BUFFER_PCT / 100), 2)
+    # Both exits are read against the entry the broker will actually accept,
+    # not the last trade — a stop that is under the market but over the limit
+    # takes the whole combo down with it, buy included.
+    if stop_price is not None and stop_price >= entry_limit:
+        raise ValueError(f"stop {stop_price} is not below the entry limit {entry_limit}")
+    if target_price is not None and target_price <= entry_limit:
+        raise ValueError(f"target {target_price} is not above the entry limit {entry_limit}")
+
+    client = quotes.get_api_client()
+    account_id = get_paper_account_id()
+    if client is None or account_id is None:
+        raise RuntimeError("No simulated account available to trade")
+
+    from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
+
+    base = {
+        "instrument_type": "EQUITY",
+        "entrust_type": "QTY",
+        "symbol": ticker.upper().strip(),
+        "market": "US",
+        "quantity": str(int(quantity)),
+        "support_trading_session": "CORE",
+    }
+    entry = {
+        **base,
+        "client_order_id": uuid.uuid4().hex,
+        "combo_type": "MASTER",
+        "side": "BUY",
+        "order_type": "LIMIT",
+        "limit_price": f"{entry_limit:.2f}",
+        "time_in_force": "DAY",
+    }
+    legs = [entry]
+    if stop_price is not None:
+        legs.append({
+            **base,
+            "client_order_id": uuid.uuid4().hex,
+            "combo_type": "STOP_LOSS",
+            "side": "SELL",
+            "order_type": "STOP_LOSS",
+            "stop_price": f"{stop_price:.2f}",
+            # GTC: an exit that expired at tonight's close would protect the
+            # position for an afternoon and then quietly stop existing.
+            "time_in_force": "GTC",
+        })
+    if target_price is not None:
+        legs.append({
+            **base,
+            "client_order_id": uuid.uuid4().hex,
+            "combo_type": "STOP_PROFIT",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "limit_price": f"{target_price:.2f}",
+            "time_in_force": "GTC",
+        })
+
+    log.info(
+        "Placing simulated bracket for %s x%s — entry limit %.2f, stop %s, target %s",
+        base["symbol"], base["quantity"], entry_limit, stop_price, target_price,
+    )
+    response = OrderOperationV3(client).place_order(account_id, legs, uuid.uuid4().hex)
+    body = response.json() if hasattr(response, "json") else response
+    placed_at = datetime.datetime.now(datetime.timezone.utc)
+    return {
+        "client_order_id": entry["client_order_id"],
+        "entry_limit": entry_limit,
+        "placed_at": placed_at,
+        "response": body,
+        "exits": [
+            {
+                "client_order_id": leg["client_order_id"],
+                "kind": "stop" if leg["order_type"] == "STOP_LOSS" else "target",
+                "price": stop_price if leg["order_type"] == "STOP_LOSS" else target_price,
+                "quantity": float(leg["quantity"]),
+                "placed_at": placed_at,
+            }
+            for leg in legs[1:]
+        ],
+    }
+
+
 def place_exit_bracket(
     ticker: str,
     quantity: float,
