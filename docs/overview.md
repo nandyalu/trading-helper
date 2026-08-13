@@ -86,6 +86,12 @@ The win probability is the one number the model produces rather than derives, wh
 Any of these can be absent — the model states them only when it has a view.
 Absent is stored as null, never as zero, so a missing stop can never be read as a stop at $0.
 
+A level is also dropped when it cannot describe anything that has not already happened.
+The model often proposes buying a pullback, and draws its stop and target around the entry it hoped for rather than the price on the screen; when the pullback never comes, the whole plan sits below the market.
+A target the price has already passed would count as reached the moment it was stored, and a stop above the price would trigger the same way, so both are discarded, along with the risk/reward and expected value computed from them.
+The win probability survives, because the model estimates it rather than deriving it from the levels.
+A third of the first forty signals held a level like this.
+
 When the trader names no stop on a Buy, the bot substitutes the same 2×ATR(14) level the sizing field shows, so every actionable Buy has an exit.
 
 ## Stop alerts
@@ -157,9 +163,23 @@ An intraday trigger is the opposite: it arrives while the market is open, and a 
 **No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
 The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.
 
-When it opens a position it also rests two real orders at the broker: a stop where the analysis says the thesis is wrong, and a take-profit at the analysis's price target.
-They go in as one pair, so whichever fills cancels the other — and the broker enforces both whether or not this app is running.
-Either level may be missing, since the analysis states them only when it has a view, and the one that exists is placed on its own.
+### How a position gets its exits
+
+Every buy is placed as a **bracket**: the purchase, a stop where the analysis says the thesis is wrong, and a take-profit at its price target, all in one order.
+The broker holds the two exits inactive and activates them the moment the buy fills, so whichever fills later cancels the other, and both are enforced whether or not this app is running.
+
+The single order is the point. Placing the exits afterwards leaves a window — however short — in which the shares are owned and nothing is protecting them, and that window is not theoretical: on 13 August 2026 two positions were bought and neither got its exits, because the broker read the sell orders as short sales against shares that had not settled yet.
+A bracket cannot fail that way, because there is no "afterwards".
+
+Either level may be missing, since the analysis states them only when it has a view, and the app discards one that would execute the instant it was placed — a target the price has already passed, or a stop it has already fallen through.
+The one that survives is placed on its own. A position with neither rests unguarded, and the Auto trader page shows a dash rather than hiding it.
+
+The entry is a limit order priced just through the market rather than a market order.
+Webull refuses a market order inside a bracket, and the limit turns out to be the better instrument anyway: a market order's slippage is unbounded, which is worth avoiding when the budget is enforced to the dollar.
+
+One case falls back to the older, slower method — buying first and arming the exits once the fill confirms.
+A broker will not accept a bracket while the cash paying for it is unsettled, and selling one holding to fund another is something the agent is explicitly allowed to do, so this happens in normal use.
+The trade still goes through and still gets its exits; it is exposed for a few seconds in between.
 
 The model chooses what to buy and how much. The app only refuses orders that cannot be executed as stated — spending cash that is not there, selling shares that are not held, fractional shares.
 An order that costs more than the cash left is dropped rather than resized, because resizing would quietly turn its decision into a different one.
@@ -215,7 +235,7 @@ Two details worth knowing when reading the page:
 
 - **The simulated account holds far more than the budget.** Webull funds it with $1,000,000, so the budget is enforced by the app, from the agent's own filled orders, and the account's buying power is never consulted.
 - **A pending order has moved no money.** Orders placed while the market is shut fill at the next open, and until they do the cash is still counted as available.
-- **Resting exits are not pending orders.** A stop or take-profit is meant to sit unfilled, so they are listed apart from orders still waiting to fill.
+- **Resting exits are not pending orders.** A stop or take-profit is meant to sit unfilled, so they appear on their holding's own row rather than among the orders still waiting to fill. An exit listed on its own means it is resting on shares the book does not show, which is a disagreement worth looking into.
 
 Fills are reported over a live event stream, so a stop that triggers is recorded and posted within a second.
 The fifteen-minute poll behind it is deliberately kept: a stream that silently stops looks exactly like a quiet market, so the stream is a speed improvement over a guarantee rather than a replacement for it.
