@@ -33,6 +33,7 @@ from backend.services.signals import (
     extract_risk_reward,
     extract_stop_loss,
     extract_time_horizon,
+    extract_trader_target,
     extract_win_probability,
     horizon_params,
     parse_time_horizon_days,
@@ -338,7 +339,15 @@ def _trade_plan_levels(
     stated = {
         "entry_price": extract_entry_price(trader_plan),
         "stop_loss": extract_stop_loss(trader_plan),
-        "price_target": extract_price_target(rationale),
+        # The trader first, the final decision only as a fallback. These four
+        # numbers have to describe one plan: risk_reward and expected_value are
+        # derived by TradingAgents from the *trader's* target, so taking the
+        # target from the portfolio manager instead stores arithmetic that
+        # cannot be explained by the levels beside it. ADT on 2026-08-12 was
+        # recorded with the trader's entry 7.28 and stop 6.90, the manager's
+        # target 6.80, and a 0.08 risk/reward that only makes sense against the
+        # trader's own 7.31.
+        "price_target": extract_trader_target(trader_plan) or extract_price_target(rationale),
     }
     # No price to check against means no basis for rejecting anything. Dropping
     # every level would be the wrong call — an unknown price is not evidence

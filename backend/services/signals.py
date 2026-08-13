@@ -24,6 +24,11 @@ _PRICE_TARGET_RE = re.compile(r"\*\*Price Target\*\*:\s*\$?([\d.]+)")
 # instead of recomputing here.
 _ENTRY_PRICE_RE = re.compile(r"\*\*Entry Price\*\*:\s*\$?([\d.]+)")
 _STOP_LOSS_RE = re.compile(r"\*\*Stop Loss\*\*:\s*\$?([\d.]+)")
+# The trader writes "Target Price"; the portfolio manager writes "Price
+# Target". Two labels for the same number, and reading only the manager's is
+# what let a signal store one stage's target beside the other stage's
+# risk/reward — see extract_trader_target.
+_TARGET_PRICE_RE = re.compile(r"\*\*Target Price\*\*:\s*\$?([\d.]+)")
 _WIN_PROBABILITY_RE = re.compile(r"\*\*Win Probability\*\*:\s*([\d.]+)\s*%")
 _RISK_REWARD_RE = re.compile(r"\*\*Risk/Reward Ratio\*\*:\s*([\d.]+)\s*:\s*1")
 _EXPECTED_VALUE_RE = re.compile(r"\*\*Expected Value\*\*:\s*([+-]?[\d.]+)\s*R")
@@ -113,7 +118,21 @@ def _extract_float(pattern: re.Pattern, text: str | None) -> float | None:
 
 
 def extract_price_target(rationale: str) -> float | None:
+    """The target as the portfolio manager states it, labelled "Price Target"."""
     return _extract_float(_PRICE_TARGET_RE, rationale)
+
+
+def extract_trader_target(trader_plan: str | None) -> float | None:
+    """The target as the *trader* states it, labelled "Target Price".
+
+    Nearly the same words in the other order, which is why this went unnoticed:
+    the manager's extractor silently returned None on a trader plan, so the
+    target fell back to the manager's while the risk/reward beside it stayed
+    the trader's. Both labels are accepted here because the trader's own
+    rendering has used each at different times."""
+    return _extract_float(_TARGET_PRICE_RE, trader_plan) or _extract_float(
+        _PRICE_TARGET_RE, trader_plan
+    )
 
 
 # --- Trader-plan fields ------------------------------------------------------

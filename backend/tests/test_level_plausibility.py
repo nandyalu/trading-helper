@@ -133,3 +133,55 @@ def test_a_plan_with_no_levels_at_all_is_not_treated_as_discarded():
     levels = _trade_plan_levels(plan, "", VERI_PRICE, SWING)
     assert levels["entry_price"] is None
     assert levels["win_probability"] == 50.0
+
+
+# --- the target must come from the same plan as the numbers derived from it ----
+
+# ADT on 2026-08-12, as the model actually produced it. The trader proposed a
+# 7.31 target and computed 0.08 risk/reward from it; the portfolio manager
+# overrode the decision to Hold and stated 6.80. Taking the target from the
+# manager while taking the arithmetic from the trader stored a row whose
+# risk/reward could not be explained by the levels printed beside it.
+ADT_PLAN = """**Action**: Sell
+
+**Entry Price**: 7.28
+
+**Stop Loss**: 6.9
+
+**Target Price**: 7.31
+
+### Probability & Risk/Reward
+- **Win Probability**: 65%
+- **Risk/Reward Ratio**: 0.08 : 1 (potential +0.03 vs risk -0.38)
+- **Expected Value**: -0.30R (unfavorable)
+"""
+ADT_RATIONALE = "**Rating**: Hold\n\n**Price Target**: 6.8\n\n**Time Horizon**: 1-2 weeks"
+ADT_PRICE = 7.31
+
+
+def test_the_target_comes_from_the_trader_not_the_final_decision():
+    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, SWING)
+
+    assert levels["price_target"] == 7.31, "the manager's 6.80 does not belong with the trader's math"
+    assert levels["entry_price"] == 7.28
+    assert levels["stop_loss"] == 6.9
+
+
+def test_the_stored_risk_reward_is_explainable_by_the_stored_levels():
+    """0.08 is (7.31 - 7.28) / (7.28 - 6.90). With a 6.80 target stored instead
+    the ratio described a trade that was not on the row."""
+    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, SWING)
+
+    entry, stop, target = levels["entry_price"], levels["stop_loss"], levels["price_target"]
+    implied = (target - entry) / (entry - stop)
+    assert implied == pytest.approx(levels["risk_reward"], abs=0.01)
+
+
+def test_the_final_decision_still_supplies_a_target_the_trader_omitted():
+    """The manager is the fallback, not the default — a plan with no target of
+    its own should still record the one the decision states."""
+    plan = "**Action**: Buy\n\n**Entry Price**: 7.28\n\n**Stop Loss**: 6.9\n"
+
+    levels = _trade_plan_levels(plan, "**Price Target**: 8.50", ADT_PRICE, SWING)
+
+    assert levels["price_target"] == 8.50
