@@ -58,6 +58,10 @@ class SignalOut(OrmModel):
 
 class SignalDetailOut(SignalOut):
     reports: dict[str, str] = {}
+    # What the auto trader did with this call, if anything. Kept apart from the
+    # signal's own grade on purpose: one says whether the analysis was right
+    # over its horizon, the other what the exit rules made of it.
+    agent_trades: list["AgentTradeRowOut"] = []
 
 
 class PaperPositionOut(OrmModel):
@@ -379,3 +383,7 @@ class AgentTradeRowOut(OrmModel):
     return_pct: float | None
     held_days: int
     is_open: bool
+
+
+# SignalDetailOut names AgentTradeRowOut before it is defined.
+SignalDetailOut.model_rebuild()

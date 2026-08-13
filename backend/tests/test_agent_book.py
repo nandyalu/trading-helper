@@ -285,3 +285,41 @@ def test_closed_trades_is_the_history_without_the_open_rows():
 
     assert len(agent_book.trade_history(trades)) == 2
     assert [r.ticker for r in agent_book.closed_trades(trades)] == ["AAPL"]
+
+
+def test_trades_are_attributable_to_the_signal_that_prompted_them(monkeypatch):
+    """The signal's grade says whether the analysis was right over its horizon;
+    the trade says what the exit rules made of it. Seeing both is what makes a
+    PASS beside a losing trade legible as "the call was right, the stop was too
+    tight"."""
+    buy = _trade(ticker="ZBH", quantity=10, price=97.83, order_id="b1")
+    buy.signal_id = 28
+    other = _trade(ticker="GNW", quantity=2, price=9.84, order_id="b2")
+    other.signal_id = 26
+    monkeypatch.setattr(agent_book.db, "get_agent_trades", lambda: [buy, other])
+
+    rows = agent_book.trades_for_signal(28)
+
+    assert [r.ticker for r in rows] == ["ZBH"]
+    assert rows[0].is_open
+
+
+def test_the_exit_is_matched_by_fifo_not_by_signal_id(monkeypatch):
+    """A sell carries no signal_id — it is the stop or take-profit firing — so
+    the lot it closes is found by the FIFO match."""
+    buy = _trade(ticker="ZBH", quantity=10, price=97.83, order_id="b1")
+    buy.signal_id = 28
+    stop = _trade(ticker="ZBH", side="sell", quantity=10, price=95.30, order_id="s1")
+    stop.signal_id = None
+    monkeypatch.setattr(agent_book.db, "get_agent_trades", lambda: [buy, stop])
+
+    rows = agent_book.trades_for_signal(28)
+
+    assert len(rows) == 1
+    assert rows[0].exit == 95.30
+    assert rows[0].pnl == pytest.approx(-25.30)
+
+
+def test_a_signal_nothing_was_traded_on_has_no_rows(monkeypatch):
+    monkeypatch.setattr(agent_book.db, "get_agent_trades", lambda: [])
+    assert agent_book.trades_for_signal(99) == []

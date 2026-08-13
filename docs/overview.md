@@ -61,6 +61,10 @@ The dashboard needs no Discord account, and Discord needs no dashboard. Run eith
    - **Target**: Did the price touch the target at any point in the window (using the window's high and low, not just the endpoint)?
 5. **Aggregated** — Every graded signal feeds `/scorecard` (win rates by decision type and ticker) and the weekly digest's rolling trend.
 
+**A signal is graded on its horizon, never on when a trade in it was closed.**
+That distinction matters once the auto trader is running. If a stop firing resolved the signal, every losing trade would settle early while every winner ran to full term — you would stop measuring the prediction and start measuring your stop placement, with nothing saying so. The vs-SPY grade needs a fixed window for the same reason.
+So the signal keeps its own verdict, the trade keeps its own result, and the signal detail page shows both. A signal that passes beside a trade that lost money is not a contradiction: it means the call was right and the stop was too tight, which is a different problem from a bad call.
+
 The vs-SPY grade exists because an absolute grade can mislead you in a trending market.
 For example, a Buy that gained 1% while SPY gained 5% "passed" on the absolute grade, but it cost you money against the obvious alternative.
 

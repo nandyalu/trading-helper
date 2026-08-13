@@ -61,6 +61,25 @@ export class SignalDetailPage {
     return s.duration_seconds !== null || s.prompt_tokens !== null || s.llm_calls !== null;
   }
 
+  /** Net of every lot traded on this signal. Null while any of them is
+   * still open — a part-realized total reads as a finished result. */
+  protected tradedPnl(s: SignalDetail): number | null {
+    if (!s.agent_trades.length || s.agent_trades.some((t) => t.is_open)) return null;
+    return s.agent_trades.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
+  }
+
+  protected money(value: number | null): string {
+    return value === null ? '—' : `$${value.toFixed(2)}`;
+  }
+
+  protected signed(value: number): string {
+    return `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+  }
+
+  protected at(value: string | null): string {
+    return value ? value.replace('T', ' ').slice(0, 16) : '—';
+  }
+
   protected duration(seconds: number): string {
     const whole = Math.round(seconds);
     const minutes = Math.floor(whole / 60);

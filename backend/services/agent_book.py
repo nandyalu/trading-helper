@@ -232,6 +232,7 @@ class TradeRow:
     exit: float | None = None
     exit_at: datetime.datetime | None = None
     signal_decision: str | None = None  # what the analyst said when it bought
+    signal_id: int | None = None  # the signal the lot was opened on
 
     @property
     def is_open(self) -> bool:
@@ -273,7 +274,7 @@ def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[
     """
     rows = trades if trades is not None else db.get_agent_trades()
     decisions = decisions or {}
-    # ticker -> [[remaining_qty, price, filled_at, decision], ...]
+    # ticker -> [[remaining_qty, price, filled_at, decision, signal_id], ...]
     open_lots: dict[str, list[list]] = {}
     history: list[TradeRow] = []
 
@@ -285,7 +286,7 @@ def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[
         when = trade.filled_at or trade.placed_at
         if trade.side == "buy":
             open_lots.setdefault(trade.ticker, []).append(
-                [trade.quantity, trade.price, when, decisions.get(trade.signal_id)]
+                [trade.quantity, trade.price, when, decisions.get(trade.signal_id), trade.signal_id]
             )
             continue
         remaining = trade.quantity
@@ -302,6 +303,7 @@ def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[
                     exit=trade.price,
                     exit_at=when,
                     signal_decision=lot[3],
+                    signal_id=lot[4],
                 )
             )
             lot[0] -= matched
@@ -310,7 +312,7 @@ def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[
                 lots.pop(0)
 
     for ticker, lots in open_lots.items():
-        for quantity, price, when, decision in lots:
+        for quantity, price, when, decision, signal_id in lots:
             if quantity > _QUANTITY_EPSILON:
                 history.append(
                     TradeRow(
@@ -319,6 +321,7 @@ def trade_history(trades=None, decisions: dict[int, str] | None = None) -> list[
                         entry=price,
                         entry_at=when,
                         signal_decision=decision,
+                        signal_id=signal_id,
                     )
                 )
 
@@ -330,3 +333,19 @@ def closed_trades(trades=None, decisions: dict[int, str] | None = None) -> list[
     """Completed round trips only — what the agent is shown about its own
     record. An open lot has no outcome to learn from yet."""
     return [row for row in trade_history(trades, decisions) if not row.is_open]
+
+
+def trades_for_signal(signal_id: int) -> list[TradeRow]:
+    """What the agent actually did with one signal's call.
+
+    The signal's own grade answers whether the analysis was right over its
+    horizon; this answers what the exit rules made of it. They are deliberately
+    separate — resolving a signal the moment a stop fires would end every loser
+    early and let every winner run to full term, which measures stop placement
+    rather than the prediction. Seeing both is what makes a PASS beside a
+    losing trade legible as "the call was right, the stop was too tight".
+
+    Only lots opened on this signal count. A sell carries no signal_id, so the
+    exit that closed the lot is found by the FIFO match rather than by id.
+    """
+    return [row for row in trade_history() if row.signal_id == signal_id]

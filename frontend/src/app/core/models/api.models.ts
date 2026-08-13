@@ -48,6 +48,10 @@ export interface Signal {
 
 export interface SignalDetail extends Signal {
   reports: Record<string, string>;
+  /** What the auto trader did with this call. Separate from the signal's own
+   * grade: one says whether the analysis was right over its horizon, the other
+   * what the exit rules made of it. */
+  agent_trades: AgentTradeRow[];
 }
 
 export interface PaperPosition {

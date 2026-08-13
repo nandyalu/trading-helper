@@ -4,7 +4,13 @@ import datetime
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.api.schemas import ActionResultOut, SignalDetailOut, SignalOut
+from backend.api.schemas import (
+    ActionResultOut,
+    AgentTradeRowOut,
+    SignalDetailOut,
+    SignalOut,
+)
+from backend.services import agent_book
 from backend.services.paper import execute_signal_reaction
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
@@ -31,7 +37,14 @@ def get_signal(signal_id: int):
     if signal is None:
         raise HTTPException(status_code=404, detail="Signal not found.")
     reports = db.get_signal_reports(signal_id)
-    return SignalDetailOut(**SignalOut.model_validate(signal).model_dump(), reports=reports)
+    return SignalDetailOut(
+        **SignalOut.model_validate(signal).model_dump(),
+        reports=reports,
+        agent_trades=[
+            AgentTradeRowOut.model_validate(r)
+            for r in agent_book.trades_for_signal(signal_id)
+        ],
+    )
 
 
 @router.post("/{signal_id}/follow", response_model=ActionResultOut)

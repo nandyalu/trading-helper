@@ -145,6 +145,71 @@
       </section>
     }
 
+    @if (s.agent_trades.length) {
+      <section class="card">
+        <div class="card-head">
+          <h2>What the auto trader did with this</h2>
+          <p class="hint">
+            The grade above says whether the analysis was right over its horizon. This says what the
+            exit rules made of it — and the two can disagree. A signal that passes while the trade
+            on it lost money means the call was right and the stop was too tight, which is a
+            different problem from a bad call.
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th class="num">Shares</th>
+                <th class="num">Entry</th>
+                <th>Bought</th>
+                <th class="num">Exit</th>
+                <th>Sold</th>
+                <th class="num">Days held</th>
+                <th class="num">Profit / loss</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of s.agent_trades; track $index) {
+                <tr>
+                  <td class="num" data-label="Shares">
+                    {{ t.quantity }}
+                    @if (t.is_open) {
+                      <span class="muted">still held</span>
+                    }
+                  </td>
+                  <td class="num" data-label="Entry">{{ money(t.entry) }}</td>
+                  <td data-label="Bought">{{ at(t.entry_at) }}</td>
+                  <td class="num" data-label="Exit">{{ money(t.exit) }}</td>
+                  <td data-label="Sold">{{ at(t.exit_at) }}</td>
+                  <td class="num" data-label="Days held">{{ t.held_days }}</td>
+                  <td
+                    class="num"
+                    data-label="Profit / loss"
+                    [class.pass]="(t.pnl ?? 0) > 0"
+                    [class.fail]="(t.pnl ?? 0) < 0"
+                  >
+                    @if (t.pnl === null) {
+                      —
+                    } @else {
+                      {{ signed(t.pnl) }}
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (tradedPnl(s); as net) {
+          <div class="card-body">
+            <p [class.pass]="net > 0" [class.fail]="net < 0">
+              Net on this signal: <strong>{{ signed(net) }}</strong>
+            </p>
+          </div>
+        }
+      </section>
+    }
+
     @if (hasRunCost(s)) {
       <section class="card">
         <div class="card-head">
