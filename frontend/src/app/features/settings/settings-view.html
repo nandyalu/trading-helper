@@ -45,9 +45,16 @@
         <label class="field narrow">
           Model
           @if (llmModelChoices().length) {
-            <select [value]="llmModel()" (change)="onLlmModelChange($event)">
+            <!-- [selected] on the option, not [value] on the select. The
+                 select's value binding is applied in the same change-detection
+                 pass that creates these options, and when it lands first the
+                 browser finds no matching option and falls back to index 0 —
+                 showing whatever sorts alphabetically first while the real
+                 setting was something else entirely. Marking the option keeps
+                 the two in step whatever the order. -->
+            <select (change)="onLlmModelChange($event)">
               @for (name of llmModelChoices(); track name) {
-                <option [value]="name">{{ name }}</option>
+                <option [value]="name" [selected]="name === llmModel()">{{ name }}</option>
               }
             </select>
           } @else {

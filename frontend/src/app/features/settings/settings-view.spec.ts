@@ -109,6 +109,27 @@ describe('SettingsView', () => {
     );
     expect(modelSelect).toBeTruthy();
     expect(modelSelect!.value).toBe('gemma4-e2b-96k');
+
+    // The option's own selected flag, not just the select's value. Binding
+    // [value] on the select passed this check in a test while failing in a
+    // browser, because whenStable() grants an extra change-detection pass that
+    // the real render does not — so assert the thing that actually decides
+    // what is displayed.
+    const chosen = Array.from(modelSelect!.options).filter((o) => o.selected);
+    expect(chosen.map((o) => o.value)).toEqual(['gemma4-e2b-96k']);
+  });
+
+  it('keeps the stored model when another setting is saved', async () => {
+    // The reported symptom: change the budget, save, and the model comes back
+    // as whatever sorts first. It only ever happened because the dropdown was
+    // already showing the wrong option.
+    const fixture = TestBed.createComponent(SettingsView);
+    await fixture.whenStable();
+
+    const component = fixture.componentInstance as unknown as { save: () => Promise<void> };
+    await component.save();
+
+    expect(service.patches[0].llm_model).toBe('gemma4-e2b-96k');
   });
 
   it('falls back to a text field when the endpoint could not be listed', async () => {
