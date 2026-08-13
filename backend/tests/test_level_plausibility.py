@@ -81,7 +81,7 @@ def test_missing_inputs_give_none():
 
 
 def test_the_veri_signal_stores_no_levels():
-    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, SWING)
+    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, "Sell", SWING)
     assert levels["entry_price"] is None
     assert levels["stop_loss"] is None
     assert levels["price_target"] is None
@@ -90,14 +90,14 @@ def test_the_veri_signal_stores_no_levels():
 def test_derived_numbers_go_out_with_their_inputs():
     """A "2.40 : 1, +1.21R" beside a trade with no levels reads as confidence
     the analysis never had. Both are computed from entry/stop/target."""
-    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, SWING)
+    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, "Sell", SWING)
     assert levels["risk_reward"] is None
     assert levels["expected_value_r"] is None
 
 
 def test_win_probability_survives():
     # It is the model's own estimate, not derived from the discarded levels.
-    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, SWING)
+    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, VERI_PRICE, "Sell", SWING)
     assert levels["win_probability"] == 65.0
 
 
@@ -113,7 +113,7 @@ def test_a_grounded_plan_is_kept_whole():
 - **Risk/Reward Ratio**: 2.64 : 1
 - **Expected Value**: +0.98R (favorable)
 """
-    levels = _trade_plan_levels(plan, "**Price Target**: 1.55", VERI_PRICE, SWING)
+    levels = _trade_plan_levels(plan, "**Price Target**: 1.55", VERI_PRICE, "Sell", SWING)
     assert levels["entry_price"] == pytest.approx(1.26)
     assert levels["stop_loss"] == pytest.approx(1.15)
     assert levels["price_target"] == pytest.approx(1.55)
@@ -123,14 +123,14 @@ def test_a_grounded_plan_is_kept_whole():
 
 def test_no_price_keeps_everything():
     # An unknown price is not evidence that the model invented the levels.
-    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, None, SWING)
+    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, None, "Sell", SWING)
     assert levels["entry_price"] == 4.5
     assert levels["risk_reward"] == 2.40
 
 
 def test_a_plan_with_no_levels_at_all_is_not_treated_as_discarded():
     plan = "**Action**: Hold\n\n### Probability & Risk/Reward\n- **Win Probability**: 50%\n"
-    levels = _trade_plan_levels(plan, "", VERI_PRICE, SWING)
+    levels = _trade_plan_levels(plan, "", VERI_PRICE, "Sell", SWING)
     assert levels["entry_price"] is None
     assert levels["win_probability"] == 50.0
 
@@ -160,7 +160,7 @@ ADT_PRICE = 7.31
 
 
 def test_the_target_comes_from_the_trader_not_the_final_decision():
-    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, SWING)
+    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, "Sell", SWING)
 
     assert levels["price_target"] == 7.31, "the manager's 6.80 does not belong with the trader's math"
     assert levels["entry_price"] == 7.28
@@ -170,7 +170,7 @@ def test_the_target_comes_from_the_trader_not_the_final_decision():
 def test_the_stored_risk_reward_is_explainable_by_the_stored_levels():
     """0.08 is (7.31 - 7.28) / (7.28 - 6.90). With a 6.80 target stored instead
     the ratio described a trade that was not on the row."""
-    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, SWING)
+    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, "Sell", SWING)
 
     entry, stop, target = levels["entry_price"], levels["stop_loss"], levels["price_target"]
     implied = (target - entry) / (entry - stop)
@@ -182,6 +182,110 @@ def test_the_final_decision_still_supplies_a_target_the_trader_omitted():
     its own should still record the one the decision states."""
     plan = "**Action**: Buy\n\n**Entry Price**: 7.28\n\n**Stop Loss**: 6.9\n"
 
-    levels = _trade_plan_levels(plan, "**Price Target**: 8.50", ADT_PRICE, SWING)
+    levels = _trade_plan_levels(plan, "**Price Target**: 8.50", ADT_PRICE, "Buy", SWING)
 
     assert levels["price_target"] == 8.50
+
+
+# --- levels on the wrong side of the traded price ------------------------------
+
+# ZBH on 2026-08-12, verbatim. Every level is within 8% of the traded price, so
+# the deviation check kept all three — and the target was under the market from
+# the moment it was written. The auto trader bought at $98.41 that afternoon
+# with a stored target of $92.00.
+ZBH_PLAN = """**Action**: Buy
+
+**Entry Price**: 91.0
+
+**Stop Loss**: 90.76
+
+**Target Price**: 92.0
+
+### Probability & Risk/Reward
+- **Win Probability**: 60%
+- **Risk/Reward Ratio**: 4.17 : 1 (potential +1.00 vs risk -0.24)
+- **Expected Value**: +1.10R (favorable)
+"""
+ZBH_PRICE = 97.89
+
+
+def test_a_target_the_price_has_already_passed_is_dropped():
+    """A pullback plan for a pullback that never came. The entry the levels
+    were drawn around is $7 below the market, so the target is reached the
+    instant it is stored.
+
+    The stop stays: at $90.76 it is still under the traded price, so it is a
+    real floor — merely a distant one — and the watchdog can watch it.
+    """
+    levels = _trade_plan_levels(ZBH_PLAN, "", ZBH_PRICE, "Buy", POSITION)
+
+    assert levels["price_target"] is None
+    assert levels["stop_loss"] == 90.76
+
+
+def test_a_stop_the_price_is_already_under_is_dropped():
+    """It would fire the moment it was stored. Nulling it also hands the signal
+    to the ATR fallback, which is how a Buy still ends up with a usable exit."""
+    plan = ZBH_PLAN.replace("**Stop Loss**: 90.76", "**Stop Loss**: 99.10")
+
+    levels = _trade_plan_levels(plan, "", ZBH_PRICE, "Buy", POSITION)
+
+    assert levels["stop_loss"] is None
+
+
+def test_the_derived_numbers_go_out_with_a_wrong_side_level():
+    """4.17 : 1 beside no levels at all reads as a good bet nobody can check."""
+    levels = _trade_plan_levels(ZBH_PLAN, "", ZBH_PRICE, "Buy", POSITION)
+
+    assert levels["risk_reward"] is None
+    assert levels["expected_value_r"] is None
+    # The model's own estimate survives, as it does everywhere else — it is not
+    # derived from the levels.
+    assert levels["win_probability"] == 60.0
+
+
+def test_the_unreached_entry_itself_is_kept():
+    """It is the one number that is still true: this is the price the model
+    wanted to pay, and it says plainly why the rest was dropped."""
+    levels = _trade_plan_levels(ZBH_PLAN, "", ZBH_PRICE, "Buy", POSITION)
+
+    assert levels["entry_price"] == 91.0
+
+
+def test_a_target_level_with_the_price_exactly_on_it_is_dropped():
+    """ADT, whose stored decision was Hold at $7.31 with a $7.31 target. There
+    is no move left to watch for."""
+    levels = _trade_plan_levels(ADT_PLAN, ADT_RATIONALE, ADT_PRICE, "Hold", SWING)
+
+    assert levels["price_target"] is None
+
+
+def test_a_coherent_plan_is_untouched():
+    """GOOG the same day: stop below, target above, both kept."""
+    plan = """**Action**: Buy
+
+**Entry Price**: 342.37
+
+**Stop Loss**: 315.04
+
+**Target Price**: 377.09
+
+### Probability & Risk/Reward
+- **Win Probability**: 65%
+- **Risk/Reward Ratio**: 1.27 : 1
+- **Expected Value**: +0.48R (favorable)
+"""
+    levels = _trade_plan_levels(plan, "", 342.37, "Overweight", POSITION)
+
+    assert levels["stop_loss"] == 315.04
+    assert levels["price_target"] == 377.09
+    assert levels["risk_reward"] == 1.27
+
+
+def test_a_sell_signal_keeps_levels_that_point_downward():
+    """This app is long-only and takes no action on a Sell, so its levels are
+    left as stated rather than screened against a direction it never trades."""
+    levels = _trade_plan_levels(VERI_PLAN, VERI_RATIONALE, 4.60, "Sell", SWING)
+
+    assert levels["price_target"] == 3.9
+    assert levels["stop_loss"] == 4.25

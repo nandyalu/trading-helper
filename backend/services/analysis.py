@@ -25,6 +25,7 @@ from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
 from backend.services.signals import (
     BUYISH_DECISIONS,
+    SELLISH_DECISIONS,
     DEFAULT_HORIZON,
     HORIZONS,
     extract_entry_price,
@@ -322,8 +323,38 @@ def _resolve_stop_loss(
     return suggestion.stop if suggestion else None
 
 
+def _levels_on_the_wrong_side(
+    decision: str, stop: float | None, target: float | None, price: float
+) -> tuple[float | None, float | None]:
+    """Drop a stop at or above the traded price, and a target at or below it.
+
+    The deviation check asks only *how far* a level is from the price, never
+    *which side* of it the level is on, and a plan can be entirely reasonable
+    for an entry that never happened. ZBH on 2026-08-12 is the case: the trader
+    proposed buying a pullback to $91.00 with a stop at $90.76 and a target at
+    $92.00, and the stock was at $97.89. Every level is within 8% of the price,
+    so all three survived, and the signal was stored with a target the market
+    had already passed.
+
+    Levels are only ever read from the traded price forward — the watchdog
+    watches from there, the auto trader buys from there. A target under it is
+    reached the instant it is written; a stop over it triggers the same way.
+    Neither describes anything that can still happen.
+
+    Sell-ish decisions are left alone. This app is long-only, so it takes no
+    action on them and their levels point the other way by design.
+    """
+    if decision in SELLISH_DECISIONS:
+        return stop, target
+    if stop is not None and stop >= price:
+        stop = None
+    if target is not None and target <= price:
+        target = None
+    return stop, target
+
+
 def _trade_plan_levels(
-    trader_plan: str, rationale: str, price: float | None, params: dict
+    trader_plan: str, rationale: str, price: float | None, decision: str, params: dict
 ) -> dict:
     """Entry / stop / target and the two derived numbers, with anything the
     model invented removed.
@@ -369,7 +400,24 @@ def _trade_plan_levels(
             ", ".join(f"{name}={value}" for name, value in discarded.items()),
         )
 
-    levels_intact = not discarded
+    stop, target = (
+        _levels_on_the_wrong_side(decision, kept["stop_loss"], kept["price_target"], price)
+        if price
+        else (kept["stop_loss"], kept["price_target"])
+    )
+    if stop is None and kept["stop_loss"] is not None:
+        log.warning(
+            "Discarded a stop at %.4f on a %s priced at %.4f — it is at or above the price",
+            kept["stop_loss"], decision, price,
+        )
+    if target is None and kept["price_target"] is not None:
+        log.warning(
+            "Discarded a target at %.4f on a %s priced at %.4f — the price is already past it",
+            kept["price_target"], decision, price,
+        )
+    kept["stop_loss"], kept["price_target"] = stop, target
+
+    levels_intact = not discarded and stop is not None and target is not None
     return {
         **kept,
         "win_probability": extract_win_probability(trader_plan),
@@ -404,7 +452,7 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
             max_days=params["max_eval_days"],
         )
     )
-    levels = _trade_plan_levels(trader_plan, rationale, price, params)
+    levels = _trade_plan_levels(trader_plan, rationale, price, decision, params)
     signal_id = db.record_signal(
         ticker=ticker,
         decision=decision,
@@ -576,6 +624,7 @@ def format_decision_embed(
             final_state.get("trader_investment_plan") or "",
             rationale,
             price,
+            decision,
             horizon_params(final_state.get("horizon")),
         )
     )

@@ -289,8 +289,28 @@ Defense 2 is the one that must never be removed. A prompt cannot make a 2B
 model reliable, and a fabricated stop is worse than no stop: the watchdog arms
 an alert at a price the stock may never reach, or fires one immediately.
 
+3. **`analysis._levels_on_the_wrong_side` drops a stop at or above the traded
+   price and a target at or below it.** Defense 2 asks only how far a level is
+   from the price, never which side of it the level is on, and the gap between
+   those two questions is wide: 14 of the first 42 signals — a third of the
+   book — held a level on the wrong side while every one of them sat inside the
+   deviation tolerance. The shape is always the same. The model proposes a
+   pullback entry, draws its stop and target around *that* entry, and the
+   pullback never comes: ZBH on 2026-08-12 wanted to buy $91.00 with a $90.76
+   stop and a $92.00 target while the stock traded at $97.89. All three levels
+   are within 8% of the price and the plan is internally coherent — it is only
+   the entry that never happened. Levels are read from the traded price
+   forward, so a target under it is reached the instant it is stored and a stop
+   over it triggers the same way. Nulling the stop also hands the signal to the
+   ATR fallback in `_resolve_stop_loss`, which is how a Buy still ends up with
+   a usable exit. Sell-ish decisions are exempt: this app is long-only, takes
+   no action on them, and their levels point the other way by design.
+
 `backend/scripts/scrub_implausible_levels.py` clears bad levels from rows
-written before the check existed.
+written before defense 2 existed; `backend/scripts/clear_wrong_side_levels.py`
+does the same for defense 3. Both leave graded signals alone — grading read the
+target to decide `price_target_hit`, so rewriting it afterwards would
+contradict a verdict already given.
 
 ## Market data goes through the bar cache
 
