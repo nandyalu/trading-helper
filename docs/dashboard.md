@@ -41,7 +41,7 @@ The price chart carries the analysis on it, because a price chart on its own ans
 
 Entries sit below the bar and exits above it, so a Buy and the trade that followed it do not overlap. The stop and target lines come from the **newest** signal only — an older signal's levels were superseded, not merely graded, and drawing them would put a stale line on the chart.
 
-Use the range buttons to change the window. The chart always fits the full range you asked for.
+The chart opens on 30 days, which is the window a swing signal is actually judged over. Use the range buttons for more context; the chart always fits the full range you asked for.
 
 ### What happened
 

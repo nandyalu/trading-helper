@@ -40,7 +40,9 @@ export class TickerDetailPage {
   protected readonly analyzing = signal(false);
   protected readonly message = signal<string | null>(null);
   protected readonly refreshingPrice = signal(false);
-  protected readonly chartDays = signal(180);
+  // 30 days, matching the 1-2 week trade horizon: the window a signal is
+  // actually judged over, rather than six months of context around it.
+  protected readonly chartDays = signal(30);
 
   protected readonly tradePrice = signal(0);
   protected readonly tradeQuantity = signal(0);
