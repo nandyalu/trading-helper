@@ -985,3 +985,61 @@ def test_the_rules_explain_what_the_numbers_mean():
     # Defining them is information; ranking by them would be taking the
     # allocation decision away from the model, which is its to make.
     assert "prefer" not in prompt.lower()
+
+
+def test_exits_wait_for_the_buy_to_fill(monkeypatch):
+    """A cash account counts every resting sell against the position it can
+    see. A stop and a take-profit for three shares each, placed while the buy
+    is still submitted, read as six shares sold against nothing — the broker
+    refuses the pair with GENERATE_NEW_SHORT_POSITION. Both of 2026-08-13's
+    buys filled and neither got its exits for exactly this reason."""
+    order_of_events = []
+    statuses = iter(["SUBMITTED", "SUBMITTED", "FILLED"])
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent, "_FILL_POLL_SECONDS", 0)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "get_order_detail",
+        lambda _id: order_of_events.append("poll") or {"status": next(statuses, "FILLED")},
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda *a: order_of_events.append("arm") or [],
+    )
+    monkeypatch.setattr(agent.db, "record_agent_trade", lambda **kw: 1)
+
+    agent._arm_exits(
+        {"ticker": "ZBH", "quantity": 3, "side": "buy"}, 95.30, 101.50, client_order_id="x"
+    )
+
+    assert order_of_events.count("poll") == 3, "it should keep asking until the buy is done"
+    assert order_of_events[-1] == "arm", "arming must come after the fill, never before"
+
+
+def test_a_buy_that_never_fills_is_left_unguarded_rather_than_shorted(monkeypatch):
+    """Placing exits against shares that may not exist is how the short
+    rejection happens; leaving it unguarded and saying so is the safer half."""
+    armed = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent, "_FILL_WAIT_SECONDS", 0)
+    monkeypatch.setattr(agent.sandbox_broker, "get_order_detail", lambda _id: {"status": "SUBMITTED"})
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: armed.append(a))
+
+    agent._arm_exits(
+        {"ticker": "ZBH", "quantity": 3, "side": "buy"}, 95.30, 101.50, client_order_id="x"
+    )
+
+    assert armed == []
+
+
+def test_a_rejected_buy_stops_the_wait_immediately(monkeypatch):
+    armed = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent, "_FILL_POLL_SECONDS", 0)
+    monkeypatch.setattr(agent.sandbox_broker, "get_order_detail", lambda _id: {"status": "REJECTED"})
+    monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: armed.append(a))
+
+    agent._arm_exits(
+        {"ticker": "ZBH", "quantity": 3, "side": "buy"}, 95.30, 101.50, client_order_id="x"
+    )
+
+    assert armed == []

@@ -24,6 +24,7 @@ import datetime
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 
 from backend.database import db
@@ -515,7 +516,42 @@ def _cancel_resting_exits(ticker: str) -> int:
     return cancelled
 
 
-def _arm_exits(order: dict, stop_price: float | None, target_price: float | None) -> None:
+# How long to wait for a buy to fill before arming its exits, and how often to
+# ask. A market order in session hours fills in well under a second; this is
+# generous enough to cover a slow one without holding the decision pass open.
+_FILL_WAIT_SECONDS = 20
+_FILL_POLL_SECONDS = 2
+
+
+def _await_fill(client_order_id: str) -> bool:
+    """Block until the buy has actually filled, or give up.
+
+    Exits cannot be placed before the shares exist. A cash account counts every
+    resting sell against the position it can see, so a stop and a take-profit
+    for three shares each, placed while the buy is still submitted, read as six
+    shares sold against nothing — the broker refuses the pair outright with
+    GENERATE_NEW_SHORT_POSITION. That is exactly what happened on 2026-08-13:
+    both buys filled and neither got its exits, because arming ran milliseconds
+    after the order was sent rather than after it was done.
+    """
+    deadline = time.monotonic() + _FILL_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        detail = sandbox_broker.get_order_detail(client_order_id)
+        status = str((detail or {}).get("status") or "").upper()
+        if status in ("FILLED", "PARTIAL_FILLED"):
+            return True
+        if status in ("CANCELLED", "REJECTED", "FAILED", "EXPIRED"):
+            return False
+        time.sleep(_FILL_POLL_SECONDS)
+    return False
+
+
+def _arm_exits(
+    order: dict,
+    stop_price: float | None,
+    target_price: float | None,
+    client_order_id: str | None = None,
+) -> None:
     """Rest the exits under a position the agent just opened: a stop where the
     thesis is wrong, a take-profit where it has played out.
 
@@ -552,6 +588,15 @@ def _arm_exits(order: dict, stop_price: float | None, target_price: float | None
 
     if not stop_price and not target_price:
         log.info("No usable stop or target for %s — the position rests unguarded", order["ticker"])
+        return
+
+    # The shares have to exist before anything can rest against them.
+    if client_order_id and not _await_fill(client_order_id):
+        log.error(
+            "%s did not fill within %ds — leaving it unguarded rather than placing exits "
+            "against shares that may not exist",
+            order["ticker"], _FILL_WAIT_SECONDS,
+        )
         return
     try:
         legs = sandbox_broker.place_exit_bracket(
@@ -712,7 +757,12 @@ def run_once() -> AgentRun:
         )
         run.placed.append(order)
         if order["side"] == "buy":
-            _arm_exits(order, stops.get(order["ticker"]), targets.get(order["ticker"]))
+            _arm_exits(
+                order,
+                stops.get(order["ticker"]),
+                targets.get(order["ticker"]),
+                client_order_id=result["client_order_id"],
+            )
         else:
             # The position is being exited, so any resting exit on it would
             # try to sell shares that are no longer held.
