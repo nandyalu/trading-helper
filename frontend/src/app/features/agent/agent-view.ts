@@ -3,11 +3,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { AgentTrade } from '../../core/models/api.models';
+import { LineChart, LineChartPoint } from '../../shared/line-chart';
 import { AgentService } from '../../core/services/agent.service';
 
 @Component({
   selector: 'app-agent-view',
-  imports: [RouterLink, UpperCasePipe],
+  imports: [RouterLink, UpperCasePipe, LineChart],
   templateUrl: './agent-view.html',
 })
 export class AgentView {
@@ -16,6 +17,13 @@ export class AgentView {
   protected readonly trades = this.agentService.trades;
   protected readonly performance = this.agentService.performance;
   protected readonly history = this.agentService.history;
+
+  /** Equity per trading day. Plotted against the budget rather than from zero,
+   * so the line crossing its own starting level is the thing you see first —
+   * that is the only question this chart answers. */
+  protected readonly equityCurve = computed<LineChartPoint[]>(() =>
+    this.agentService.curve().map((p) => ({ time: p.date, value: p.equity })),
+  );
 
   protected readonly running = signal(false);
   protected readonly message = signal<string | null>(null);

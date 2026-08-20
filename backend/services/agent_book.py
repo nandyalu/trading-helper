@@ -349,3 +349,100 @@ def trades_for_signal(signal_id: int) -> list[TradeRow]:
     exit that closed the lot is found by the FIFO match rather than by id.
     """
     return [row for row in trade_history() if row.signal_id == signal_id]
+
+
+@dataclass
+class EquityPoint:
+    """One day on the agent's equity curve."""
+
+    date: datetime.date
+    equity: float
+    cash: float
+    market_value: float
+
+
+def equity_curve(trades=None, today: datetime.date | None = None) -> list[EquityPoint]:
+    """The agent's equity, one point per trading day since its first fill.
+
+    Rebuilt from the ledger and the bar cache rather than recorded daily. A
+    daily snapshot — which is how the paper book does it — can only ever draw
+    the days since it was switched on, and the agent has been trading longer
+    than this curve has existed. Both sources are already here: the filled
+    trades say what was held on any past day, and a completed session's close
+    never changes, which is the whole premise of the bar cache.
+
+    It also cannot drift. A snapshot table is a second copy of a number the
+    ledger already implies, and the two disagreeing would leave nothing to say
+    which was right.
+
+    The calendar comes from SPY, not from the held tickers, so the line does
+    not develop gaps on a day a thinly-traded holding printed no bar.
+    """
+    from backend.services import bars
+
+    today = today or datetime.date.today()
+    filled = [
+        t for t in (trades if trades is not None else db.get_agent_trades())
+        if t.status == "filled" and t.price is not None
+    ]
+    if not filled:
+        return []
+
+    def day_of(trade) -> datetime.date:
+        return (trade.filled_at or trade.placed_at).date()
+
+    start = min(day_of(t) for t in filled)
+    sessions = [
+        datetime.date.fromisoformat(bar.date)
+        for bar in bars.get_bars("SPY", start, include_today=True, today=today)
+    ]
+    if not sessions:
+        return []
+
+    closes: dict[str, dict[datetime.date, float]] = {}
+    for ticker in {t.ticker for t in filled}:
+        closes[ticker] = {
+            datetime.date.fromisoformat(bar.date): bar.close
+            for bar in bars.get_bars(ticker, start, include_today=True, today=today)
+        }
+
+    budget = get_budget()
+    by_day: dict[datetime.date, list] = {}
+    for trade in filled:
+        by_day.setdefault(day_of(trade), []).append(trade)
+
+    curve: list[EquityPoint] = []
+    cash = budget
+    held: dict[str, float] = {}
+    # Carried so a holding is never valued at nothing on a day its own ticker
+    # printed no bar — a missing quote is not a position worth zero.
+    last_close: dict[str, float] = {}
+    for session in sessions:
+        for trade in by_day.get(session, []):
+            amount = trade.quantity * trade.price
+            if trade.side == "buy":
+                cash -= amount
+                held[trade.ticker] = held.get(trade.ticker, 0.0) + trade.quantity
+            else:
+                cash += amount
+                held[trade.ticker] = held.get(trade.ticker, 0.0) - trade.quantity
+
+        market_value = 0.0
+        for ticker, quantity in held.items():
+            if quantity <= _QUANTITY_EPSILON:
+                continue
+            close = closes.get(ticker, {}).get(session) or last_close.get(ticker)
+            if close is None:
+                continue
+            last_close[ticker] = close
+            market_value += quantity * close
+
+        curve.append(
+            EquityPoint(
+                date=session,
+                equity=cash + market_value,
+                cash=cash,
+                market_value=market_value,
+            )
+        )
+    return curve

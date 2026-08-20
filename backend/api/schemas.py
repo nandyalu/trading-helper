@@ -324,6 +324,13 @@ class AgentTradeOut(OrmModel):
     signal_id: int | None
 
 
+class AgentEquityPointOut(OrmModel):
+    date: date
+    equity: float
+    cash: float
+    market_value: float
+
+
 class AgentOrderOut(BaseModel):
     ticker: str
     side: str

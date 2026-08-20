@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 
-import { AgentBook, AgentTrade } from '../../core/models/api.models';
+import { AgentBook, AgentEquityPoint, AgentTrade } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 import { AgentView } from './agent-view';
 
@@ -67,6 +67,7 @@ class AgentServiceStub {
   readonly trades = signal<AgentTrade[]>([]);
   readonly performance = signal(null);
   readonly history = signal([]);
+  readonly curve = signal<AgentEquityPoint[]>([]);
   async load(): Promise<void> {}
   async runNow() {
     return { placed: [], rejected: [], failed: [], reasoning: '' };
@@ -138,5 +139,29 @@ describe('AgentView', () => {
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).not.toContain('Exits with no holding');
+  });
+
+  it('draws the equity curve once there are points', async () => {
+    service.curve.set([
+      { date: '2026-08-13', equity: 1004.04, cash: 17.45, market_value: 986.59 },
+      { date: '2026-08-14', equity: 1006.48, cash: 17.45, market_value: 989.03 },
+    ]);
+    const fixture = TestBed.createComponent(AgentView);
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-line-chart')).toBeTruthy();
+    expect(el.textContent).not.toContain('No curve yet');
+  });
+
+  it('says the curve has not started rather than drawing an empty chart', async () => {
+    // Before the first fill there is nothing to plot, and an axis with no line
+    // on it reads as a bug.
+    const fixture = TestBed.createComponent(AgentView);
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-line-chart')).toBeNull();
+    expect(el.textContent).toContain('No curve yet');
   });
 });

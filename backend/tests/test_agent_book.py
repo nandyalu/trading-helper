@@ -323,3 +323,96 @@ def test_the_exit_is_matched_by_fifo_not_by_signal_id(monkeypatch):
 def test_a_signal_nothing_was_traded_on_has_no_rows(monkeypatch):
     monkeypatch.setattr(agent_book.db, "get_agent_trades", lambda: [])
     assert agent_book.trades_for_signal(99) == []
+
+
+# --- the equity curve ----------------------------------------------------------
+
+
+class _Trade:
+    """A filled agent order, in the shape equity_curve reads."""
+
+    def __init__(self, ticker, side, quantity, price, day, status="filled"):
+        self.ticker, self.side, self.quantity, self.price = ticker, side, quantity, price
+        self.filled_at = datetime.datetime.fromisoformat(f"{day}T15:00:00")
+        self.placed_at = self.filled_at
+        self.status = status
+
+
+def _bars(monkeypatch, closes: dict[str, dict[str, float]], sessions: list[str]):
+    """Stub the bar cache: SPY supplies the calendar, the rest supply closes."""
+
+    class Bar:
+        def __init__(self, date, close):
+            self.date, self.close = date, close
+
+    def get_bars(ticker, start, include_today=False, today=None):
+        if ticker == "SPY":
+            return [Bar(d, 100.0) for d in sessions]
+        return [Bar(d, c) for d, c in sorted(closes.get(ticker, {}).items())]
+
+    from backend.services import bars
+
+    monkeypatch.setattr(bars, "get_bars", get_bars)
+
+
+def test_the_curve_covers_every_session_not_only_the_trading_days(monkeypatch):
+    """A daily snapshot table would only ever draw the days since it was
+    switched on. Rebuilding from the ledger draws the whole history."""
+    _bars(
+        monkeypatch,
+        {"ZBH": {"2026-08-13": 100.0, "2026-08-14": 110.0, "2026-08-17": 90.0}},
+        ["2026-08-13", "2026-08-14", "2026-08-17"],
+    )
+    monkeypatch.setattr(agent_book, "get_budget", lambda: 1000.0)
+
+    curve = agent_book.equity_curve([_Trade("ZBH", "buy", 3, 100.0, "2026-08-13")])
+
+    assert [p.date.isoformat() for p in curve] == ["2026-08-13", "2026-08-14", "2026-08-17"]
+    # 700 cash + 3 shares marked at each day's close.
+    assert [round(p.equity, 2) for p in curve] == [1000.0, 1030.0, 970.0]
+
+
+def test_a_sale_moves_the_value_into_cash(monkeypatch):
+    _bars(
+        monkeypatch,
+        {"ZBH": {"2026-08-13": 100.0, "2026-08-14": 110.0}},
+        ["2026-08-13", "2026-08-14"],
+    )
+    monkeypatch.setattr(agent_book, "get_budget", lambda: 1000.0)
+
+    curve = agent_book.equity_curve([
+        _Trade("ZBH", "buy", 3, 100.0, "2026-08-13"),
+        _Trade("ZBH", "sell", 3, 110.0, "2026-08-14"),
+    ])
+
+    assert curve[-1].market_value == 0.0
+    assert round(curve[-1].cash, 2) == 1030.0
+    assert round(curve[-1].equity, 2) == 1030.0
+
+
+def test_a_holding_with_no_bar_that_day_keeps_its_last_close(monkeypatch):
+    """A missing quote is not a position worth zero — that would draw a cliff
+    on the chart and recover from it the next day."""
+    _bars(
+        monkeypatch,
+        {"ZBH": {"2026-08-13": 100.0, "2026-08-17": 90.0}},  # nothing on the 14th
+        ["2026-08-13", "2026-08-14", "2026-08-17"],
+    )
+    monkeypatch.setattr(agent_book, "get_budget", lambda: 1000.0)
+
+    curve = agent_book.equity_curve([_Trade("ZBH", "buy", 3, 100.0, "2026-08-13")])
+
+    assert round(curve[1].equity, 2) == 1000.0
+
+
+def test_an_unfilled_order_is_not_on_the_curve(monkeypatch):
+    """A pending buy has moved no money, so it cannot have moved equity."""
+    _bars(monkeypatch, {}, ["2026-08-13"])
+    monkeypatch.setattr(agent_book, "get_budget", lambda: 1000.0)
+
+    assert agent_book.equity_curve([_Trade("ZBH", "buy", 3, 100.0, "2026-08-13", "pending")]) == []
+
+
+def test_no_fills_means_no_curve(monkeypatch):
+    _bars(monkeypatch, {}, ["2026-08-13"])
+    assert agent_book.equity_curve([]) == []

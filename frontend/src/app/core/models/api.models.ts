@@ -258,6 +258,13 @@ export interface AgentHolding {
   unrealized_pnl: number | null;
 }
 
+export interface AgentEquityPoint {
+  date: string;
+  equity: number;
+  cash: number;
+  market_value: number;
+}
+
 export interface AgentBook {
   enabled: boolean;
   /** False means the app holds production credentials, where the agent refuses

@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   AgentBook,
   AgentComparison,
+  AgentEquityPoint,
   AgentRun,
   AgentTrade,
   AgentTradeRow,
@@ -18,22 +19,26 @@ export class AgentService {
   private readonly _trades = signal<AgentTrade[]>([]);
   private readonly _performance = signal<AgentComparison | null>(null);
   private readonly _history = signal<AgentTradeRow[]>([]);
+  private readonly _curve = signal<AgentEquityPoint[]>([]);
   readonly book = this._book.asReadonly();
   readonly trades = this._trades.asReadonly();
   readonly performance = this._performance.asReadonly();
   readonly history = this._history.asReadonly();
+  readonly curve = this._curve.asReadonly();
 
   async load(): Promise<void> {
-    const [book, trades, performance, history] = await Promise.all([
+    const [book, trades, performance, history, curve] = await Promise.all([
       firstValueFrom(this.http.get<AgentBook>('/api/agent')),
       firstValueFrom(this.http.get<AgentTrade[]>('/api/agent/trades')),
       firstValueFrom(this.http.get<AgentComparison>('/api/agent/performance')),
       firstValueFrom(this.http.get<AgentTradeRow[]>('/api/agent/history')),
+      firstValueFrom(this.http.get<AgentEquityPoint[]>('/api/agent/curve')),
     ]);
     this._book.set(book);
     this._trades.set(trades);
     this._performance.set(performance);
     this._history.set(history);
+    this._curve.set(curve);
   }
 
   async runNow(): Promise<AgentRun> {

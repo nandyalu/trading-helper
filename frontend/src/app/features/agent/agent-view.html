@@ -63,6 +63,28 @@
       </div>
     </div>
 
+    <section class="card">
+      <div class="card-head">
+        <h2>Equity curve</h2>
+        <p class="hint">
+          Cash plus the market value of what it holds, one point per trading day since its first
+          fill. Rebuilt from the ledger and each day's closing price, so it covers every day the
+          agent has traded rather than starting the day the chart was added.
+        </p>
+      </div>
+      <div class="card-body">
+        @if (equityCurve().length === 0) {
+          <div class="empty">
+            <span class="empty-icon" aria-hidden="true">📈</span>
+            <strong>No curve yet</strong>
+            <span>It starts on the day the agent's first order fills.</span>
+          </div>
+        } @else {
+          <app-line-chart [points]="equityCurve()" />
+        }
+      </div>
+    </section>
+
     @if (performance(); as p) {
       @if (p.strategies.length) {
         <section class="card">

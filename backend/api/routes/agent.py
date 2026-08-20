@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from backend.api.schemas import (
     AgentBookOut,
     AgentComparisonOut,
+    AgentEquityPointOut,
     AgentRunOut,
     AgentTradeOut,
     AgentTradeRowOut,
@@ -109,3 +110,15 @@ def get_history():
     in the holdings table."""
     rows = agent_book.trade_history()
     return [AgentTradeRowOut.model_validate(r) for r in reversed(rows)]
+
+
+@router.get("/curve", response_model=list[AgentEquityPointOut])
+def get_curve():
+    """The agent's equity, one point per trading day since its first fill.
+
+    Rebuilt from the ledger and the bar cache on each request rather than read
+    from stored snapshots — see agent_book.equity_curve for why. Cheap: a
+    completed session's close is served from the cache, so a repeat call
+    fetches nothing.
+    """
+    return [AgentEquityPointOut.model_validate(p) for p in agent_book.equity_curve()]

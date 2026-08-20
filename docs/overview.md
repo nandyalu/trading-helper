@@ -184,6 +184,15 @@ The trade still goes through and still gets its exits; it is exposed for a few s
 The model chooses what to buy and how much. The app only refuses orders that cannot be executed as stated — spending cash that is not there, selling shares that are not held, fractional shares.
 An order that costs more than the cash left is dropped rather than resized, because resizing would quietly turn its decision into a different one.
 
+### The equity curve
+
+Cash plus the market value of what it holds, one point per trading day since its first fill.
+
+It is rebuilt each time you open the page, from the ledger and the closing price of each past day, rather than read from a stored daily snapshot.
+That is what lets it cover every day the agent has traded instead of starting on the day the chart was added — and it cannot drift, because a stored snapshot would be a second copy of a number the ledger already implies, with nothing to say which one was right when they disagreed.
+
+A holding that printed no bar that day keeps its previous close rather than counting as nothing, so a missing quote does not draw a cliff and recover from it the next day.
+
 ### Is the model earning its keep?
 
 The agent picks stocks with an LLM, which is only worth doing if it beats the two things it could be replaced by tomorrow.
