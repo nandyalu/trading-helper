@@ -165,6 +165,9 @@ class AgentPosition:
     price: float | None = None
     opened: datetime.date | None = None
     exits: list[RestingExit] = field(default_factory=list)
+    # An arming already queued for the next open. Shown so the button can say
+    # so rather than inviting a second press that changes nothing.
+    arm_queued: bool = False
 
     @property
     def market_value(self) -> float | None:
@@ -233,6 +236,7 @@ def agent_position(ticker: str, price: float | None = None) -> AgentPosition | N
         price=price,
         opened=opened,
         exits=exits,
+        arm_queued=ticker in db.pending_exit_arm_tickers(),
     )
 
 

@@ -139,6 +139,7 @@ const UNPROTECTED: AgentPosition = {
   unrealized_pct: 1.05,
   exits: [],
   unprotected: true,
+  arm_queued: false,
 };
 
 const BRACKETED: AgentPosition = {
@@ -326,7 +327,7 @@ describe('TickerDetailPage', () => {
     await create();
 
     const button = Array.from(element.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Place the exits now'),
+      b.textContent?.includes('Place the exits'),
     );
     expect(button).toBeTruthy();
   });
@@ -338,8 +339,30 @@ describe('TickerDetailPage', () => {
     await create();
 
     const button = Array.from(element.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Place the exits now'),
+      b.textContent?.includes('Place the exits'),
     );
     expect(button).toBeUndefined();
+  });
+
+  it('says an arming is queued instead of offering the button again', async () => {
+    // Pressing it twice changes nothing, and a button that looks live implies
+    // the first press did not register.
+    stub.detail = { ...DETAIL, agent_position: { ...UNPROTECTED, arm_queued: true } };
+    await create();
+
+    const button = Array.from(element.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Place the exits'),
+    );
+    expect(button).toBeUndefined();
+    expect(element.textContent).toContain('Queued');
+  });
+
+  it('still warns that nothing is protecting a queued position', async () => {
+    // Queued is not protected. The exits go on at the open, and the overnight
+    // gap is exactly when they would have mattered.
+    stub.detail = { ...DETAIL, agent_position: { ...UNPROTECTED, arm_queued: true } };
+    await create();
+
+    expect(element.textContent).toContain('nothing is resting at the broker');
   });
 });

@@ -409,6 +409,7 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
     calls = []
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
@@ -442,6 +443,7 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
 def test_a_run_that_places_nothing_does_not_settle_twice(monkeypatch):
     calls = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: calls.append("settle") or [])
@@ -599,6 +601,7 @@ def test_a_sell_does_not_arm_exits(monkeypatch):
     monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 0)
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "settle_pending", lambda: [])
@@ -746,6 +749,7 @@ def test_an_unknown_price_does_not_block_arming(monkeypatch):
 def _reset_world(monkeypatch, held, held_after=None, sell_fails=False, open_market=True):
     """The broker is the authority here, so ``held`` is what it reports."""
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: open_market)
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [])
@@ -790,6 +794,7 @@ def test_a_reset_refuses_before_touching_anything_when_the_market_is_shut(monkey
     check comes before the first cancel."""
     touched = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: touched.append("cancel") or 1)
@@ -824,6 +829,7 @@ def test_the_ledger_survives_if_a_sell_fails(monkeypatch):
 
 def test_the_ledger_survives_if_the_account_cannot_be_read(monkeypatch):
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: None)
     cleared = []
     monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: cleared.append(1) or 0)
@@ -847,6 +853,7 @@ def test_a_failed_sell_leaves_the_other_positions_protected(monkeypatch):
     cancelled = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0, "BBB": 1.0})
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: cancelled.append(t) or 1)
 
@@ -865,6 +872,7 @@ def test_exits_left_over_from_a_site_reset_are_cancelled(monkeypatch):
     """An exit resting against a position that no longer exists is an order to
     sell shares the account does not have."""
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {})
 
     class Stop:
@@ -885,6 +893,7 @@ def test_a_reset_ahead_of_a_site_flatten_disables_the_agent(monkeypatch):
     disagree. An agent trading into that gap buys positions the site reset then
     wipes, leaving the ledger claiming stock that is gone."""
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
     monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
     monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: 5)
@@ -902,6 +911,7 @@ def test_a_reset_ahead_of_a_site_flatten_disables_the_agent(monkeypatch):
 def test_the_normal_reset_still_refuses_a_held_account(monkeypatch):
     """The escape hatch must be asked for explicitly, never the default."""
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
     cleared = []
@@ -919,6 +929,7 @@ def test_a_run_outside_market_hours_is_refused_before_the_model_is_asked(monkeyp
     to buy 6 VT and the broker returned FIXGW_NOT_READY_MARKET."""
     asked = []
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
     monkeypatch.setattr(agent, "_decide", lambda *a, **kw: asked.append(1) or ("", [], []))
@@ -1448,6 +1459,7 @@ def test_arming_by_hand_places_the_missing_exits(monkeypatch):
     armed = []
     states = iter([_position(), _position(exits=[ticker_book.RestingExit("stop", 88.0, 3)])])
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
     monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: next(states))
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
@@ -1466,6 +1478,7 @@ def test_arming_refuses_when_exits_already_rest(monkeypatch):
     from backend.services import ticker_book
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "get_current_price", lambda t: 341.70)
     monkeypatch.setattr(
         ticker_book, "agent_position",
@@ -1485,6 +1498,7 @@ def test_arming_refuses_a_ticker_the_agent_does_not_hold(monkeypatch):
     from backend.services import ticker_book
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "get_current_price", lambda t: 200.0)
     monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: None)
 
@@ -1508,6 +1522,7 @@ def test_arming_reports_plainly_when_nothing_ended_up_resting(monkeypatch):
     from backend.services import ticker_book
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
     monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: _position())
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
@@ -1526,6 +1541,7 @@ def test_arming_invents_no_level_when_none_is_usable(monkeypatch):
     from backend.services import ticker_book
 
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
     monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: _position())
     monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
@@ -1537,3 +1553,104 @@ def test_arming_invents_no_level_when_none_is_usable(monkeypatch):
     result = agent.arm_exits_now("INTC")
 
     assert result["ok"] is False and "No usable level" in result["message"]
+
+
+# --- queueing an arming for the next open --------------------------------------
+
+
+def test_pressing_the_button_while_shut_queues_instead_of_failing(monkeypatch):
+    """The broker refuses a combo outside 9:30-16:00 ET. Telling someone who
+    has already noticed the problem to come back in the morning wastes the one
+    thing they contributed — noticing."""
+    from backend.services import ticker_book
+
+    queued = []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: _position())
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "atr_stop", lambda t, p: 88.0)
+    monkeypatch.setattr(agent.db, "queue_exit_arm", lambda t: queued.append(t) or 1)
+    monkeypatch.setattr(
+        agent, "_arm_exits", lambda *a, **k: pytest.fail("the broker would refuse it now")
+    )
+
+    result = agent.arm_exits_now("INTC")
+
+    assert result["ok"] is True and result["queued"] is True
+    assert queued == ["INTC"]
+    # It must not read as solved: the position is still bare until the open.
+    assert "Nothing is protecting it until then" in result["message"]
+
+
+def test_a_position_that_cannot_be_armed_at_all_is_not_queued(monkeypatch):
+    """Queueing a request that will fail again at the open just moves the
+    disappointment eight hours later."""
+    from backend.services import ticker_book
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 200.0)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: None)
+    monkeypatch.setattr(
+        agent.db, "queue_exit_arm", lambda t: pytest.fail("nothing is held to arm")
+    )
+
+    assert agent.arm_exits_now("AAPL")["ok"] is False
+
+
+def test_the_queue_is_drained_at_the_open(monkeypatch):
+    class Request:
+        id, ticker = 7, "INTC"
+
+    completed = []
+    monkeypatch.setattr(agent.db, "get_pending_exit_arms", lambda: [Request()])
+    monkeypatch.setattr(agent.db, "complete_exit_arm", lambda i, ok, m: completed.append((i, ok, m)))
+    monkeypatch.setattr(agent, "arm_exits_now", lambda t: {"ok": True, "message": f"Armed {t}"})
+
+    results = agent.process_queued_arms()
+
+    assert results == [{"ticker": "INTC", "ok": True, "message": "Armed INTC"}]
+    assert completed == [(7, True, "Armed INTC")]
+
+
+def test_a_request_that_queues_itself_again_counts_as_failed(monkeypatch):
+    """Otherwise it re-queues forever. The market is open by the time this
+    runs, so if arming still cannot happen the reason is not the hour."""
+    class Request:
+        id, ticker = 7, "INTC"
+
+    completed = []
+    monkeypatch.setattr(agent.db, "get_pending_exit_arms", lambda: [Request()])
+    monkeypatch.setattr(agent.db, "complete_exit_arm", lambda i, ok, m: completed.append((i, ok, m)))
+    monkeypatch.setattr(
+        agent, "arm_exits_now", lambda t: {"ok": True, "queued": True, "message": "queued again"}
+    )
+
+    agent.process_queued_arms()
+
+    assert completed[0][1] is False
+
+
+def test_one_bad_request_does_not_stall_the_rest_of_the_queue(monkeypatch):
+    class Request:
+        def __init__(self, id, ticker):
+            self.id, self.ticker = id, ticker
+
+    completed = []
+    monkeypatch.setattr(
+        agent.db, "get_pending_exit_arms", lambda: [Request(1, "BAD"), Request(2, "INTC")]
+    )
+    monkeypatch.setattr(agent.db, "complete_exit_arm", lambda i, ok, m: completed.append((i, ok)))
+
+    def arm(ticker):
+        if ticker == "BAD":
+            raise RuntimeError("boom")
+        return {"ok": True, "message": "Armed INTC"}
+
+    monkeypatch.setattr(agent, "arm_exits_now", arm)
+
+    agent.process_queued_arms()
+
+    assert completed == [(1, False), (2, True)]

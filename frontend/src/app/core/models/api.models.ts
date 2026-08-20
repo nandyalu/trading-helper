@@ -184,6 +184,8 @@ export interface AgentPosition {
   unrealized_pct: number | null;
   exits: RestingExit[];
   unprotected: boolean;
+  /** An arming already waiting for the next open. */
+  arm_queued: boolean;
 }
 
 /** One lot's life in one book, matched FIFO. `pnl` is null while it is open —

@@ -49,9 +49,13 @@
         <span aria-hidden="true">⚠️</span> The auto trader holds this and nothing is resting at the
         broker to close it. The stop and target below are what the analysis proposed, not orders
         that will execute.
-        <button class="btn btn-sm" type="button" (click)="armExits()" [disabled]="arming()">
-          {{ arming() ? 'Placing…' : 'Place the exits now' }}
-        </button>
+        @if (agentPosition()?.arm_queued) {
+          <strong>Queued — the exits go on at the next open.</strong>
+        } @else {
+          <button class="btn btn-sm" type="button" (click)="armExits()" [disabled]="arming()">
+            {{ arming() ? 'Placing…' : 'Place the exits' }}
+          </button>
+        }
       </div>
     }
     @if (armMessage()) {

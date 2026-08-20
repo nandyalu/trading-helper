@@ -66,7 +66,12 @@ It uses the same levels a fresh buy would get: the newest signal's, screened aga
 It never invents a target, because a made-up exit price on a real position is worse than none — it looks decided.
 
 It refuses rather than duplicating when exits are already resting, which is why the button only appears when there are none: two stops on one position sell it twice, and the second sale is a short.
-Outside 9:30–16:00 ET the broker refuses every order, and the button says so plainly instead of failing silently.
+
+**Outside market hours it queues instead of failing.** Webull accepts a standalone order at any time but refuses a linked pair — an OCO or a bracket — outside 9:30–16:00 ET, because tying the legs together needs a routing session that only runs then.
+So pressing the button in the evening records the request, and the app places the orders on the first pass after the next open, then posts what happened.
+Press it again and nothing changes: one pending request per position, because a second press is someone checking it registered, not a second instruction.
+
+A queued position is **not** a protected one, and the warning stays up to say so. The exits go on at the open, and an overnight gap is exactly when they would have mattered.
 
 **Positions taken** lists every lot bought in this ticker, in any book: entry price and date, quantity, exit price and date, days held, and the profit or loss.
 An open lot shows no exit and no profit, because its result is not decided yet, but the days held keep counting.

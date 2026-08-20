@@ -19,6 +19,7 @@ from backend.database.models import (
     TickerStatus,
     Transaction,
     WatchlistTicker,
+    ExitArmRequest,
 )
 
 # --- Watchlist ---------------------------------------------------------------
@@ -651,3 +652,67 @@ def clear_agent_trades(*, _session: Session = None) -> int:
         _session.delete(row)
     _session.commit()
     return len(rows)
+
+
+@write_session
+def queue_exit_arm(ticker: str, *, _session: Session = None) -> int:
+    """Record a request to arm a position's exits at the next open.
+
+    One pending request per ticker. Pressing the button twice is a person
+    checking it registered, not a second instruction, and two requests would
+    place two brackets on one position.
+    """
+    existing = _session.exec(
+        select(ExitArmRequest)
+        .where(ExitArmRequest.ticker == ticker, ExitArmRequest.status == "pending")
+    ).first()
+    if existing is not None:
+        return existing.id
+    row = ExitArmRequest(
+        ticker=ticker,
+        requested_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    _session.add(row)
+    _session.commit()
+    _session.refresh(row)
+    return row.id
+
+
+@read_session
+def get_pending_exit_arms(*, _session: Session = None) -> list[ExitArmRequest]:
+    """Requests still waiting for a market open, oldest first."""
+    return list(
+        _session.exec(
+            select(ExitArmRequest)
+            .where(ExitArmRequest.status == "pending")
+            .order_by(ExitArmRequest.id)
+        ).all()
+    )
+
+
+@read_session
+def pending_exit_arm_tickers(*, _session: Session = None) -> set[str]:
+    """Just the tickers, for the page that greys out the button."""
+    return {
+        row.ticker
+        for row in _session.exec(
+            select(ExitArmRequest).where(ExitArmRequest.status == "pending")
+        ).all()
+    }
+
+
+@write_session
+def complete_exit_arm(
+    request_id: int, ok: bool, message: str, *, _session: Session = None
+) -> None:
+    """Close out a request. Kept rather than deleted: a failed one is the
+    record of an attempt that has to be understood, and a person who queued it
+    is owed the reason."""
+    row = _session.get(ExitArmRequest, request_id)
+    if row is None:
+        return
+    row.status = "done" if ok else "failed"
+    row.completed_at = datetime.datetime.now(datetime.timezone.utc)
+    row.message = message[:500]
+    _session.add(row)
+    _session.commit()

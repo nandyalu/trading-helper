@@ -1215,6 +1215,22 @@ def arm_exits_now(ticker: str) -> dict:
             ),
         }
 
+    # The broker takes a standalone order at any hour but refuses a combo —
+    # an OCO pair or a bracket — outside 9:30-16:00 ET, because linking legs
+    # needs the routing session that only runs then. Rather than telling
+    # someone who has already noticed the problem to come back in the morning,
+    # remember the request and act on it at the open.
+    if not watchdog.is_us_market_hours():
+        db.queue_exit_arm(ticker)
+        return {
+            "ok": True,
+            "queued": True,
+            "message": (
+                f"The market is shut, so {ticker} is queued — the exits go on at the next open. "
+                "Nothing is protecting it until then."
+            ),
+        }
+
     order = {"ticker": ticker, "side": "buy", "quantity": position.quantity}
     try:
         _arm_exits(order, stop, target)
@@ -1232,3 +1248,32 @@ def arm_exits_now(ticker: str) -> dict:
         }
     resting = ", ".join(f"{e.kind} at ${e.price:,.2f}" for e in placed.exits)
     return {"ok": True, "message": f"Armed {ticker}: {resting}."}
+
+
+def process_queued_arms() -> list[dict]:
+    """Act on every request queued while the market was shut.
+
+    Called from the intraday pass, which already runs only during market hours,
+    so the first tick after the open drains the queue. Returns what happened
+    per ticker, so a caller can announce it — a request made the previous
+    evening and silently dropped would be worse than not offering the queue.
+
+    Each is re-checked rather than replayed. Hours have passed: the position
+    may have been sold, exits may have been placed by a fresh buy, and the
+    price has certainly moved, so the levels are computed now rather than
+    remembered from when the button was pressed.
+    """
+    results = []
+    for request in db.get_pending_exit_arms():
+        try:
+            outcome = arm_exits_now(request.ticker)
+        except Exception as exc:  # a bad request must not stall the rest of the queue
+            log.exception("Queued arming failed for %s", request.ticker)
+            outcome = {"ok": False, "message": f"Failed: {exc}"}
+        # A request that re-queues itself would loop forever, so a queued
+        # answer here counts as failure — the market is open, and if arming
+        # still cannot happen the reason is not the hour.
+        ok = bool(outcome.get("ok")) and not outcome.get("queued")
+        db.complete_exit_arm(request.id, ok, outcome["message"])
+        results.append({"ticker": request.ticker, "ok": ok, "message": outcome["message"]})
+    return results

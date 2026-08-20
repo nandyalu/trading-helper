@@ -249,6 +249,18 @@ def morning_sweep() -> None:
     run_on_main(_morning_sweep_job)
 
 
+async def _place_queued_exits() -> None:
+    """Arm the positions someone queued while the market was shut, and say so."""
+    try:
+        results = await asyncio.to_thread(agent.process_queued_arms)
+    except Exception:
+        log.exception("Could not process queued exit arming")
+        return
+    for result in results:
+        icon = "🛡️" if result["ok"] else "⚠️"
+        await notify(f"{icon} {result['message']}")
+
+
 async def _alert_watchdog_job() -> None:
     """Rule-based intraday scan (no LLM): move/volume/stop/target alerts,
     plus event-triggered analyses. Long triggered runs just delay the next
@@ -260,6 +272,11 @@ async def _alert_watchdog_job() -> None:
     # the book would show a position that had already been sold — for the rest
     # of the day, and into the next morning's decision.
     await _settle_agent_fills()
+    # Then the exits someone asked for while the market was shut. First tick
+    # after the open drains the queue, which is the whole promise of the button
+    # — a request made in the evening and silently dropped would be worse than
+    # not offering to remember it.
+    await _place_queued_exits()
     try:
         alerts, to_analyze = await asyncio.to_thread(watchdog.scan_for_alerts)
     except Exception:

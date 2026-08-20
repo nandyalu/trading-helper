@@ -175,6 +175,7 @@ class AgentPositionOut(OrmModel):
     unrealized_pct: float | None
     exits: list[RestingExitOut]
     unprotected: bool
+    arm_queued: bool = False
 
 
 class LotOut(OrmModel):

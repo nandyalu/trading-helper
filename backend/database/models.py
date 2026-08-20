@@ -152,6 +152,31 @@ class AgentTrade(SQLModel, table=True):
     signal_id: int | None = Field(default=None, foreign_key="signal.id", index=True)
 
 
+class ExitArmRequest(SQLModel, table=True):
+    """A request to place the missing exits on a position, waiting for the open.
+
+    The broker accepts a standalone order at any hour but refuses a *combo* —
+    an OCO pair or a bracket — outside 9:30-16:00 ET, because linking legs
+    needs the routing session that only runs during regular hours. So noticing
+    an unprotected position in the evening used to mean remembering to come
+    back in the morning.
+
+    This is the remembering. The request is recorded when it is made and acted
+    on at the next open, which turns "come back at 9:30" into a decision the
+    person already made.
+
+    ``status`` is ours, not the broker's: pending until a pass acts on it, then
+    done or failed with the reason on ``message``.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    requested_at: datetime.datetime
+    status: str = Field(default="pending", index=True)  # "pending" | "done" | "failed"
+    completed_at: datetime.datetime | None = None
+    message: str | None = None  # what happened, for the page that shows it
+
+
 class PaperSnapshot(SQLModel, table=True):
     """End-of-day valuation of the paper book, recorded by the daily task —
     the series behind the equity curve in /paper. One row per day (re-runs

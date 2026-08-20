@@ -203,6 +203,7 @@ The signal-recording stage already substitutes an ATR stop, but only for Buy and
 A target can still be missing, and a position with no exit at all is still possible if the stock has too little history to compute a range.
 When that happens the app **says so**: it records an alert, the Overview lists it under "Needs a decision", and the Auto trader page shows a dash.
 The ticker's own page carries a button that places the missing exits, so fixing it is a click rather than a Python shell.
+Pressed while the market is shut, it queues the request and the app places the orders at the next open — noticing the problem at 11pm is worth something, and it should not depend on remembering again at 9:30.
 Before that, the failure was completely silent — no alert, no ledger row — and the only way to discover it was to look at the broker.
 
 The entry is a limit order priced just through the market rather than a market order.
