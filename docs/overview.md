@@ -225,6 +225,23 @@ That is what lets it cover every day the agent has traded instead of starting on
 
 A holding that printed no bar that day keeps its previous close rather than counting as nothing, so a missing quote does not draw a cliff and recover from it the next day.
 
+### Moving the exits as the analysis changes
+
+Every holding is re-analysed each morning, and the agent can act on what that says about a position it already owns — not only by selling it, but by moving the stop and the take-profit.
+
+This closes a real gap. Exits used to be fixed when a position opened and left untouched until it closed, so GOOG spent a week with a $377.09 take-profit while each morning's analysis put the end of the move at $345.00 — a level the position would never have reached. A stop from a week-old analysis protects a thesis that no longer exists.
+
+The agent decides; the app enforces what is possible. A stop must be below the current price and a target above it, or the order would execute the moment it was placed, and a level that fails that is refused rather than quietly corrected.
+
+Two details make it safe to do repeatedly:
+
+- **Levels are replaced, not cancelled and re-placed.** Cancelling first would leave a window with nothing resting under the position, which is the state most of this design exists to avoid.
+- **A level already where it was asked for is left alone**, so a run that changes nothing costs no orders against a rate-limited API.
+
+A holding with nothing resting on it yet is armed instead, so one action means "set my exits to these" whether or not there are any.
+
+The prompt names what is currently resting on each position, and says plainly when nothing is — the agent cannot move an exit it cannot see, nor notice one that was never placed.
+
 ### The conviction floor
 
 Two settings decide how good a signal has to look before the agent may open a position on it: a minimum chance of working, and a minimum risk/reward.

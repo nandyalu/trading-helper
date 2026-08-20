@@ -213,6 +213,14 @@ def build_prompt(
 
     if book.holdings:
         lines.append("You currently hold:")
+        exits_by_ticker = {
+            h.ticker: {
+                t.exit_kind: t.limit_price
+                for t in db.get_resting_exits(h.ticker)
+                if t.exit_kind and t.limit_price
+            }
+            for h in book.holdings
+        }
         for h in book.holdings:
             value = f"${h.market_value:,.2f}" if h.market_value is not None else "unpriced"
             pnl = f"{h.unrealized_pnl:+,.2f}" if h.unrealized_pnl is not None else "unknown"
@@ -227,6 +235,17 @@ def build_prompt(
             held_days = h.held_days()
             if held_days is not None:
                 line += f", held {held_days} day(s)"
+            # What is actually resting at the broker on this position. Without
+            # it the model cannot tell an exit it should move from one that is
+            # already where it wants it — or notice there is none at all.
+            resting = exits_by_ticker.get(h.ticker, {})
+            if resting:
+                levels = ", ".join(
+                    f"{kind} at ${level:,.2f}" for kind, level in sorted(resting.items())
+                )
+                line += f". Currently protected by a resting {levels}"
+            else:
+                line += ". NOTHING is resting to close it"
             if h.market_value:
                 line += f". Selling all {h.quantity:g} would raise about ${h.market_value:,.2f}"
             lines.append(line)
@@ -318,6 +337,13 @@ def build_prompt(
             if conviction_line
             else []
         ),
+        "- You can also move the stop and take-profit on something you already hold,",
+        "  without buying or selling any of it. Use side \"adjust\" with a \"stop\" or a",
+        "  \"target\" price, or both. The stop must be below the current price and the",
+        "  target above it, or the order would execute the moment it was placed.",
+        "  Raising a stop as a position gains is how a profit is protected; today's",
+        "  analysis is what tells you where the thesis now breaks. If a holding has",
+        "  nothing resting on it, an adjust places the exits for the first time.",
         "- Doing nothing is a valid answer, and often the right one.",
         *(
             [
@@ -332,7 +358,8 @@ def build_prompt(
         "",
         "Reply with JSON only, in this exact shape:",
         '{"reasoning": "one or two sentences", "orders": '
-        '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"}]}',
+        '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"},',
+        ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"}]}',
         "Use an empty list for orders if you want to hold everything.",
     ]
     return "\n".join(lines)
@@ -396,6 +423,31 @@ def screen(
 
     for order in orders:
         ticker = str(order.get("ticker", "")).upper().strip()
+        if str(order.get("side", "")).lower().strip() == "adjust":
+            # Moves no cash and no shares, so the running-balance machinery
+            # below has nothing to say about it. What it does need is a
+            # position to rest on.
+            quantity_held = held.get(ticker, 0.0)
+            if quantity_held <= 0:
+                rejected.append(
+                    agent_book.Rejection(
+                        ticker=ticker, side="adjust", quantity=0,
+                        why="holds none of it, so there are no exits to move",
+                    )
+                )
+                continue
+            if order.get("stop") is None and order.get("target") is None:
+                rejected.append(
+                    agent_book.Rejection(
+                        ticker=ticker, side="adjust", quantity=0,
+                        why="no new stop or target given",
+                    )
+                )
+                continue
+            accepted.append(
+                {**order, "ticker": ticker, "side": "adjust", "quantity": quantity_held}
+            )
+            continue
         running = agent_book.Book(
             budget=book.budget,
             cash=cash,
@@ -537,12 +589,16 @@ class AgentRun:
     placed: list[dict] = field(default_factory=list)
     rejected: list[agent_book.Rejection] = field(default_factory=list)
     failed: list[tuple[dict, str]] = field(default_factory=list)
+    # Exits moved to new levels. Kept apart from placed: no position was
+    # opened or closed, but the risk on an open one changed, which is worth
+    # reporting rather than folding into "no trades".
+    adjusted: list[str] = field(default_factory=list)
     book: agent_book.Book | None = None
     skipped: str | None = None  # why the run did nothing at all
 
     @property
     def acted(self) -> bool:
-        return bool(self.placed)
+        return bool(self.placed or self.adjusted)
 
 
 def format_run_embed(run: AgentRun) -> "discord.Embed":
@@ -585,6 +641,12 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
                 + (f" — {o['reason']}" if o.get("reason") else "")
                 for o in run.placed
             )[:_FIELD_MAX],
+            inline=False,
+        )
+    if run.adjusted:
+        embed.add_field(
+            name="Exits moved",
+            value="\n".join(run.adjusted)[:_FIELD_MAX],
             inline=False,
         )
     if run.rejected:
@@ -1004,6 +1066,14 @@ def run_once() -> AgentRun:
     # stated by the trader, discarded if implausible against the traded price.
     targets = {s.ticker: s.price_target for s in signals if s.price_target}
     for order in accepted:
+        if order["side"] == "adjust":
+            outcome = adjust_exits(order["ticker"], order.get("stop"), order.get("target"))
+            log.info("Adjust %s: %s", order["ticker"], outcome["message"])
+            if outcome["ok"]:
+                run.adjusted.append(outcome["message"])
+            else:
+                run.failed.append((order, outcome["message"]))
+            continue
         try:
             result = _place(order, prices.get(order["ticker"]), stops, targets)
         except Exception as exc:  # broker refusal, network, bad symbol
@@ -1277,3 +1347,75 @@ def process_queued_arms() -> list[dict]:
         db.complete_exit_arm(request.id, ok, outcome["message"])
         results.append({"ticker": request.ticker, "ok": ok, "message": outcome["message"]})
     return results
+
+
+def adjust_exits(ticker: str, stop: float | None, target: float | None) -> dict:
+    """Move the exits resting under a position to new levels.
+
+    The agent re-reads every holding each day, and until this existed it could
+    do nothing with what it learned: the stop and target were fixed when the
+    position opened and sat unchanged until it closed. GOOG spent a week with a
+    $377.09 take-profit while each morning's analysis put the move's end at
+    $345.00 — a level the position would never have reached.
+
+    Letting the model move them is deliberate. Tightening a stop as a trade
+    works is what the exits are *for*, and a rule that only ever placed them
+    once is not risk management, it is a fossil. What Python keeps is the same
+    thing it keeps everywhere else: a level that cannot be executed as stated
+    is refused, never silently corrected.
+
+    Replaces rather than cancelling and re-placing. Cancelling first leaves a
+    window with nothing under the position, which is the state this app spends
+    most of its effort avoiding. A level with nothing resting yet is armed
+    instead, so "set my exits to these" works whether or not there are any.
+    """
+    ticker = ticker.upper().strip()
+    if not quotes.is_sandbox():
+        return {"ok": False, "message": "Webull is not in sandbox mode, so no order can be placed."}
+
+    price = get_current_price(ticker)
+    stop, target = usable_levels(ticker, stop, target, price)
+    if stop is None and target is None:
+        return {"ok": False, "message": f"No usable level for {ticker} — nothing was changed."}
+
+    resting = {t.exit_kind: t for t in db.get_resting_exits(ticker) if t.exit_kind}
+    moved, armed, failed = [], [], []
+    for kind, level in (("stop", stop), ("target", target)):
+        if level is None:
+            continue
+        existing = resting.get(kind)
+        if existing is None:
+            armed.append((kind, level))
+            continue
+        if existing.limit_price is not None and abs(existing.limit_price - level) < 0.005:
+            continue  # already there; a replace would be a round trip for nothing
+        try:
+            sandbox_broker.replace_exit(existing.client_order_id, kind, level)
+        except Exception as exc:
+            log.exception("Couldn't move the %s on %s", kind, ticker)
+            failed.append(f"{kind} ({exc})")
+            continue
+        db.move_resting_exit(existing.id, level)
+        moved.append((kind, level))
+
+    # Whatever had nothing resting yet is placed now, in one call so a pair
+    # still goes out as a pair.
+    if armed:
+        levels = dict(armed)
+        position = next(
+            (h for h in agent_book.build_book().holdings if h.ticker == ticker), None
+        )
+        if position is not None:
+            _arm_exits(
+                {"ticker": ticker, "side": "buy", "quantity": position.quantity},
+                levels.get("stop"),
+                levels.get("target"),
+            )
+
+    parts = [f"moved {k} to ${v:,.2f}" for k, v in moved]
+    parts += [f"placed {k} at ${v:,.2f}" for k, v in armed]
+    if failed:
+        parts += [f"could not move {f}" for f in failed]
+    if not parts:
+        return {"ok": True, "message": f"{ticker} exits already at those levels."}
+    return {"ok": not failed, "message": f"{ticker}: {', '.join(parts)}."}

@@ -435,6 +435,9 @@ class AgentRunOut(BaseModel):
     placed: list[AgentOrderOut]
     rejected: list[AgentOrderOut]
     failed: list[AgentOrderOut]
+    # Exits moved to new levels. No position opened or closed, but the risk on
+    # an open one changed, so a run that only did this is not an idle run.
+    adjusted: list[str] = []
 
 
 class StrategyOut(OrmModel):

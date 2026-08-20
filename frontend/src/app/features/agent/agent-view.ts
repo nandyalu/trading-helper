@@ -82,6 +82,9 @@ export class AgentView {
       const run = await this.agentService.runNow();
       const parts: string[] = [];
       if (run.placed.length) parts.push(`${run.placed.length} order(s) placed`);
+      // A run that only moved exits is not an idle run: the risk on an open
+      // position changed, which is the thing the exits are for.
+      if (run.adjusted?.length) parts.push(run.adjusted.join('; '));
       if (run.rejected.length) parts.push(`${run.rejected.length} rejected`);
       // Failures were previously left out entirely, so an order the broker
       // refused rendered as "No trades" — the agent looked idle when it had in

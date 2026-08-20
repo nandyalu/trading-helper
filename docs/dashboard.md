@@ -94,7 +94,7 @@ Every watchdog alert, filterable by type. **No exit resting** is the one that is
 | Tickers | Add and remove watchlist entries, run an analysis across all of them, and follow screened candidates |
 | Signals | Every signal, filterable by pending or resolved |
 | Paper | The paper book, its equity curve against SPY, and per-position closes |
-| Auto trader | The simulated account the model trades on its own: budget, cash, its equity curve, holdings with the stop and target actually resting at the broker, every position taken with its entry, exit and profit, and every order with the reason it gave |
+| Auto trader | The simulated account the model trades on its own: budget, cash, its equity curve, exits it has moved, holdings with the stop and target actually resting at the broker, every position taken with its entry, exit and profit, and every order with the reason it gave |
 | Portfolio | The real book, weights, and concentration warnings |
 | Scorecard | Win rates overall, by decision, by model, and by ticker, plus whether the model's stated confidence matches how often it is right |
 | Digest | The weekly wrap-up |

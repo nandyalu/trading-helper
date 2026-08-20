@@ -418,6 +418,42 @@ def place_exit_bracket(
     ]
 
 
+def replace_exit(client_order_id: str, kind: str, price: float) -> bool:
+    """Move a resting exit to a new level.
+
+    A replace rather than a cancel-and-place, which matters: cancelling first
+    leaves a window with nothing resting under the position, and that window is
+    exactly the state this app spends most of its effort avoiding.
+
+    The order keeps its ``client_order_id`` — the replace identifies the order
+    by it rather than issuing a new one — so the ledger row that already points
+    at it stays correct and only its price changes.
+
+    Only the price is sent. The docs are explicit that a STOP_LOSS accepts
+    changes to ``stop_price`` and a LIMIT to ``limit_price``, and sending the
+    fields that are not being changed is how a replace turns into a different
+    order by accident.
+    """
+    _assert_sandbox()
+    if kind not in ("stop", "target"):
+        raise ValueError(f"kind must be stop or target, got {kind!r}")
+    if price <= 0:
+        raise ValueError(f"price must be positive, got {price}")
+
+    client = quotes.get_api_client()
+    account_id = get_paper_account_id()
+    if client is None or account_id is None:
+        raise RuntimeError("No simulated account available to trade")
+
+    from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
+
+    field = "stop_price" if kind == "stop" else "limit_price"
+    modify = {"client_order_id": client_order_id, field: f"{price:.2f}"}
+    log.info("Moving the resting %s on order %s to %.2f", kind, client_order_id[:8], price)
+    OrderOperationV3(client).replace_order(account_id, [modify])
+    return True
+
+
 def cancel_order(client_order_id: str) -> bool:
     """Cancel a resting order. Used when a position is closed by other means —
     a stop left behind would try to sell shares that are no longer held."""

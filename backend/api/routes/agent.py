@@ -80,6 +80,7 @@ def run_now():
             {"ticker": o["ticker"], "side": o["side"], "quantity": o["quantity"], "why": why}
             for o, why in run.failed
         ],
+        adjusted=run.adjusted,
     )
 
 

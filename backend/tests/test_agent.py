@@ -1654,3 +1654,137 @@ def test_one_bad_request_does_not_stall_the_rest_of_the_queue(monkeypatch):
     agent.process_queued_arms()
 
     assert completed == [(1, False), (2, True)]
+
+
+# --- moving the exits on a position already held -------------------------------
+
+
+def test_the_prompt_shows_what_is_resting_on_each_holding(monkeypatch):
+    """The agent re-reads every holding daily. It cannot tell an exit worth
+    moving from one already where it wants it unless it can see the level."""
+    class Exit:
+        def __init__(self, kind, price):
+            self.exit_kind, self.limit_price = kind, price
+
+    monkeypatch.setattr(
+        agent.db, "get_resting_exits",
+        lambda t: [Exit("stop", 315.04), Exit("target", 377.09)] if t == "GOOG" else [],
+    )
+    book = _book(holdings=[("GOOG", 2, 343.66), ("INTC", 3, 91.84)])
+    for h in book.holdings:
+        h.price = 341.70
+
+    prompt = agent.build_prompt(book, [], {})
+
+    assert "resting stop at $315.04, target at $377.09" in prompt
+    # The absence has to be as loud as the presence.
+    assert "NOTHING is resting to close it" in prompt
+
+
+def test_an_adjust_needs_a_position_to_rest_on(monkeypatch):
+    accepted, rejected = agent.screen(
+        [{"ticker": "AAPL", "side": "adjust", "stop": 200.0}], _book(), {"AAPL": 210.0}
+    )
+
+    assert accepted == []
+    assert "no exits to move" in rejected[0].why
+
+
+def test_an_adjust_with_no_levels_is_refused():
+    accepted, rejected = agent.screen(
+        [{"ticker": "AAA", "side": "adjust"}],
+        _book(holdings=[("AAA", 5, 10.0)]),
+        {"AAA": 12.0},
+    )
+
+    assert accepted == []
+    assert "no new stop or target" in rejected[0].why
+
+
+def test_an_adjust_moves_no_cash_and_no_shares():
+    """It changes the risk on an open position, not the position itself — so a
+    later buy in the same pass must see the same cash it would have anyway."""
+    book = _book(cash=1000.0, holdings=[("AAA", 5, 10.0)])
+    orders = [
+        {"ticker": "AAA", "side": "adjust", "stop": 11.0},
+        {"ticker": "BBB", "side": "buy", "quantity": 5},
+    ]
+
+    accepted, rejected = agent.screen(orders, book, {"AAA": 12.0, "BBB": 200.0})
+
+    assert [o["side"] for o in accepted] == ["adjust", "buy"]
+    assert rejected == []
+
+
+def test_moving_a_stop_replaces_rather_than_cancelling(monkeypatch):
+    """Cancelling first leaves a window with nothing under the position, which
+    is the state this whole area exists to avoid."""
+    class Row:
+        id, client_order_id, exit_kind, limit_price = 1, "abc", "stop", 315.04
+
+    replaced, moved = [], []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 341.70)
+    monkeypatch.setattr(agent.db, "get_resting_exits", lambda t: [Row()])
+    monkeypatch.setattr(agent.db, "move_resting_exit", lambda i, p: moved.append((i, p)))
+    monkeypatch.setattr(
+        agent.sandbox_broker, "replace_exit", lambda *a: replaced.append(a) or True
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "cancel_order",
+        lambda *a: pytest.fail("a replace must not cancel the protection first"),
+    )
+
+    result = agent.adjust_exits("GOOG", 336.50, None)
+
+    assert result["ok"] is True
+    assert replaced == [("abc", "stop", 336.50)]
+    assert moved == [(1, 336.50)], "the ledger has to follow the broker"
+
+
+def test_a_level_that_would_execute_at_once_is_refused(monkeypatch):
+    """The same guard every other path uses: a stop above the price triggers
+    the moment it is placed."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 341.70)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "replace_exit", lambda *a: pytest.fail("that would sell it now")
+    )
+
+    result = agent.adjust_exits("GOOG", 400.00, None)
+
+    assert result["ok"] is False and "No usable level" in result["message"]
+
+
+def test_a_level_already_where_it_was_asked_for_is_left_alone(monkeypatch):
+    """A replace for no change is a round trip against a rate-limited API."""
+    class Row:
+        id, client_order_id, exit_kind, limit_price = 1, "abc", "stop", 336.50
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 341.70)
+    monkeypatch.setattr(agent.db, "get_resting_exits", lambda t: [Row()])
+    monkeypatch.setattr(
+        agent.sandbox_broker, "replace_exit", lambda *a: pytest.fail("nothing changed")
+    )
+
+    assert agent.adjust_exits("GOOG", 336.50, None)["ok"] is True
+
+
+def test_adjusting_a_holding_with_nothing_resting_places_the_exits(monkeypatch):
+    """INTC and NOK. "Set my exits to these" should work whether or not there
+    are any yet."""
+    armed = []
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 92.80)
+    monkeypatch.setattr(agent.db, "get_resting_exits", lambda t: [])
+    monkeypatch.setattr(
+        agent.agent_book, "build_book",
+        lambda **k: _book(holdings=[("INTC", 3, 91.84)]),
+    )
+    monkeypatch.setattr(agent, "_arm_exits", lambda order, s, t: armed.append((order["ticker"], s, t)))
+
+    result = agent.adjust_exits("INTC", 84.63, 104.56)
+
+    assert armed == [("INTC", 84.63, 104.56)]
+    assert "placed" in result["message"]

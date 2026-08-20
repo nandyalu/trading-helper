@@ -386,6 +386,9 @@ export interface AgentOrder {
 }
 
 export interface AgentRun {
+  /** Exits moved to new levels — no position opened or closed, but the risk on
+   * an open one changed. */
+  adjusted?: string[];
   reasoning: string;
   placed: AgentOrder[];
   rejected: AgentOrder[];

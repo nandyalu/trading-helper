@@ -716,3 +716,37 @@ def complete_exit_arm(
     row.message = message[:500]
     _session.add(row)
     _session.commit()
+
+
+@read_session
+def get_resting_exits(ticker: str, *, _session: Session = None) -> list[AgentTrade]:
+    """The exits currently resting on one ticker, newest first."""
+    return list(
+        _session.exec(
+            select(AgentTrade)
+            .where(
+                AgentTrade.ticker == ticker,
+                AgentTrade.status == "pending",
+                AgentTrade.is_stop == True,  # noqa: E712 — SQL, not Python truthiness
+            )
+            .order_by(AgentTrade.id.desc())
+        ).all()
+    )
+
+
+@write_session
+def move_resting_exit(trade_id: int, price: float, *, _session: Session = None) -> None:
+    """Point a resting exit's ledger row at its new level.
+
+    The broker keeps the same client_order_id through a replace, so the row is
+    still the right one — only the price it names has changed. Rewriting the
+    reason too keeps the dashboard's wording honest, since it prints it.
+    """
+    row = _session.get(AgentTrade, trade_id)
+    if row is None:
+        return
+    label = "stop-loss" if row.exit_kind == "stop" else "take-profit"
+    row.limit_price = price
+    row.reason = f"{label} resting at ${price:,.2f}"
+    _session.add(row)
+    _session.commit()
