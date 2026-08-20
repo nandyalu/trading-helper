@@ -9,6 +9,7 @@ import {
   AgentRun,
   AgentTrade,
   AgentTradeRow,
+  ActionResult,
   UnprotectedPosition,
 } from '../models/api.models';
 
@@ -28,6 +29,13 @@ export class AgentService {
   readonly history = this._history.asReadonly();
   readonly curve = this._curve.asReadonly();
   readonly unprotected = this._unprotected.asReadonly();
+
+  /** Place the missing exits on a position the agent already holds. Rests a
+   * stop and a take-profit under shares that are already owned, which is the
+   * one action that can only reduce exposure — it opens nothing. */
+  async armExits(ticker: string): Promise<ActionResult> {
+    return firstValueFrom(this.http.post<ActionResult>(`/api/agent/exits/${ticker}`, {}));
+  }
 
   /** Just the holdings with nothing resting under them. The Overview page
    * needs this without needing the whole book, and loading four other

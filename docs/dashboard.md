@@ -59,7 +59,14 @@ The auto trader's tile is the one that carries **resting stop** and **resting ta
 Those are different numbers from the stop and target above them, and the distinction matters: the signal's levels are what the analysis proposed, while the resting ones are orders sitting at the broker that will execute whether or not this app is running.
 They disagree often — a level the app discarded, an ATR-derived fallback, or a bracket the broker refused.
 
-When the auto trader holds a stock with **nothing** resting under it, the page says so in a warning rather than leaving you to notice two empty cells.
+When the auto trader holds a stock with **nothing** resting under it, the page says so in a warning rather than leaving you to notice two empty cells — and offers a button to fix it.
+
+**Place the exits now** rests a stop and a take-profit under shares the agent already holds.
+It uses the same levels a fresh buy would get: the newest signal's, screened against the current price, with a volatility-derived stop when the stated one cannot be used.
+It never invents a target, because a made-up exit price on a real position is worse than none — it looks decided.
+
+It refuses rather than duplicating when exits are already resting, which is why the button only appears when there are none: two stops on one position sell it twice, and the second sale is a short.
+Outside 9:30–16:00 ET the broker refuses every order, and the button says so plainly instead of failing silently.
 
 **Positions taken** lists every lot bought in this ticker, in any book: entry price and date, quantity, exit price and date, days held, and the profit or loss.
 An open lot shows no exit and no profit, because its result is not decided yet, but the days held keep counting.

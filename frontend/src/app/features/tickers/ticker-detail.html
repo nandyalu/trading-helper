@@ -45,11 +45,17 @@
     }
 
     @if (agentPosition()?.unprotected) {
-      <p class="notice notice-warn">
+      <div class="notice notice-warn">
         <span aria-hidden="true">⚠️</span> The auto trader holds this and nothing is resting at the
         broker to close it. The stop and target below are what the analysis proposed, not orders
         that will execute.
-      </p>
+        <button class="btn btn-sm" type="button" (click)="armExits()" [disabled]="arming()">
+          {{ arming() ? 'Placing…' : 'Place the exits now' }}
+        </button>
+      </div>
+    }
+    @if (armMessage()) {
+      <p class="notice notice-info">{{ armMessage() }}</p>
     }
 
     <!-- The exit plan, above the chart: these are the numbers that decide what

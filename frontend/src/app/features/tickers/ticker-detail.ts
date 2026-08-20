@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { Lot, Signal, TickerDetail, TickerEvents } from '../../core/models/api.models';
+import { AgentService } from '../../core/services/agent.service';
 import { TickersService } from '../../core/services/tickers.service';
 import { TransactionsService } from '../../core/services/transactions.service';
 import { WatchlistService } from '../../core/services/watchlist.service';
@@ -30,6 +31,7 @@ interface TimelineEntry {
 })
 export class TickerDetailPage {
   private readonly route = inject(ActivatedRoute);
+  private readonly agentService = inject(AgentService);
   private readonly tickersService = inject(TickersService);
   private readonly watchlistService = inject(WatchlistService);
   private readonly transactionsService = inject(TransactionsService);
@@ -40,6 +42,8 @@ export class TickerDetailPage {
   protected readonly analyzing = signal(false);
   protected readonly message = signal<string | null>(null);
   protected readonly refreshingPrice = signal(false);
+  protected readonly arming = signal(false);
+  protected readonly armMessage = signal<string | null>(null);
   // 30 days, matching the 1-2 week trade horizon: the window a signal is
   // actually judged over, rather than six months of context around it.
   protected readonly chartDays = signal(30);
@@ -273,6 +277,24 @@ export class TickerDetailPage {
 
   protected signed(value: number, digits = 1): string {
     return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
+  }
+
+  /** Rest the missing exits under a position the auto trader already holds.
+   * The remediation for a bracket the broker refused — which used to need a
+   * Python shell, while the position sat exposed. */
+  protected async armExits(): Promise<void> {
+    this.arming.set(true);
+    this.armMessage.set(null);
+    try {
+      const result = await this.agentService.armExits(this.ticker());
+      this.armMessage.set(result.message);
+      await this.refresh();
+    } catch (err) {
+      const detail = (err as { error?: { detail?: string } })?.error?.detail;
+      this.armMessage.set(detail ?? "Couldn't place the exits.");
+    } finally {
+      this.arming.set(false);
+    }
   }
 
   protected bookLabel(book: string): string {

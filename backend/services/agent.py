@@ -1161,3 +1161,74 @@ def reset_book(pending_external_flatten: bool = False) -> ResetResult:
     result.cleared = db.clear_agent_trades()
     log.info("Agent book reset: cleared %d ledger row(s)", result.cleared)
     return result
+
+
+def arm_exits_now(ticker: str) -> dict:
+    """Place the missing exits on a position the agent already holds.
+
+    The remediation for a position that ended up unguarded — a bracket the
+    broker refused, a buy that filled too slowly, a stop the price had already
+    fallen through. All three used to need someone with a Python shell; the
+    first time it happened, that someone was reconstructing the right levels by
+    hand while the position sat exposed.
+
+    The levels are the same ones a fresh buy would get: the newest signal's,
+    screened against the current price, with a volatility-derived stop when the
+    stated one cannot be used. Nothing here invents a target — a made-up exit
+    price on a real position is worse than none, because it looks decided.
+
+    Refuses rather than duplicates when exits are already resting. Two stops on
+    one position sell it twice, and the second sale is a short.
+
+    Returns {"ok": bool, "message": str} — this answers a button, so the reason
+    for a refusal has to be readable rather than an exception type.
+    """
+    from backend.services import ticker_book
+
+    ticker = ticker.upper().strip()
+    if not quotes.is_sandbox():
+        return {"ok": False, "message": "Webull is not in sandbox mode, so no order can be placed."}
+
+    price = get_current_price(ticker)
+    position = ticker_book.agent_position(ticker, price)
+    if position is None:
+        return {"ok": False, "message": f"The auto trader holds no {ticker}."}
+    if position.exits:
+        resting = ", ".join(f"{e.kind} at ${e.price:,.2f}" for e in position.exits)
+        return {"ok": False, "message": f"{ticker} already has {resting} resting."}
+
+    signal = next(iter(db.get_recent_signals(ticker, limit=1)), None)
+    stop, target = usable_levels(
+        ticker,
+        signal.stop_loss if signal else None,
+        signal.price_target if signal else None,
+        price,
+    )
+    if stop is None and price:
+        stop = atr_stop(ticker, price)
+    if stop is None and target is None:
+        return {
+            "ok": False,
+            "message": (
+                f"No usable level for {ticker}: the analysis gives none that the price "
+                "has not already passed, and there is too little history to derive one."
+            ),
+        }
+
+    order = {"ticker": ticker, "side": "buy", "quantity": position.quantity}
+    try:
+        _arm_exits(order, stop, target)
+    except Exception as exc:  # _arm_exits is best-effort, but a broker refusal can still surface
+        return {"ok": False, "message": f"The broker refused it: {exc}"}
+
+    placed = ticker_book.agent_position(ticker, price)
+    if placed is None or not placed.exits:
+        return {
+            "ok": False,
+            "message": (
+                f"Nothing rested on {ticker}. The market is open 9:30–16:00 ET; outside those "
+                "hours the broker refuses every order. Check the log for the exact reason."
+            ),
+        }
+    resting = ", ".join(f"{e.kind} at ${e.price:,.2f}" for e in placed.exits)
+    return {"ok": True, "message": f"Armed {ticker}: {resting}."}

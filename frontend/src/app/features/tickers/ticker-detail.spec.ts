@@ -320,4 +320,26 @@ describe('TickerDetailPage', () => {
 
     expect(element.textContent).not.toContain('Positions taken');
   });
+
+  it('offers a button to place the missing exits', async () => {
+    stub.detail = { ...DETAIL, agent_position: UNPROTECTED };
+    await create();
+
+    const button = Array.from(element.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Place the exits now'),
+    );
+    expect(button).toBeTruthy();
+  });
+
+  it('offers no such button when the position is already bracketed', async () => {
+    // The button places orders. Offering it where exits already rest invites
+    // doubling up, and a second stop sells the position twice.
+    stub.detail = { ...DETAIL, agent_position: BRACKETED };
+    await create();
+
+    const button = Array.from(element.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Place the exits now'),
+    );
+    expect(button).toBeUndefined();
+  });
 });

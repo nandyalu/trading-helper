@@ -14,6 +14,7 @@ from backend.api.schemas import (
     AgentRunOut,
     AgentTradeOut,
     AgentTradeRowOut,
+    ActionResultOut,
     UnprotectedPositionOut,
 )
 from backend.database import db
@@ -143,3 +144,17 @@ def get_unprotected():
         )
         for ticker, position in ticker_book.unprotected_positions()
     ]
+
+
+@router.post("/exits/{ticker}", response_model=ActionResultOut)
+def arm_exits(ticker: str):
+    """Place the missing exits on a position the agent already holds.
+
+    A write, unlike everything else here except /run — but it places no trade
+    and opens no position. It rests a stop and a take-profit under shares that
+    are already owned, which is the one action that can only reduce exposure.
+    """
+    result = agent.arm_exits_now(ticker)
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActionResultOut(message=result["message"])

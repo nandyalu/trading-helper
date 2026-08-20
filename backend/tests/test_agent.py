@@ -1427,3 +1427,113 @@ def test_the_same_unguarded_position_is_announced_once_a_day(monkeypatch):
     agent._arm_exits(_order(), None, None)
 
     assert alerts[0]["dedupe_key"] == alerts[1]["dedupe_key"]
+
+
+# --- arming a position by hand -------------------------------------------------
+
+
+def _position(quantity=3.0, exits=()):
+    from backend.services import ticker_book
+
+    return ticker_book.AgentPosition(
+        quantity=quantity, avg_cost=91.84, exits=list(exits)
+    )
+
+
+def test_arming_by_hand_places_the_missing_exits(monkeypatch):
+    """The remediation for a bracket the broker refused. It used to need a
+    Python shell, while the position sat exposed."""
+    from backend.services import ticker_book
+
+    armed = []
+    states = iter([_position(), _position(exits=[ticker_book.RestingExit("stop", 88.0, 3)])])
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: next(states))
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "atr_stop", lambda t, p: 88.0)
+    monkeypatch.setattr(agent, "_arm_exits", lambda *a, **k: armed.append(a))
+
+    result = agent.arm_exits_now("INTC")
+
+    assert result["ok"] is True
+    assert "stop at $88.00" in result["message"]
+    assert armed
+
+
+def test_arming_refuses_when_exits_already_rest(monkeypatch):
+    """Two stops on one position sell it twice, and the second sale is a short."""
+    from backend.services import ticker_book
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 341.70)
+    monkeypatch.setattr(
+        ticker_book, "agent_position",
+        lambda t, p=None: _position(exits=[ticker_book.RestingExit("stop", 315.04, 2)]),
+    )
+    monkeypatch.setattr(
+        agent, "_arm_exits", lambda *a, **k: pytest.fail("must not double up on a resting exit")
+    )
+
+    result = agent.arm_exits_now("GOOG")
+
+    assert result["ok"] is False
+    assert "already has" in result["message"]
+
+
+def test_arming_refuses_a_ticker_the_agent_does_not_hold(monkeypatch):
+    from backend.services import ticker_book
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 200.0)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: None)
+
+    result = agent.arm_exits_now("AAPL")
+
+    assert result["ok"] is False and "holds no AAPL" in result["message"]
+
+
+def test_arming_refuses_outside_the_sandbox(monkeypatch):
+    """The same guarantee every order path here carries."""
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: False)
+
+    result = agent.arm_exits_now("INTC")
+
+    assert result["ok"] is False and "sandbox" in result["message"]
+
+
+def test_arming_reports_plainly_when_nothing_ended_up_resting(monkeypatch):
+    """The broker refuses every order outside 9:30-16:00 ET, and _arm_exits is
+    best-effort — so success has to be confirmed by looking, not assumed."""
+    from backend.services import ticker_book
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: _position())
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "atr_stop", lambda t, p: 88.0)
+    monkeypatch.setattr(agent, "_arm_exits", lambda *a, **k: None)
+
+    result = agent.arm_exits_now("INTC")
+
+    assert result["ok"] is False
+    assert "9:30" in result["message"]
+
+
+def test_arming_invents_no_level_when_none_is_usable(monkeypatch):
+    """A made-up exit price on a real position is worse than none, because it
+    looks decided."""
+    from backend.services import ticker_book
+
+    monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 91.84)
+    monkeypatch.setattr(ticker_book, "agent_position", lambda t, p=None: _position())
+    monkeypatch.setattr(agent.db, "get_recent_signals", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "atr_stop", lambda t, p: None)
+    monkeypatch.setattr(
+        agent, "_arm_exits", lambda *a, **k: pytest.fail("there is nothing to arm")
+    )
+
+    result = agent.arm_exits_now("INTC")
+
+    assert result["ok"] is False and "No usable level" in result["message"]
