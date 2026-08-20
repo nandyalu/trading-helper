@@ -190,7 +190,14 @@ The single order is the point. Placing the exits afterwards leaves a window — 
 A bracket cannot fail that way, because there is no "afterwards".
 
 Either level may be missing, since the analysis states them only when it has a view, and the app discards one that would execute the instant it was placed — a target the price has already passed, or a stop it has already fallen through.
-The one that survives is placed on its own. A position with neither rests unguarded, and the Auto trader page shows a dash rather than hiding it.
+
+**A discarded stop is replaced, not simply dropped.** When the stated stop cannot be used, the agent derives one from the stock's own volatility at the moment it buys — 2×ATR below the purchase price, which cannot come back on the wrong side by construction.
+This matters because days pass between a signal and the purchase. NOK was bought at $10.47 against a $10.56 stop and INTC at $91.84 against a $94.00 stop; both stocks had fallen through their own stop in the meantime, so both levels were correctly discarded and both positions opened with nothing under them.
+The signal-recording stage already substitutes an ATR stop, but only for Buy and Overweight decisions — and the agent buys on Hold signals too, which is exactly how those two slipped through.
+
+A target can still be missing, and a position with no exit at all is still possible if the stock has too little history to compute a range.
+When that happens the app **says so**: it records an alert, the Overview lists it under "Needs a decision", and the Auto trader page shows a dash.
+Before that, the failure was completely silent — no alert, no ledger row — and the only way to discover it was to look at the broker.
 
 The entry is a limit order priced just through the market rather than a market order.
 Webull refuses a market order inside a bracket, and the limit turns out to be the better instrument anyway: a market order's slippage is unbounded, which is worth avoiding when the budget is enforced to the dollar.

@@ -1089,7 +1089,46 @@ def test_a_refused_bracket_still_buys(monkeypatch):
     assert result == {"client_order_id": "fallback"}
 
 
-def test_a_buy_with_no_usable_level_is_a_plain_market_order(monkeypatch):
+def test_a_buy_with_no_usable_stop_gets_one_from_the_stock_s_own_volatility(monkeypatch):
+    """Every position needs an exit. NOK and INTC were both bought after the
+    price had fallen through the stated stop, so the level was discarded as
+    unusable and they opened with nothing under them."""
+    calls = []
+    monkeypatch.setattr(agent, "atr_stop", lambda ticker, price: 92.00)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: calls.append(a) or {"client_order_id": "x", "exits": []},
+    )
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_market_order",
+        lambda *a: pytest.fail("a derived stop is still a stop — this should bracket"),
+    )
+
+    agent._place(_order(), 98.41, {}, {})
+
+    assert calls == [("ZBH", 3, 98.41, 92.00, None)]
+
+
+def test_a_stated_stop_on_the_wrong_side_is_replaced_not_merely_dropped(monkeypatch):
+    """INTC on 2026-08-19: bought at $91.84 against a $94.00 stop from a signal
+    two days older. Dropping the level was right; opening the position with no
+    exit at all was not."""
+    calls = []
+    monkeypatch.setattr(agent, "atr_stop", lambda ticker, price: 88.00)
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a: calls.append(a) or {"client_order_id": "x", "exits": []},
+    )
+
+    agent._place(_order("INTC"), 91.84, {"INTC": 94.00}, {"INTC": 109.33})
+
+    assert calls == [("INTC", 3, 91.84, 88.00, 109.33)]
+
+
+def test_a_buy_with_no_levels_and_no_atr_is_a_plain_market_order(monkeypatch):
+    """A stock with too little history to compute a range still has to be
+    buyable — it just cannot be bracketed."""
+    monkeypatch.setattr(agent, "atr_stop", lambda ticker, price: None)
     monkeypatch.setattr(
         agent.sandbox_broker, "place_bracket_order",
         lambda *a: pytest.fail("nothing to bracket with"),
@@ -1113,7 +1152,7 @@ def test_a_wrong_side_level_is_dropped_before_it_reaches_the_bracket(monkeypatch
     # ZBH on 2026-08-12: a $92.00 target on a stock trading at $97.89.
     agent._place(_order(), 97.89, {"ZBH": 95.30}, {"ZBH": 92.00})
 
-    assert calls == [("ZBH", 3, 97.89, 95.30, None)]
+    assert calls == [("ZBH", 3, 97.89, 95.30, None)], "the stop was fine; only the target went"
 
 
 def test_a_sell_is_never_bracketed(monkeypatch):
@@ -1317,3 +1356,74 @@ def test_the_floor_is_enforced_in_python_not_only_in_the_prompt(monkeypatch):
 
     assert accepted == []
     assert len(rejected) == 1
+
+
+# --- a position left unguarded must not be silent ------------------------------
+
+
+def test_a_position_with_no_usable_level_is_recorded_not_merely_logged(monkeypatch):
+    """The failure that took a person to notice. Two positions sat with no
+    exits for days; there was no ledger row, no alert, and by the time anyone
+    asked, the run's logs had been erased with the container."""
+    alerts = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent.db, "record_alert", lambda **kw: alerts.append(kw))
+
+    agent._arm_exits(_order(), None, None)
+
+    assert len(alerts) == 1
+    assert alerts[0]["alert_type"] == "unguarded_position"
+    assert "ZBH" in alerts[0]["message"]
+
+
+def test_a_buy_that_never_fills_is_recorded_as_unguarded(monkeypatch):
+    alerts = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent, "_FILL_WAIT_SECONDS", 0)
+    monkeypatch.setattr(agent.db, "record_alert", lambda **kw: alerts.append(kw))
+    monkeypatch.setattr(agent.sandbox_broker, "get_order_detail", lambda _id: {"status": "SUBMITTED"})
+
+    agent._arm_exits(_order(), 95.30, 101.50, client_order_id="x")
+
+    assert len(alerts) == 1
+    assert "had not filled" in alerts[0]["message"]
+
+
+def test_a_broker_refusal_is_recorded_as_unguarded(monkeypatch):
+    """The shares are owned either way, so this must not raise — but it must
+    also not pass in silence."""
+    alerts = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent.db, "record_alert", lambda **kw: alerts.append(kw))
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_exit_bracket",
+        lambda *a: (_ for _ in ()).throw(RuntimeError("INVALID_PARAMETER")),
+    )
+
+    agent._arm_exits(_order(), 95.30, 101.50)
+
+    assert len(alerts) == 1
+    assert "refused" in alerts[0]["message"]
+
+
+def test_an_unrecordable_alert_does_not_undo_a_filled_buy(monkeypatch):
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(
+        agent.db, "record_alert",
+        lambda **kw: (_ for _ in ()).throw(RuntimeError("database is locked")),
+    )
+
+    agent._arm_exits(_order(), None, None)  # must not raise
+
+
+def test_the_same_unguarded_position_is_announced_once_a_day(monkeypatch):
+    """It stays unguarded until someone acts on it, and re-announcing it every
+    pass would bury the alert that is still new."""
+    alerts = []
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
+    monkeypatch.setattr(agent.db, "record_alert", lambda **kw: alerts.append(kw))
+
+    agent._arm_exits(_order(), None, None)
+    agent._arm_exits(_order(), None, None)
+
+    assert alerts[0]["dedupe_key"] == alerts[1]["dedupe_key"]

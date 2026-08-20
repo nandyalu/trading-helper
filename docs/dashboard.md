@@ -73,7 +73,7 @@ Selling part of a position splits it — the shares sold get their own result an
 
 ## Alerts
 
-Every watchdog alert, filterable by type. The two stop alerts read differently on purpose — "Thesis broken" means price reached the level the analysis named, "Below your cost" means price fell a set percentage under what you paid. Either can happen without the other.
+Every watchdog alert, filterable by type. **No exit resting** is the one that is not about price at all: the auto trader holds a position and nothing is at the broker to close it. The two stop alerts read differently on purpose — "Thesis broken" means price reached the level the analysis named, "Below your cost" means price fell a set percentage under what you paid. Either can happen without the other.
 
 ## The rest
 

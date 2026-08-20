@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from backend.database import db
 from backend.services import agent_book, analysis, quotes, sandbox_broker, watchdog
 from backend.services.positions import get_current_price
+from backend.services.sizing import get_atr, suggest_position
 
 log = logging.getLogger("trading-bot.agent")
 
@@ -638,6 +639,8 @@ def _place(
         return sandbox_broker.place_market_order(ticker, order["side"].upper(), order["quantity"])
 
     stop, target = usable_levels(ticker, stops.get(ticker), targets.get(ticker), price)
+    if stop is None and price:
+        stop = atr_stop(ticker, price)
     if price and (stop or target):
         try:
             return sandbox_broker.place_bracket_order(
@@ -650,6 +653,67 @@ def _place(
             )
 
     return sandbox_broker.place_market_order(ticker, "BUY", order["quantity"])
+
+
+def _record_unguarded(ticker: str, quantity: float, why: str) -> None:
+    """Write down that a position was opened with nothing protecting it.
+
+    Until this existed the failure was completely silent: no ledger row, no
+    alert, no Discord line. Two positions sat unguarded for days on
+    2026-08-20 and the only reason anyone found out was a person noticing the
+    broker screen — by then the run's logs had been erased with the container,
+    so *why* the exits never rested had to be reconstructed from prices.
+
+    Recorded as an alert rather than a trade, because nothing was traded. The
+    watchdog's alert table is already the place the dashboard reads for things
+    that need a person.
+    """
+    log.error("%s is unguarded: %s", ticker, why)
+    try:
+        db.record_alert(
+            ticker=ticker,
+            alert_type="unguarded_position",
+            # Once per ticker per day. The same position stays unguarded until
+            # someone acts on it, and re-announcing it every pass would bury
+            # the alert that is still new.
+            dedupe_key=f"unguarded:{ticker}:{datetime.date.today().isoformat()}",
+            message=f"{quantity:g} share(s) of {ticker} have no resting exit — {why}",
+        )
+    except Exception:
+        # An unrecordable alert must not undo a filled buy.
+        log.exception("Couldn't record the unguarded-position alert for %s", ticker)
+
+
+def atr_stop(ticker: str, price: float) -> float | None:
+    """A stop derived from the stock's own volatility, for a buy whose stated
+    stop cannot be used.
+
+    Every position needs an exit, and the signal's stop is missing more often
+    than it looks. ``_resolve_stop_loss`` already substitutes this at
+    signal-record time — but only for Buy and Overweight, and the agent buys on
+    Hold signals too. A Hold therefore carries whatever the trader stated and
+    no safety net, and days can pass between the signal and the purchase.
+
+    That gap is what went wrong on 2026-08-18 and 2026-08-19. NOK was bought at
+    $10.47 against a $10.56 stop and INTC at $91.84 against a $94.00 stop —
+    both stocks had fallen through their own stop in the meantime, so the level
+    was discarded as unusable and the position opened with nothing under it.
+
+    Derived from the price at purchase rather than at the signal, and 2×ATR
+    below it by construction, so it cannot come back on the wrong side.
+    """
+    atr = get_atr(ticker)
+    if atr is None:
+        log.warning("No ATR for %s — cannot derive a stop", ticker)
+        return None
+    suggestion = suggest_position(price, atr, equity=None)
+    if suggestion is None or suggestion.stop is None or suggestion.stop >= price:
+        return None
+    log.info(
+        "Using an ATR-derived stop of %.2f for %s at %.2f — the stated stop was unusable",
+        suggestion.stop, ticker, price,
+    )
+    return suggestion.stop
 
 
 def _record_exits(ticker: str, exits: list[dict]) -> None:
@@ -783,23 +847,27 @@ def _arm_exits(
     stop_price, target_price = usable_levels(order["ticker"], stop_price, target_price, price)
 
     if not stop_price and not target_price:
-        log.info("No usable stop or target for %s — the position rests unguarded", order["ticker"])
+        _record_unguarded(
+            order["ticker"], order["quantity"], "the analysis gave no usable stop or target"
+        )
         return
 
     # The shares have to exist before anything can rest against them.
     if client_order_id and not _await_fill(client_order_id):
-        log.error(
-            "%s did not fill within %ds — leaving it unguarded rather than placing exits "
+        _record_unguarded(
+            order["ticker"],
+            order["quantity"],
+            f"the buy had not filled after {_FILL_WAIT_SECONDS}s, so exits could not be placed "
             "against shares that may not exist",
-            order["ticker"], _FILL_WAIT_SECONDS,
         )
         return
     try:
         legs = sandbox_broker.place_exit_bracket(
             order["ticker"], order["quantity"], stop_price, target_price
         )
-    except Exception:
+    except Exception as exc:
         log.exception("Couldn't arm exits for %s", order["ticker"])
+        _record_unguarded(order["ticker"], order["quantity"], f"the broker refused them: {exc}")
         return
     for leg in legs:
         label = "stop-loss" if leg["kind"] == "stop" else "take-profit"

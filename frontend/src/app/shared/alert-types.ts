@@ -12,6 +12,9 @@ export const ALERT_TYPES: Record<string, { label: string; icon: string; urgent: 
   target: { label: 'Target reached', icon: '🎯', urgent: true },
   big_move: { label: 'Big move', icon: '📊', urgent: false },
   volume: { label: 'Volume spike', icon: '📊', urgent: false },
+  // Urgent: the money is at risk right now and the exit everyone assumes is
+  // there is not. It is an absence, so nothing else on the page implies it.
+  unguarded_position: { label: 'No exit resting', icon: '🛡️', urgent: true },
 };
 
 export function alertLabel(alertType: string): string {

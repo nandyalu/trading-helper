@@ -84,3 +84,20 @@ Google Gemini is available as a paid alternative: set `GOOGLE_API_KEY` and `LLM_
 `LLM_MODEL` sets which model the provider runs, but only as the starting value.
 The settings page and `/model` change it afterwards without a redeploy, choosing from whatever the endpoint has pulled — see [the model section of the overview](overview.md#the-analysis-model) for what to watch when you switch.
 If you run this stack yourself, this repo's maintainer docs (`CLAUDE.md`, not part of this site) have provider-specific notes.
+
+## Logs
+
+The app writes to `data/logs/trading-bot.log`, in the same volume as the database, and rotates at 5 MB across ten files — comfortably more than a month at the volume this produces.
+
+It writes to standard output as well, so `docker logs trading-bot` still works. The file exists because that output does not survive the container: rebuild the image or recreate the stack and every line is gone.
+
+That loss is not theoretical. Two positions were once found holding no exits, and the run that placed them had already been erased — so why the exits never rested had to be reconstructed from prices and ledger rows, instead of read from the line the code had already written.
+
+To read it:
+
+```bash
+docker exec trading-bot tail -f /app/data/logs/trading-bot.log
+docker exec trading-bot grep INTC /app/data/logs/trading-bot.log
+```
+
+Every logger is named `trading-bot.<module>`, so grepping for `trading-bot.agent` gives you the auto trader's decisions and nothing else.
