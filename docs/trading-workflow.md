@@ -24,7 +24,7 @@ Treat every alert as worth ten seconds of your attention.
 
 ## Evening (after close)
 
-The 21:30 UTC run posts two kinds of message:
+The daily runs post two kinds of message — new analyses from the 11:00 UTC sweep, and grades from the 21:30 UTC pass:
 
 - **Graded signals** — for example: `NVDA Buy from 2026-06-17: PASS ($450.12 → $470.30, +4.5%) · vs SPY +2.1%: PASS (alpha +2.4%) · target $480.00: not hit`. These messages deserve more attention than fresh signals — they are the only messages that tell you whether the bot is any good. If a signal you followed gets a FAIL, use `/ask` to see the original reasoning and find out what it missed.
 - **The nightly sweep** — fresh analyses for the whole watchlist. Skim the decision lines. Read the full rationale only where the decision *changed* since yesterday — a Hold-to-Sell flip matters; a fifth straight Hold does not.

@@ -86,6 +86,11 @@ The win probability is the one number the model produces rather than derives, wh
 Any of these can be absent — the model states them only when it has a view.
 Absent is stored as null, never as zero, so a missing stop can never be read as a stop at $0.
 
+**A signal made while the market is shut is priced at the last completed close, not at the last trade.**
+Pre-market sessions open at 4:00 in New York, so the quote a broker reports before the open can be a thin print with a wide spread — hours before the market agrees what the stock is worth.
+Every level on the plan would then be drawn against a number that was never really the price, and the auto trader would buy at the open into a different one.
+A completed close is what the whole market settled on, which is the same reasoning the bar cache follows: today's bar is never stored, because it is still moving.
+
 A level is also dropped when it cannot describe anything that has not already happened.
 The model often proposes buying a pullback, and draws its stop and target around the entry it hoped for rather than the price on the screen; when the pullback never comes, the whole plan sits below the market.
 A target the price has already passed would count as reached the moment it was stored, and a stop above the price would trigger the same way, so both are discarded, along with the risk/reward and expected value computed from them.
@@ -172,11 +177,11 @@ A run that was never measured stores nothing rather than zero, and shows nothing
 A simulated Webull account the model trades on its own, inside a budget you set (default $1,000).
 It runs on two triggers.
 
-Each weekday at 13:35 UTC — five minutes after the US open — it decides on everything the previous evening's sweep produced.
+Each weekday at 13:35 UTC — five minutes after the US open — it decides on everything that morning's sweep produced.
 And whenever an intraday analysis is triggered during market hours, by an unusual move or a volume spike, it decides again on the spot, at most once every 30 minutes.
 
-The split is deliberate. The nightly sweep lands at 21:30 UTC, which is 17:30 in New York — nothing placed then can fill, and deciding its eight signals one at a time would hand the budget out first-come-first-served instead of weighing them against each other.
-An intraday trigger is the opposite: it arrives while the market is open, and a move worth analyzing at 11:00 is worth nothing by the next morning.
+The split is deliberate. The sweep lands at 11:00 UTC, two and a half hours before the open — nothing placed then can fill, and deciding its nine signals one at a time would hand the budget out first-come-first-served instead of weighing them against each other.
+An intraday trigger is the opposite: it arrives while the market is open, and a move worth analyzing at midday is worth nothing by the next morning.
 
 **No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
 The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.
@@ -290,7 +295,7 @@ Two details worth knowing when reading the page:
 Fills are reported over a live event stream, so a stop that triggers is recorded and posted within a second.
 The fifteen-minute poll behind it is deliberately kept: a stream that silently stops looks exactly like a quiet market, so the stream is a speed improvement over a guarantee rather than a replacement for it.
 
-Why the open rather than straight after the sweep: the sweep runs at 21:30 UTC, which is 17:30 in New York, ninety minutes after the close. Webull rejects a market order outright at that hour, so an agent chained to the sweep would look healthy and never fill anything.
+Why the open rather than straight after the sweep: the sweep finishes well before the market opens, and Webull rejects a market order outright at that hour, so an agent chained to the sweep would look healthy and never fill anything.
 
 ## Finding new tickers
 
@@ -304,11 +309,12 @@ See them on the Tickers page, with `/candidates`, or in the weekly digest post.
 
 | Time | What happens |
 |---|---|
+| 11:00 | **Watchlist sweep** — a fresh analysis for every tracked ticker, before the open, so the overnight news cycle is in it (unless `/dailysweep` turned this off) |
 | 12:35 | **Webull sync** — mirrors real holdings into the watchlist and positions (posts only when something changes) |
 | 12:45 | **Regime snapshot** — VIX, SPY vs its 200-day average, and the 10Y–3M yield spread, shown as 🟢/🟡/🔴 |
 | 13:00 | **Earnings check** — runs a fresh analysis for any tracked ticker that reports within 2 days |
 | 13:30–20:00 (9:30–16:00 ET) | **Watchdog**, every 15 minutes — flags a move of 5% or more, volume at 2x the average or more, a stop breach, or a target touch. Big moves and volume spikes also trigger an immediate analysis, at most one per ticker per day |
-| 21:30 | **Daily run** — grades and posts matured signals, snapshots the paper book, then sweeps the full watchlist (unless `/dailysweep` turned this off) |
+| 21:30 | **Daily grading** — grades and posts matured signals, and snapshots the paper book. Stays after the close because both read the day's closing price |
 | Fri 23:00 | **Weekly digest** — the week's outcomes, the win-rate trend, alerts, and both books |
 
 ## Data sources

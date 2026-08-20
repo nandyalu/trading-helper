@@ -151,11 +151,12 @@ async def _maybe_run_agent() -> None:
     """Let the agent act on fresh intraday signals, but only when it could
     actually trade on them.
 
-    The nightly sweep is deliberately *not* wired here. 21:30 UTC is 17:30 in
-    New York, so nothing placed then can fill, and deciding its eight signals
-    one at a time would hand the budget out first-come-first-served instead of
-    comparing them against each other — which is the entire job. Those go to
-    the 13:35 batch, which re-decides at the open on fresh prices.
+    The morning sweep is deliberately *not* wired here. It runs at 11:00 UTC,
+    two and a half hours before the open, so nothing placed then could fill —
+    and deciding its nine signals one at a time would hand the budget out
+    first-come-first-served instead of comparing them against each other, which
+    is the entire job. Those go to the 13:35 batch, which decides on all of
+    them at once, on opening prices.
 
     Intraday triggers are the opposite case: they arrive while the market is
     open, and a move worth analyzing at 11:00 is worth nothing by tomorrow
@@ -180,6 +181,12 @@ async def _maybe_run_agent() -> None:
 
 
 async def _daily_signals_job() -> None:
+    """21:30 UTC (17:30 ET): grade what matured and snapshot the paper book.
+
+    Stays after the close because both read the day's closing price. The
+    watchlist sweep used to run here too and now runs in the morning instead —
+    see _morning_sweep_job.
+    """
     # Weekday-only: US markets are closed Sat/Sun, running would just waste a GPU pass.
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
         return
@@ -188,8 +195,36 @@ async def _daily_signals_job() -> None:
         await asyncio.to_thread(paper.record_daily_snapshot)  # equity-curve point for /paper
     except Exception:
         log.exception("Paper snapshot failed")
+
+
+def daily_signals() -> None:
+    run_on_main(_daily_signals_job)
+
+
+async def _morning_sweep_job() -> None:
+    """11:00 UTC (07:00 ET): analyse the watchlist before the market opens.
+
+    Moved here from 21:30 UTC, and the reason is news rather than prices. The
+    newest completed session is the same one either way — an evening run and
+    the next morning's run both reason over yesterday's bar — but an evening
+    run at 17:30 ET misses the entire overnight cycle, which is when earnings
+    are released. Its signals then sat unchanged until the agent acted on them
+    sixteen hours later.
+
+    07:00 rather than closer to the open, for two reasons that have nothing to
+    do with GPU time. The pre-open window is already busy — broker_sync at
+    12:35, morning_regime at 12:45, earnings_check at 13:00, the last of which
+    runs its own analyses on the same pool — and a sweep that overran into the
+    agent's 13:35 decision would hand it half a picture. This leaves two and a
+    half hours of margin for a slow run or a retry.
+
+    Signals recorded before the open are priced at the last completed close
+    rather than a pre-market print — see analysis.signal_price.
+    """
+    if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
+        return
     if db.get_setting("daily_sweep") == "off":
-        return  # event-triggered analyses only (/dailysweep); evaluation above still ran
+        return  # event-triggered analyses only (/dailysweep)
     # Dispatched together, not one await at a time: a sequential loop keeps
     # exactly one LLM request in flight regardless of how many backends the
     # Ollama pool has, so every GPU past the first sits idle for the whole
@@ -210,8 +245,8 @@ async def _daily_signals_job() -> None:
     )
 
 
-def daily_signals() -> None:
-    run_on_main(_daily_signals_job)
+def morning_sweep() -> None:
+    run_on_main(_morning_sweep_job)
 
 
 async def _alert_watchdog_job() -> None:
@@ -377,12 +412,13 @@ def paper_agent() -> None:
 
 
 def register_jobs() -> None:
-    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
+    """Registers all 8 scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
     across restarts."""
     scheduler.add_task(task_name="alert_watchdog", func=alert_watchdog, interval=900)
     scheduler.add_task(task_name="daily_signals", func=daily_signals, interval=86400, delay=_seconds_until(21, 30))
+    scheduler.add_task(task_name="morning_sweep", func=morning_sweep, interval=86400, delay=_seconds_until(11, 0))
     scheduler.add_task(task_name="earnings_check", func=earnings_check, interval=86400, delay=_seconds_until(13, 0))
     scheduler.add_task(task_name="broker_sync", func=broker_sync, interval=86400, delay=_seconds_until(12, 35))
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))

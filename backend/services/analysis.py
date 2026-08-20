@@ -20,7 +20,7 @@ from tradingagents.llm_clients.openai_client import OPENAI_COMPATIBLE_PROVIDERS
 from backend.database import db
 from backend.database.models import Signal
 from backend.discord_bot.notify import notify
-from backend.services import llm_usage
+from backend.services import bars, llm_usage, watchdog
 from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
 from backend.services.signals import (
@@ -426,8 +426,40 @@ def _trade_plan_levels(
     }
 
 
+def signal_price(ticker: str, today: datetime.date | None = None) -> float | None:
+    """The price to record a signal against.
+
+    While the market is open this is simply the current quote. While it is shut
+    it is the last completed session's close instead, and the difference
+    matters as soon as analyses run before the open.
+
+    Webull's snapshot reports the last trade, and pre-market sessions begin at
+    4:00 ET — so a sweep at 7:00 or 8:30 ET would price a signal off a thin
+    print with a wide spread, hours before the market agrees what the stock is
+    worth. Every level on the trade plan is then drawn against a number that
+    was never really the price, and the agent buys at the open into a different
+    one. That is the same failure the wrong-side guard exists to catch, arriving
+    by a new route.
+
+    A completed close is the price the whole market settled on, which is the
+    same reasoning the bar cache already follows: today's bar is never stored,
+    because it is still moving.
+    """
+    if watchdog.is_us_market_hours():
+        return get_current_price(ticker)
+
+    today = today or datetime.date.today()
+    window = bars.get_bars(ticker, today - datetime.timedelta(days=10), today=today)
+    if window:
+        return window[-1].close
+    # No cached history — a newly added ticker, or one the fetch failed for.
+    # A live quote is better than refusing to record the signal at all.
+    log.info("No completed bar for %s — falling back to the live quote", ticker)
+    return get_current_price(ticker)
+
+
 def record_signal(ticker: str, final_state: dict, decision: str, message_id: str | None = None) -> Signal | None:
-    price = get_current_price(ticker)
+    price = signal_price(ticker)
     if price is None:
         log.warning("Could not fetch a price for %s, skipping signal record", ticker)
         return None

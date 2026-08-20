@@ -52,7 +52,7 @@ This keeps the bot responsive.
 | Command | What it does |
 |---|---|
 | `/alertconfig move_pct:5 stop_pct:10 volume_mult:2 enabled:True` | View or tune the intraday watchdog. All arguments are optional. Run with no arguments to view your current settings. |
-| `/dailysweep enabled:False` | Turn the fixed 21:30 UTC watchlist sweep off, or back on. If it is off, analyses run only from triggers: earnings, big moves, volume spikes, and `/analyze`. Signal grading still runs every night, either way. |
+| `/dailysweep enabled:False` | Turn the fixed 11:00 UTC watchlist sweep off, or back on. If it is off, analyses run only from triggers: earnings, big moves, volume spikes, and `/analyze`. Signal grading still runs every night, either way. |
 | `/regime` | Show the market regime snapshot now. It also posts automatically each weekday at 12:45 UTC. |
 | `/digest` | Show the weekly digest now. It also posts automatically on Fridays at 23:00 UTC. |
 | `/setchannel` | Set the current channel as the destination for all scheduled posts. This needs the Manage Server permission. |
@@ -67,5 +67,6 @@ This keeps the bot responsive.
 | 13:35 | The auto trader decides, five minutes after the US open. Posts only when it placed, refused, or failed an order |
 | every 15 min, market hours | 📊 big moves, 📊 unusual volume, 🛑 stop breaches, and 🎯 target touches. Each alert posts at most once a day (a target alert posts once ever, per signal). Plus ⚡ triggered analyses, and the auto trader deciding on them |
 | whenever one fills | 🛑 the auto trader stopped out, or 🎯 it reached its target. These arrive within a second of the fill |
-| 21:30 | Graded signals ("PASS/FAIL, vs SPY, target hit"), then new analyses from the watchlist sweep |
+| 11:00 | New analyses from the watchlist sweep, before the US open |
+| 21:30 | Graded signals ("PASS/FAIL, vs SPY, target hit") |
 | Fri 23:00 | 🗞️ weekly digest, then the week's screened candidates |

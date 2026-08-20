@@ -381,7 +381,7 @@ async def alertconfig(
 async def dailysweep(interaction: discord.Interaction, enabled: bool):
     db.set_setting("daily_sweep", "on" if enabled else "off")
     if enabled:
-        await interaction.response.send_message("Daily watchlist sweep is **on** (21:30 UTC weekdays).")
+        await interaction.response.send_message("Daily watchlist sweep is **on** (11:00 UTC weekdays, before the US open).")
     else:
         await interaction.response.send_message(
             "Daily watchlist sweep is **off** — analyses now run only on triggers "
