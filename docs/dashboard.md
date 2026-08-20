@@ -87,4 +87,4 @@ Every watchdog alert, filterable by type. The two stop alerts read differently o
 | Scorecard | Win rates overall, by decision, by model, and by ticker, plus whether the model's stated confidence matches how often it is right |
 | Digest | The weekly wrap-up |
 | Regime | VIX, SPY against its 200-day average, and the yield curve |
-| Settings | Trade horizon, analysis model, sizing limits, alert thresholds, the daily sweep, and the auto trader |
+| Settings | Trade horizon, analysis model, sizing limits, alert thresholds, the daily sweep, and the auto trader with its budget and conviction floor |

@@ -296,6 +296,10 @@ class SettingsOut(BaseModel):
     daily_sweep_enabled: bool
     agent_enabled: bool
     agent_budget: float
+    # The conviction floor. Zero means off, which is the default — see
+    # backend/services/agent.py on why it stays off until calibration earns it.
+    agent_min_win_probability: float
+    agent_min_risk_reward: float
 
 
 class SettingsPatchIn(BaseModel):
@@ -313,6 +317,8 @@ class SettingsPatchIn(BaseModel):
     daily_sweep_enabled: bool | None = None
     agent_enabled: bool | None = None
     agent_budget: float | None = None
+    agent_min_win_probability: float | None = None
+    agent_min_risk_reward: float | None = None
 
 
 class TransactionIn(BaseModel):

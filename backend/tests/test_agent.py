@@ -1231,3 +1231,89 @@ def test_one_exit_is_enough(monkeypatch):
 def test_a_bracket_with_no_exit_at_all_is_a_programming_error(monkeypatch):
     with pytest.raises(ValueError, match="at least one exit"):
         _bracket_legs(monkeypatch, ticker="ZBH", quantity=3, price=98.41)
+
+
+# --- the conviction floor ------------------------------------------------------
+
+
+class _Signal:
+    def __init__(self, ticker, win_probability=None, risk_reward=None):
+        self.ticker = ticker
+        self.win_probability = win_probability
+        self.risk_reward = risk_reward
+
+
+def _conviction(monkeypatch, probability=0.0, risk_reward=0.0):
+    monkeypatch.setattr(agent, "get_conviction", lambda: (probability, risk_reward))
+
+
+def test_no_floor_lets_everything_through(monkeypatch):
+    """Zero is the default, and it must skip the check rather than compare
+    against zero — a signal that states nothing still has to pass."""
+    _conviction(monkeypatch)
+    assert agent.fails_conviction(_Signal("AAA"), 0.0, 0.0) is None
+    assert agent.fails_conviction(None, 0.0, 0.0) is None
+
+
+def test_a_signal_below_the_probability_floor_is_refused():
+    why = agent.fails_conviction(_Signal("AAA", win_probability=45.0), 60.0, 0.0)
+    assert why is not None and "below the 60% floor" in why
+
+
+def test_a_signal_stating_no_probability_fails_a_probability_floor():
+    """Accepting it would make the floor avoidable by not answering — the model
+    would only have to stop stating the number."""
+    why = agent.fails_conviction(_Signal("AAA"), 60.0, 0.0)
+    assert why is not None and "states no win probability" in why
+
+
+def test_a_ticker_with_no_recent_signal_cannot_be_opened_under_a_floor():
+    """The plainest case a conviction floor exists to stop: buying with no
+    analysis behind it at all."""
+    why = agent.fails_conviction(None, 60.0, 0.0)
+    assert why == "no recent signal to justify it"
+
+
+def test_both_floors_apply():
+    good_odds_bad_ratio = _Signal("AAA", win_probability=80.0, risk_reward=0.5)
+    why = agent.fails_conviction(good_odds_bad_ratio, 60.0, 2.0)
+    assert why is not None and "risk/reward 0.50" in why
+
+
+def test_a_signal_clearing_both_floors_passes():
+    assert agent.fails_conviction(_Signal("AAA", 70.0, 3.0), 60.0, 2.0) is None
+
+
+def test_the_floor_blocks_a_buy_but_never_a_sell(monkeypatch):
+    """A Sell the agent has no confidence in is still a reason to close a
+    position it holds. The floor is about opening, not about knowing."""
+    _conviction(monkeypatch, probability=60.0)
+    book = _book(cash=1000.0, holdings=[("AAA", 5, 10.0)])
+    signals = {"AAA": _Signal("AAA", win_probability=30.0)}
+
+    accepted, rejected = agent.screen(
+        [
+            {"ticker": "AAA", "side": "sell", "quantity": 5},
+            {"ticker": "AAA", "side": "buy", "quantity": 1},
+        ],
+        book,
+        {"AAA": 100.0},
+        signals,
+    )
+
+    assert [o["side"] for o in accepted] == ["sell"]
+    assert [r.side for r in rejected] == ["buy"]
+
+
+def test_the_floor_is_enforced_in_python_not_only_in_the_prompt(monkeypatch):
+    """A rule stated only in the prompt is a request, not a limit."""
+    _conviction(monkeypatch, probability=60.0, risk_reward=2.0)
+    accepted, rejected = agent.screen(
+        [{"ticker": "AAA", "side": "buy", "quantity": 1}],
+        _book(cash=1000.0),
+        {"AAA": 100.0},
+        {"AAA": _Signal("AAA", win_probability=55.0, risk_reward=3.0)},
+    )
+
+    assert accepted == []
+    assert len(rejected) == 1

@@ -30,6 +30,8 @@ def _current_settings() -> SettingsOut:
         daily_sweep_enabled=db.get_setting("daily_sweep") != "off",
         agent_enabled=agent.is_enabled(),
         agent_budget=agent_book.get_budget(),
+        agent_min_win_probability=agent.get_conviction()[0],
+        agent_min_risk_reward=agent.get_conviction()[1],
     )
 
 
@@ -93,6 +95,14 @@ def update_settings(payload: SettingsPatchIn):
             agent_book.set_budget(payload.agent_budget)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload.agent_min_win_probability is not None or payload.agent_min_risk_reward is not None:
+        try:
+            agent.set_conviction(
+                payload.agent_min_win_probability, payload.agent_min_risk_reward
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if payload.agent_enabled is not None:
         # Switching the agent on outside the sandbox would arm something that
         # refuses every order anyway; saying so beats an agent that silently

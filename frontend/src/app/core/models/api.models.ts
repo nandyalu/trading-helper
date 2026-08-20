@@ -295,6 +295,9 @@ export interface Settings {
   daily_sweep_enabled: boolean;
   agent_enabled: boolean;
   agent_budget: number;
+  /** The conviction floor. Zero means off, which is the default. */
+  agent_min_win_probability: number;
+  agent_min_risk_reward: number;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;

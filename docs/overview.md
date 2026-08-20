@@ -211,6 +211,22 @@ That is what lets it cover every day the agent has traded instead of starting on
 
 A holding that printed no bar that day keeps its previous close rather than counting as nothing, so a missing quote does not draw a cliff and recover from it the next day.
 
+### The conviction floor
+
+Two settings decide how good a signal has to look before the agent may open a position on it: a minimum chance of working, and a minimum risk/reward.
+
+**Both default to zero, meaning off, and that default is the point rather than caution.**
+The chance of working is the model's own claim, and until the Scorecard's calibration says that claim is honest *and* that it sorts outcomes, a threshold on it is a threshold on a number that may mean nothing.
+Filtering by it would feel like discipline while being arbitrary. Check the calibration first, then set the floor.
+
+Three details that follow from what the floor is for:
+
+- **Selling is never blocked by it.** A Sell the model has no confidence in is still a reason to close a position you hold. The floor governs opening a position, not knowing about one — which is why low-conviction signals still reach the agent's prompt rather than being hidden from it.
+- **A signal that states no number counts as failing.** Asking for at least 60% confidence and then accepting a signal that claims nothing would make the floor avoidable by not answering.
+- **Buying a ticker with no recent analysis at all is refused** whenever a floor is set. That is the plainest case the floor exists to stop.
+
+It is enforced in Python, not only stated in the prompt. A rule that lives only in the prompt is a request.
+
 ### Is the model earning its keep?
 
 The agent picks stocks with an LLM, which is only worth doing if it beats the two things it could be replaced by tomorrow.

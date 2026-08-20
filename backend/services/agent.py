@@ -35,6 +35,19 @@ log = logging.getLogger("trading-bot.agent")
 
 _ENABLED_SETTING_KEY = "agent_enabled"
 
+# The conviction floor: how good a signal has to look before the agent may
+# open a position on it. Both default to 0, meaning off, and that default is
+# the point rather than caution.
+#
+# The thresholds read win_probability and risk_reward. The first is the one
+# number the model asserts rather than derives, and until the Scorecard's
+# calibration says it is honest and that it sorts outcomes, a threshold on it
+# is a threshold on a number that may not mean anything — filtering by it would
+# feel like discipline while being arbitrary. Turn these on once calibration
+# earns it.
+_MIN_WIN_PROBABILITY_KEY = "agent_min_win_probability"
+_MIN_RISK_REWARD_KEY = "agent_min_risk_reward"
+
 # How far back to show signals. The trade horizon is 1-2 weeks, so a signal
 # older than this has already had its chance and would just crowd the prompt.
 _SIGNAL_LOOKBACK_DAYS = 3
@@ -51,6 +64,62 @@ def is_enabled() -> bool:
 
 def set_enabled(enabled: bool) -> None:
     db.set_setting(_ENABLED_SETTING_KEY, "on" if enabled else "off")
+
+
+def _threshold(key: str) -> float:
+    stored = db.get_setting(key)
+    try:
+        return max(0.0, float(stored)) if stored else 0.0
+    except (TypeError, ValueError):
+        log.warning("Ignoring unparseable %s %r", key, stored)
+        return 0.0
+
+
+def get_conviction() -> tuple[float, float]:
+    """(minimum win probability, minimum risk/reward). Zero means no floor."""
+    return _threshold(_MIN_WIN_PROBABILITY_KEY), _threshold(_MIN_RISK_REWARD_KEY)
+
+
+def set_conviction(min_win_probability: float | None, min_risk_reward: float | None) -> None:
+    if min_win_probability is not None:
+        if not 0 <= min_win_probability <= 100:
+            raise ValueError("Minimum win probability must be between 0 and 100.")
+        db.set_setting(_MIN_WIN_PROBABILITY_KEY, str(min_win_probability))
+    if min_risk_reward is not None:
+        if min_risk_reward < 0:
+            raise ValueError("Minimum risk/reward cannot be negative.")
+        db.set_setting(_MIN_RISK_REWARD_KEY, str(min_risk_reward))
+
+
+def fails_conviction(signal, min_probability: float, min_risk_reward: float) -> str | None:
+    """Why this signal is not good enough to open a position on, or None.
+
+    A signal that states no probability *fails* a probability floor rather than
+    passing it. Asking for at least 60% confidence and accepting a signal that
+    claims nothing would make the floor trivially avoidable — the model would
+    only have to stop answering the question.
+
+    None as the signal itself means the agent proposed a ticker with no recent
+    analysis at all, which is the plainest case a conviction floor exists to
+    stop.
+    """
+    if not min_probability and not min_risk_reward:
+        return None
+    if signal is None:
+        return "no recent signal to justify it"
+    if min_probability:
+        stated = signal.win_probability
+        if stated is None:
+            return f"states no win probability (floor is {min_probability:.0f}%)"
+        if stated < min_probability:
+            return f"{stated:.0f}% win probability is below the {min_probability:.0f}% floor"
+    if min_risk_reward:
+        stated = signal.risk_reward
+        if stated is None:
+            return f"states no risk/reward (floor is {min_risk_reward:.2f})"
+        if stated < min_risk_reward:
+            return f"risk/reward {stated:.2f} is below the {min_risk_reward:.2f} floor"
+    return None
 
 
 def _recent_signals() -> list:
@@ -213,6 +282,14 @@ def build_prompt(
             "cannot afford, sell something first and list the sell before the buy.",
         ]
 
+    min_probability, min_risk_reward = get_conviction()
+    floors = []
+    if min_probability:
+        floors.append(f"at least {min_probability:.0f}% chance of working")
+    if min_risk_reward:
+        floors.append(f"risk/reward of at least {min_risk_reward:.2f}")
+    conviction_line = " and ".join(floors)
+
     lines += [
         "",
         "Rules:",
@@ -231,6 +308,15 @@ def build_prompt(
         "  in R-multiples, where one R is the amount risked: positive means the bet pays",
         "  at the stated odds, negative means it does not. Signals without these numbers",
         "  are not worse bets, only ones where the analyst did not say.",
+        *(
+            [
+                f"- You may only open a new position on a signal that meets the conviction "
+                f"floor: {conviction_line}. A signal below it, or one that does not state "
+                "the number, cannot be bought. Selling is never blocked this way.",
+            ]
+            if conviction_line
+            else []
+        ),
         "- Doing nothing is a valid answer, and often the right one.",
         *(
             [
@@ -279,14 +365,29 @@ def parse_decision(text: str) -> tuple[str, list[dict]]:
     return str(payload.get("reasoning") or ""), [o for o in orders if isinstance(o, dict)]
 
 
-def screen(orders: list[dict], book: agent_book.Book, prices: dict[str, float | None]):
+def screen(
+    orders: list[dict],
+    book: agent_book.Book,
+    prices: dict[str, float | None],
+    signals_by_ticker: dict | None = None,
+):
     """Split proposed orders into (accepted, rejected), applying each accepted
     one to a running copy of the book.
 
     This is the part that must not be simplified into a per-order check against
     the opening balance: three buys that each fit the starting cash do not
     necessarily fit together.
+
+    The conviction floor is enforced here rather than by leaving low-conviction
+    signals out of the prompt. The agent still needs to see them — a Sell it
+    has no confidence in is still a reason to close a position it holds — so
+    the floor applies to opening a position, not to knowing about one. And it
+    is checked in Python for the same reason every other limit is: a rule
+    stated only in the prompt is a request, not a limit.
+
+    A floor of zero, which is the default, skips the check entirely.
     """
+    min_probability, min_risk_reward = get_conviction()
     cash = book.cash
     held = {h.ticker: h.quantity for h in book.holdings}
     accepted: list[dict] = []
@@ -310,6 +411,15 @@ def screen(orders: list[dict], book: agent_book.Book, prices: dict[str, float | 
 
         quantity = float(order["quantity"])
         side = str(order["side"]).lower()
+        if side == "buy":
+            why = fails_conviction(
+                (signals_by_ticker or {}).get(ticker), min_probability, min_risk_reward
+            )
+            if why is not None:
+                rejected.append(
+                    agent_book.Rejection(ticker=ticker, side=side, quantity=quantity, why=why)
+                )
+                continue
         if side == "buy":
             cash -= quantity * price
             held[ticker] = held.get(ticker, 0.0) + quantity
@@ -399,8 +509,9 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     than merging, because nothing has been placed yet and two half-adopted plans
     are harder to reason about than one.
     """
+    by_ticker = {s.ticker: s for s in signals}
     reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices, closed=closed, regime_line=regime_line, horizon_days=horizon_days)))
-    accepted, rejected = screen(proposed, book, prices)
+    accepted, rejected = screen(proposed, book, prices, by_ticker)
     if not rejected:
         return reasoning, accepted, rejected
 
@@ -413,7 +524,7 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
         # A retry that proposes nothing is a decision to stand pat; keep the
         # first answer's accepted orders rather than discarding them.
         return reasoning, accepted, rejected
-    retry_accepted, retry_rejected = screen(retry_proposed, book, prices)
+    retry_accepted, retry_rejected = screen(retry_proposed, book, prices, by_ticker)
     return retry_reasoning or reasoning, retry_accepted, retry_rejected
 
 

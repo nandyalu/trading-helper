@@ -27,6 +27,9 @@ export class SettingsView {
   protected readonly dailySweepEnabled = signal(true);
   protected readonly agentEnabled = signal(false);
   protected readonly agentBudget = signal(1000);
+  // Zero means no floor, which is the default — see the template's hint.
+  protected readonly agentMinWinProbability = signal(0);
+  protected readonly agentMinRiskReward = signal(0);
 
   protected readonly saving = signal(false);
   protected readonly message = signal<string | null>(null);
@@ -51,6 +54,8 @@ export class SettingsView {
       this.dailySweepEnabled.set(s.daily_sweep_enabled);
       this.agentEnabled.set(s.agent_enabled);
       this.agentBudget.set(s.agent_budget);
+      this.agentMinWinProbability.set(s.agent_min_win_probability);
+      this.agentMinRiskReward.set(s.agent_min_risk_reward);
     });
     void this.settingsService.load();
   }
@@ -112,6 +117,14 @@ export class SettingsView {
     this.agentBudget.set(Number((e.target as HTMLInputElement).value));
   }
 
+  protected onMinWinProbabilityInput(e: Event): void {
+    this.agentMinWinProbability.set(Number((e.target as HTMLInputElement).value));
+  }
+
+  protected onMinRiskRewardInput(e: Event): void {
+    this.agentMinRiskReward.set(Number((e.target as HTMLInputElement).value));
+  }
+
   protected async save(): Promise<void> {
     this.saving.set(true);
     this.message.set(null);
@@ -133,6 +146,8 @@ export class SettingsView {
         daily_sweep_enabled: this.dailySweepEnabled(),
         agent_enabled: this.agentEnabled(),
         agent_budget: this.agentBudget(),
+        agent_min_win_probability: this.agentMinWinProbability(),
+        agent_min_risk_reward: this.agentMinRiskReward(),
       });
       this.message.set('Settings saved.');
     } catch (err) {

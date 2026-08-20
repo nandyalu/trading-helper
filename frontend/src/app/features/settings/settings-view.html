@@ -240,6 +240,37 @@
             (input)="onAgentBudgetInput($event)"
           />
         </label>
+        <label class="field narrow">
+          Minimum chance of working (%)
+          <input
+            type="number"
+            inputmode="decimal"
+            min="0"
+            max="100"
+            step="any"
+            [value]="agentMinWinProbability()"
+            (input)="onMinWinProbabilityInput($event)"
+          />
+        </label>
+        <label class="field narrow">
+          Minimum risk/reward
+          <input
+            type="number"
+            inputmode="decimal"
+            min="0"
+            step="any"
+            [value]="agentMinRiskReward()"
+            (input)="onMinRiskRewardInput($event)"
+          />
+        </label>
+        <p class="hint">
+          The conviction floor: how good a signal has to look before the agent may open a position
+          on it. Zero means no floor, and that is the default on purpose — the chance of working is
+          the model's own claim, so check the
+          <a routerLink="/scorecard">Scorecard</a> first. A threshold on a number that has not
+          earned trust feels like discipline while being arbitrary. Selling is never blocked by
+          this, and a signal that states no number counts as failing rather than passing.
+        </p>
       </div>
     </section>
 

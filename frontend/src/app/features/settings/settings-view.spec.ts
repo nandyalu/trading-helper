@@ -21,6 +21,8 @@ const SERVER_SETTINGS: Settings = {
   daily_sweep_enabled: true,
   agent_enabled: false,
   agent_budget: 1000,
+  agent_min_win_probability: 0,
+  agent_min_risk_reward: 0,
 };
 
 /** Stands in for the HTTP-backed service: records what was sent, and lets a
@@ -150,5 +152,34 @@ describe('SettingsView', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('Most of equity in one position');
     expect(text).toContain('Most positions open at once');
+  });
+
+  it('keeps the conviction floor off unless the server says otherwise', async () => {
+    // Zero is the default on purpose: the chance of working is the model's own
+    // claim, and a threshold on an unchecked number is arbitrary discipline.
+    const fixture = TestBed.createComponent(SettingsView);
+    await fixture.whenStable();
+
+    const component = fixture.componentInstance as unknown as { save: () => Promise<void> };
+    await component.save();
+
+    expect(service.patches[0].agent_min_win_probability).toBe(0);
+    expect(service.patches[0].agent_min_risk_reward).toBe(0);
+  });
+
+  it('shows the floor the server reports', async () => {
+    service.serverSettings = {
+      ...SERVER_SETTINGS,
+      agent_min_win_probability: 60,
+      agent_min_risk_reward: 2,
+    };
+    const fixture = TestBed.createComponent(SettingsView);
+    await fixture.whenStable();
+
+    const component = fixture.componentInstance as unknown as { save: () => Promise<void> };
+    await component.save();
+
+    expect(service.patches[0].agent_min_win_probability).toBe(60);
+    expect(service.patches[0].agent_min_risk_reward).toBe(2);
   });
 });
