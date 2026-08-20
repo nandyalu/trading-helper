@@ -14,9 +14,10 @@ from backend.api.schemas import (
     AgentRunOut,
     AgentTradeOut,
     AgentTradeRowOut,
+    UnprotectedPositionOut,
 )
 from backend.database import db
-from backend.services import agent, agent_book, agent_performance, quotes
+from backend.services import agent, agent_book, agent_performance, quotes, ticker_book
 from backend.services.positions import get_current_price
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -122,3 +123,23 @@ def get_curve():
     fetches nothing.
     """
     return [AgentEquityPointOut.model_validate(p) for p in agent_book.equity_curve()]
+
+
+@router.get("/unprotected", response_model=list[UnprotectedPositionOut])
+def get_unprotected():
+    """Holdings with nothing resting under them at the broker.
+
+    Its own endpoint rather than a flag on the book, because the Overview page
+    needs the answer without needing the book, and because the rule for what
+    counts as protected belongs in one place — two pages computing it from
+    holdings and orders separately is how they come to disagree.
+    """
+    return [
+        UnprotectedPositionOut(
+            ticker=ticker,
+            quantity=position.quantity,
+            avg_cost=position.avg_cost,
+            held_days=position.held_days,
+        )
+        for ticker, position in ticker_book.unprotected_positions()
+    ]

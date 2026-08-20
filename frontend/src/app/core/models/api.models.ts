@@ -319,6 +319,16 @@ export interface AgentHolding {
   unrealized_pnl: number | null;
 }
 
+/** An auto-trader holding with no exit resting at the broker. Its own type
+ * because it is an absence, and nothing on a dashboard draws attention to an
+ * absence on its own. */
+export interface UnprotectedPosition {
+  ticker: string;
+  quantity: number;
+  avg_cost: number;
+  held_days: number | null;
+}
+
 export interface AgentEquityPoint {
   date: string;
   equity: number;

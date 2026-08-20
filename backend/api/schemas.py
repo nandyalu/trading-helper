@@ -395,6 +395,19 @@ class CalibrationOut(OrmModel):
     bands: list[CalibrationBandOut]
 
 
+class UnprotectedPositionOut(BaseModel):
+    """An auto-trader holding with no exit resting at the broker.
+
+    Named as its own thing because it is an absence, and an absence is what
+    nothing on a dashboard ever draws attention to on its own.
+    """
+
+    ticker: str
+    quantity: float
+    avg_cost: float
+    held_days: int | None
+
+
 class AgentEquityPointOut(OrmModel):
     date: date
     equity: float

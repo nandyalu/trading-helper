@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { Alert, PortfolioPosition, Signal, TickerSummary } from '../../core/models/api.models';
+import { AgentService } from '../../core/services/agent.service';
 import { AlertsService } from '../../core/services/alerts.service';
 import { PaperService } from '../../core/services/paper.service';
 import { PortfolioService } from '../../core/services/portfolio.service';
@@ -33,6 +34,7 @@ const ATTENTION_WINDOW_DAYS = 3;
   imports: [RouterLink, DecisionBadge],
 })
 export class Overview {
+  private readonly agentService = inject(AgentService);
   private readonly alertsService = inject(AlertsService);
   private readonly portfolioService = inject(PortfolioService);
   private readonly paperService = inject(PaperService);
@@ -46,6 +48,11 @@ export class Overview {
   protected readonly paper = this.paperService.portfolio;
   protected readonly scorecard = this.scorecardService.scorecard;
   protected readonly alerts = this.alertsService.alerts;
+
+  /** Auto-trader holdings with nothing resting at the broker to close them.
+   * This belongs above everything else on the page: the money is at risk now,
+   * and the exit everyone assumes is there is not. */
+  protected readonly unprotected = this.agentService.unprotected;
   protected readonly tickers = this.tickersService.tickers;
 
   protected readonly signals = signal<Signal[]>([]);
@@ -121,6 +128,7 @@ export class Overview {
         this.paperService.load(),
         this.scorecardService.load(),
         this.alertsService.load(),
+        this.agentService.loadUnprotected(),
         this.tickersService.load(),
         this.signalsService
           .load({ limit: 40 })

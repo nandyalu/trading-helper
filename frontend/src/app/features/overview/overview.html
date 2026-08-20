@@ -26,12 +26,26 @@
   } @else {
     <!-- Anything requiring a decision comes first. Everything below this block
          is context; this block is the reason to open the app. -->
-    @if (needsAttention().length > 0 || exitSignals().length > 0) {
+    @if (needsAttention().length > 0 || exitSignals().length > 0 || unprotected().length > 0) {
       <div class="attention">
         <div class="card-head">
           <h2>Needs a decision</h2>
-          <span class="badge badge-neg">{{ needsAttention().length + exitSignals().length }}</span>
+          <span class="badge badge-neg">{{
+            needsAttention().length + exitSignals().length + unprotected().length
+          }}</span>
         </div>
+        @for (p of unprotected(); track p.ticker) {
+          <a class="attention-row" [routerLink]="['/tickers', p.ticker]">
+            <span class="attention-icon" aria-hidden="true">🛡️</span>
+            <span class="attention-body">
+              <strong>{{ p.ticker }}</strong> — the auto trader holds {{ p.quantity }} share(s) and
+              nothing is resting at the broker to close them.
+            </span>
+            <span class="attention-when">
+              {{ p.held_days === null ? '' : p.held_days + 'd' }}
+            </span>
+          </a>
+        }
         @for (s of exitSignals(); track s.id) {
           <a class="attention-row" [routerLink]="['/tickers', s.ticker]">
             <span class="attention-icon" aria-hidden="true">🔻</span>
