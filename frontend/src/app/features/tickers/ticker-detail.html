@@ -44,6 +44,14 @@
       <p class="notice notice-info">{{ message() }}</p>
     }
 
+    @if (agentPosition()?.unprotected) {
+      <p class="notice notice-warn">
+        <span aria-hidden="true">⚠️</span> The auto trader holds this and nothing is resting at the
+        broker to close it. The stop and target below are what the analysis proposed, not orders
+        that will execute.
+      </p>
+    }
+
     <!-- The exit plan, above the chart: these are the numbers that decide what
          to do next, and burying them under the price history hides them. -->
     <div class="stat-grid">
@@ -77,6 +85,24 @@
           }
         </div>
       }
+      @if (agentPosition(); as a) {
+        <div class="stat">
+          <span class="stat-label">Auto trader</span>
+          <span class="stat-value">{{ a.quantity }} @ ${{ a.avg_cost.toFixed(2) }}</span>
+          @if (a.unrealized_pct !== null) {
+            <span
+              class="stat-note"
+              [class.pass]="a.unrealized_pct >= 0"
+              [class.fail]="a.unrealized_pct < 0"
+            >
+              {{ signed(a.unrealized_pct) }}%
+              @if (a.held_days !== null) {
+                <span>, held {{ a.held_days }}d</span>
+              }
+            </span>
+          }
+        </div>
+      }
       @if (stopLevel() !== null) {
         <div class="stat">
           <span class="stat-label">Stop</span>
@@ -93,6 +119,20 @@
           @if (targetStatus()) {
             <span class="stat-note" [class.pass]="targetReached()">{{ targetStatus() }}</span>
           }
+        </div>
+      }
+      @if (restingStop() !== null) {
+        <div class="stat">
+          <span class="stat-label">Resting stop</span>
+          <span class="stat-value">${{ restingStop()!.toFixed(2) }}</span>
+          <span class="stat-note">live order at the broker</span>
+        </div>
+      }
+      @if (restingTarget() !== null) {
+        <div class="stat">
+          <span class="stat-label">Resting target</span>
+          <span class="stat-value">${{ restingTarget()!.toFixed(2) }}</span>
+          <span class="stat-note">live order at the broker</span>
         </div>
       }
       @if (activeSignal()?.win_probability !== null && activeSignal(); as s) {
@@ -137,6 +177,62 @@
         />
       </div>
     </section>
+
+    @if (lots().length) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Positions taken</h2>
+          <p class="hint">
+            Every lot bought in this ticker, in any book, and what became of it. An open lot shows
+            no exit and no profit — its result is not decided yet — but the days held keep counting.
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Book</th>
+                <th class="num">Shares</th>
+                <th class="num">Entry</th>
+                <th>Bought</th>
+                <th class="num">Exit</th>
+                <th>Sold</th>
+                <th class="num">Held</th>
+                <th class="num">P/L</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (lot of lots(); track trackLot($index, lot)) {
+                <tr>
+                  <td data-label="">{{ bookLabel(lot.book) }}</td>
+                  <td class="num" data-label="Shares">{{ lot.quantity }}</td>
+                  <td class="num" data-label="Entry">${{ lot.entry.toFixed(2) }}</td>
+                  <td data-label="Bought">{{ lot.entry_at }}</td>
+                  <td class="num" data-label="Exit">
+                    {{ lot.exit === null ? '—' : '$' + lot.exit.toFixed(2) }}
+                  </td>
+                  <td data-label="Sold">{{ lot.exit_at ?? '—' }}</td>
+                  <td class="num" data-label="Held">{{ lot.held_days }}d</td>
+                  <td
+                    class="num"
+                    data-label="P/L"
+                    [class.pass]="(lot.pnl ?? 0) > 0"
+                    [class.fail]="(lot.pnl ?? 0) < 0"
+                  >
+                    @if (lot.pnl === null) {
+                      <span>open</span>
+                    } @else {
+                      {{ signed(lot.pnl, 2) }}
+                      <span class="stat-note">{{ signed(lot.return_pct ?? 0) }}%</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
 
     <div class="grid-2">
       <section class="card">

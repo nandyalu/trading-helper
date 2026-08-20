@@ -22,13 +22,15 @@ from fastapi import APIRouter, HTTPException
 
 from backend.database import db
 from backend.database.models import TickerPrice
-from backend.services import analysis
+from backend.services import analysis, ticker_book
 from backend.api.schemas import (
     ActionResultOut,
+    AgentPositionOut,
     AlertOut,
     AnalyzeAllQueuedOut,
     AnalyzeQueuedOut,
     AskIn,
+    LotOut,
     OhlcBarOut,
     PaperPositionOut,
     PortfolioPositionOut,
@@ -102,6 +104,11 @@ def _ticker_detail(ticker: str, cached: TickerPrice | None) -> TickerDetailOut:
         price_updated_at=cached.fetched_at if cached else None,
         real_position=_real_position(ticker, price),
         paper_position=_paper_position(ticker, price),
+        agent_position=(
+            AgentPositionOut.model_validate(position)
+            if (position := ticker_book.agent_position(ticker, price))
+            else None
+        ),
         latest_signal=_latest_signal(ticker),
         inactive=bool(status and status.inactive),
         inactive_reason=status.reason if status and status.inactive else None,
@@ -187,6 +194,7 @@ def get_ticker_events(ticker: str, days: int = 180):
             AlertOut.model_validate(a) for a in db.get_recent_alerts(limit=500) if a.ticker == ticker
         ],
         trades=sorted(trades, key=lambda t: t.date),
+        lots=[LotOut.model_validate(lot) for lot in ticker_book.lots_for(ticker)],
     )
 
 

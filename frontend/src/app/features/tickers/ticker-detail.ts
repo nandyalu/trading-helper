@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
-import { Signal, TickerDetail, TickerEvents } from '../../core/models/api.models';
+import { Lot, Signal, TickerDetail, TickerEvents } from '../../core/models/api.models';
 import { TickersService } from '../../core/services/tickers.service';
 import { TransactionsService } from '../../core/services/transactions.service';
 import { WatchlistService } from '../../core/services/watchlist.service';
@@ -57,6 +57,22 @@ export class TickerDetailPage {
   protected readonly alerts = computed(() => this.events()?.alerts ?? []);
   protected readonly trades = computed(() => this.events()?.trades ?? []);
   protected readonly bars = computed(() => this.events()?.bars ?? []);
+  protected readonly lots = computed(() => this.events()?.lots ?? []);
+
+  /** The auto trader's position, if it holds any. Kept apart from the real and
+   * paper ones because it is the only book with orders resting at a broker. */
+  protected readonly agentPosition = computed(() => this.detail()?.agent_position ?? null);
+
+  /** The stop and target the broker will actually execute — not the signal's.
+   * The two disagree often: a discarded level, an ATR-derived fallback, or a
+   * bracket the broker refused. Showing the signal's where these belong is how
+   * an unprotected position looks protected. */
+  protected readonly restingStop = computed(
+    () => this.agentPosition()?.exits.find((e) => e.kind === 'stop')?.price ?? null,
+  );
+  protected readonly restingTarget = computed(
+    () => this.agentPosition()?.exits.find((e) => e.kind === 'target')?.price ?? null,
+  );
 
   /** The signal whose levels are still in force — the newest one. Its stop and
    * target are what the chart draws, because an older signal's levels were
@@ -257,6 +273,14 @@ export class TickerDetailPage {
 
   protected signed(value: number, digits = 1): string {
     return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
+  }
+
+  protected bookLabel(book: string): string {
+    return { real: 'Your book', paper: 'Paper', agent: 'Auto trader' }[book] ?? book;
+  }
+
+  protected trackLot(_index: number, lot: Lot): string {
+    return `${lot.book}:${lot.entry_at}:${lot.entry}:${lot.quantity}:${lot.exit_at ?? ''}`;
   }
 
   protected trackTimeline(_index: number, entry: TimelineEntry): string {

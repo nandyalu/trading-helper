@@ -49,6 +49,21 @@ Signals, alerts, and your trades in one list, newest first. They live in three d
 
 Each signal row shows the entry price, the stop, the target, and the confidence, plus a pass or fail badge once it has been graded. Click through for the full rationale and every analyst report.
 
+### Positions and lots
+
+Three books can hold the same stock: your real account, the paper book, and the auto trader.
+All three now appear at the top of the page, so a position is never invisible on the page about the stock it is in.
+
+The auto trader's tile is the one that carries **resting stop** and **resting target** beside it.
+Those are different numbers from the stop and target above them, and the distinction matters: the signal's levels are what the analysis proposed, while the resting ones are orders sitting at the broker that will execute whether or not this app is running.
+They disagree often — a level the app discarded, an ATR-derived fallback, or a bracket the broker refused.
+
+When the auto trader holds a stock with **nothing** resting under it, the page says so in a warning rather than leaving you to notice two empty cells.
+
+**Positions taken** lists every lot bought in this ticker, in any book: entry price and date, quantity, exit price and date, days held, and the profit or loss.
+An open lot shows no exit and no profit, because its result is not decided yet, but the days held keep counting.
+Selling part of a position splits it — the shares sold get their own result and the rest stays open — and the matching is the same FIFO walk the position tiles use, so the two can never disagree about the same shares.
+
 ### Ask, and record a trade
 
 **Ask** puts a question to the model about the stored analysis for this ticker. It answers only from the saved reports, and says so when they do not cover your question.

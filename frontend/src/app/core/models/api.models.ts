@@ -142,6 +142,42 @@ export interface TickerSummary {
   inactive_reason: string | null;
 }
 
+export interface RestingExit {
+  kind: string; // "stop" | "target"
+  price: number;
+  quantity: number;
+}
+
+/** What the auto trader holds in one ticker. `exits` are the orders the broker
+ * will actually execute, which is a different claim from the signal's stop and
+ * target shown beside them. */
+export interface AgentPosition {
+  quantity: number;
+  avg_cost: number;
+  price: number | null;
+  opened: string | null;
+  held_days: number | null;
+  market_value: number | null;
+  unrealized_pct: number | null;
+  exits: RestingExit[];
+  unprotected: boolean;
+}
+
+/** One lot's life in one book, matched FIFO. `pnl` is null while it is open —
+ * its result is not decided yet. */
+export interface Lot {
+  book: string; // "real" | "paper" | "agent"
+  quantity: number;
+  entry: number;
+  entry_at: string;
+  exit: number | null;
+  exit_at: string | null;
+  pnl: number | null;
+  return_pct: number | null;
+  held_days: number;
+  signal_id: number | null;
+}
+
 export interface TickerDetail {
   ticker: string;
   current_price: number | null;
@@ -149,6 +185,7 @@ export interface TickerDetail {
   real_position: PortfolioPosition | null;
   paper_position: PaperPosition | null;
   latest_signal: Signal | null;
+  agent_position: AgentPosition | null;
   inactive: boolean;
   inactive_reason: string | null;
 }
@@ -191,6 +228,7 @@ export interface TickerEvents {
   signals: Signal[];
   alerts: Alert[];
   trades: Trade[];
+  lots: Lot[];
 }
 
 export interface Digest {

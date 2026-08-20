@@ -3,7 +3,9 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 
 import {
+  AgentPosition,
   Alert,
+  Lot,
   OhlcBar,
   Signal,
   TickerDetail,
@@ -110,6 +112,7 @@ const EVENTS: TickerEvents = {
     },
   ],
   trades: [{ book: 'real', side: 'buy', date: '2026-07-08', price: 155, quantity: 10 }],
+  lots: [],
 };
 
 const DETAIL: TickerDetail = {
@@ -119,16 +122,42 @@ const DETAIL: TickerDetail = {
   real_position: null,
   paper_position: null,
   latest_signal: null,
+  agent_position: null,
   inactive: false,
   inactive_reason: null,
 };
 
+/** INTC on 2026-08-20: three shares held by the auto trader with nothing
+ * resting at the broker. */
+const UNPROTECTED: AgentPosition = {
+  quantity: 3,
+  avg_cost: 91.84,
+  price: 92.8,
+  opened: '2026-08-19',
+  held_days: 1,
+  market_value: 278.4,
+  unrealized_pct: 1.05,
+  exits: [],
+  unprotected: true,
+};
+
+const BRACKETED: AgentPosition = {
+  ...UNPROTECTED,
+  exits: [
+    { kind: 'stop', price: 315.04, quantity: 2 },
+    { kind: 'target', price: 377.09, quantity: 2 },
+  ],
+  unprotected: false,
+};
+
 class TickersServiceStub {
+  detail: TickerDetail = DETAIL;
+  events: TickerEvents = EVENTS;
   async getDetail(): Promise<TickerDetail> {
-    return DETAIL;
+    return this.detail;
   }
   async getEvents(): Promise<TickerEvents> {
-    return EVENTS;
+    return this.events;
   }
 }
 
@@ -139,14 +168,24 @@ interface Exposed {
   targetLevel: () => number | null;
   stopDistancePct: () => number | null;
   targetDistancePct: () => number | null;
+  restingStop: () => number | null;
+  restingTarget: () => number | null;
+  lots: () => Lot[];
 }
 
 describe('TickerDetailPage', () => {
+  let stub: TickersServiceStub;
+  let element: HTMLElement;
+
+  beforeEach(() => {
+    stub = new TickersServiceStub();
+  });
+
   async function create(): Promise<Exposed> {
     await TestBed.configureTestingModule({
       imports: [TickerDetailPage],
       providers: [
-        { provide: TickersService, useClass: TickersServiceStub },
+        { provide: TickersService, useFactory: () => stub },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: { get: () => 'NVDA' } } },
@@ -161,6 +200,7 @@ describe('TickerDetailPage', () => {
       .compileComponents();
     const fixture = TestBed.createComponent(TickerDetailPage);
     await fixture.whenStable();
+    element = fixture.nativeElement as HTMLElement;
     return fixture.componentInstance as unknown as Exposed;
   }
 
@@ -195,5 +235,89 @@ describe('TickerDetailPage', () => {
     // Price 180, stop 168 → -6.7%; target 210 → +16.7%.
     expect(c.stopDistancePct()).toBeCloseTo(-6.67, 1);
     expect(c.targetDistancePct()).toBeCloseTo(16.67, 1);
+  });
+
+  // --- the auto trader's position -------------------------------------------
+
+  it('warns when the auto trader holds this and nothing is resting under it', async () => {
+    // The state that motivated all of this: the page showed a signal's stop
+    // that looked like protection, beside a position it did not know existed.
+    stub.detail = { ...DETAIL, agent_position: UNPROTECTED };
+    await create();
+
+    expect(element.textContent).toContain('nothing is resting at the broker');
+  });
+
+  it('says nothing when the position is bracketed', async () => {
+    stub.detail = { ...DETAIL, agent_position: BRACKETED };
+    await create();
+
+    expect(element.textContent).not.toContain('nothing is resting at the broker');
+  });
+
+  it("shows the broker's levels apart from the analysis's", async () => {
+    stub.detail = { ...DETAIL, agent_position: BRACKETED };
+    const c = await create();
+
+    expect(c.restingStop()).toBe(315.04);
+    expect(c.restingTarget()).toBe(377.09);
+    expect(element.textContent).toContain('live order at the broker');
+  });
+
+  it('has no resting levels when nothing is resting', async () => {
+    stub.detail = { ...DETAIL, agent_position: UNPROTECTED };
+    const c = await create();
+
+    expect(c.restingStop()).toBeNull();
+    expect(c.restingTarget()).toBeNull();
+  });
+
+  // --- lots ------------------------------------------------------------------
+
+  it('lists every lot with its result, and marks an open one as undecided', async () => {
+    stub.events = {
+      ...EVENTS,
+      lots: [
+        {
+          book: 'agent',
+          quantity: 3,
+          entry: 98.41,
+          entry_at: '2026-08-13',
+          exit: 101.5,
+          exit_at: '2026-08-19',
+          pnl: 9.27,
+          return_pct: 3.14,
+          held_days: 6,
+          signal_id: 37,
+        },
+        {
+          book: 'real',
+          quantity: 10,
+          entry: 155,
+          entry_at: '2026-07-08',
+          exit: null,
+          exit_at: null,
+          pnl: null,
+          return_pct: null,
+          held_days: 43,
+          signal_id: null,
+        },
+      ],
+    };
+    await create();
+
+    const text = element.textContent ?? '';
+    expect(text).toContain('Positions taken');
+    expect(text).toContain('Auto trader');
+    expect(text).toContain('Your book');
+    // An open lot must not show a profit — an unrealized figure in that column
+    // would read as booked.
+    expect(text).toContain('open');
+  });
+
+  it('leaves the lots table out entirely when nothing was ever bought', async () => {
+    await create();
+
+    expect(element.textContent).not.toContain('Positions taken');
   });
 });

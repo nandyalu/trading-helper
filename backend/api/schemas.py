@@ -153,6 +153,43 @@ class TickerSummaryOut(BaseModel):
     inactive_reason: str | None = None
 
 
+class RestingExitOut(OrmModel):
+    kind: str  # "stop" | "target"
+    price: float
+    quantity: float
+
+
+class AgentPositionOut(OrmModel):
+    """What the auto trader holds in one ticker, and the orders resting on it.
+
+    ``exits`` are what the broker will actually execute, which is not the same
+    claim as the signal's stop and target shown beside them.
+    """
+
+    quantity: float
+    avg_cost: float
+    price: float | None
+    opened: date | None
+    held_days: int | None
+    market_value: float | None
+    unrealized_pct: float | None
+    exits: list[RestingExitOut]
+    unprotected: bool
+
+
+class LotOut(OrmModel):
+    book: str  # "real" | "paper" | "agent"
+    quantity: float
+    entry: float
+    entry_at: date
+    exit: float | None
+    exit_at: date | None
+    pnl: float | None  # NULL while the lot is open — its result is not decided
+    return_pct: float | None
+    held_days: int
+    signal_id: int | None
+
+
 class TickerDetailOut(BaseModel):
     ticker: str
     current_price: float | None
@@ -160,6 +197,9 @@ class TickerDetailOut(BaseModel):
     real_position: PortfolioPositionOut | None
     paper_position: PaperPositionOut | None
     latest_signal: SignalOut | None
+    # The auto trader's position, kept apart from the two above because it is
+    # the only one with real orders resting under it.
+    agent_position: AgentPositionOut | None = None
     inactive: bool = False
     inactive_reason: str | None = None
 
@@ -188,6 +228,9 @@ class TickerEventsOut(BaseModel):
     signals: list[SignalOut]
     alerts: list[AlertOut]
     trades: list[TradeOut]
+    # Lots, FIFO-matched across all three books: what was bought, what became
+    # of it, and what it made or lost. ``trades`` above is the raw fills.
+    lots: list[LotOut] = []
 
 
 class AnalyzeQueuedOut(BaseModel):
