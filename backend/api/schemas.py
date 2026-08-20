@@ -367,6 +367,34 @@ class AgentTradeOut(OrmModel):
     signal_id: int | None
 
 
+class CalibrationBandOut(OrmModel):
+    label: str
+    total: int
+    passes: int
+    stated_pct: float | None
+    actual_pct: float | None
+    gap: float | None  # claimed minus actual; positive is overconfident
+
+
+class CalibrationOut(OrmModel):
+    """Whether the model's stated confidence is worth anything.
+
+    ``sorts_outcomes`` is the question that decides whether the number is
+    usable at all: a probability that does not separate winners from losers
+    cannot inform a threshold, however well centered it is. NULL until two
+    bands hold signals.
+    """
+
+    resolved: int
+    passes: int
+    stated_pct: float | None
+    actual_pct: float | None
+    gap: float | None
+    sorts_outcomes: bool | None
+    verdict: str
+    bands: list[CalibrationBandOut]
+
+
 class AgentEquityPointOut(OrmModel):
     date: date
     equity: float

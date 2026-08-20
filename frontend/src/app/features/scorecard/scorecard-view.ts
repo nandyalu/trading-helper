@@ -13,9 +13,22 @@ import { DecisionBadge } from '../../shared/decision-badge';
 export class ScorecardView {
   private readonly scorecardService = inject(ScorecardService);
   protected readonly scorecard = this.scorecardService.scorecard;
+  protected readonly calibration = this.scorecardService.calibration;
 
   constructor() {
     void this.scorecardService.load();
+  }
+
+  /** A percentage-point gap, signed. Positive means the model claimed more
+   * than it delivered, which is the direction that inflates every expected
+   * value computed from it. */
+  protected gap(value: number | null): string {
+    if (value === null) return '—';
+    return `${value >= 0 ? '+' : ''}${value.toFixed(0)} pts`;
+  }
+
+  protected pctOf(value: number | null): string {
+    return value === null ? '—' : `${Math.round(value)}%`;
   }
 
   /** Count and share together, for a table cell. */

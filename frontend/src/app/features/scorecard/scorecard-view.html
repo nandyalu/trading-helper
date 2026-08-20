@@ -48,6 +48,58 @@
       </div>
     </div>
 
+    @if (calibration(); as c) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Is the confidence worth anything?</h2>
+          <p class="hint">
+            Win probability is the one number a signal asserts rather than works out. Risk/reward
+            comes from the levels and expected value comes from both, so if the confidence is
+            inflated, every figure computed from it is inflated too. This compares what the model
+            claimed against how often it was right.
+          </p>
+        </div>
+        <div class="card-body">
+          <p class="notice notice-info">{{ c.verdict }}</p>
+        </div>
+        @if (c.bands.length) {
+          <div class="table-wrap">
+            <table class="data-table data-table--stack">
+              <thead>
+                <tr>
+                  <th>Claimed</th>
+                  <th class="num">Signals</th>
+                  <th class="num">It said</th>
+                  <th class="num">It was right</th>
+                  <th class="num">Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (band of c.bands; track band.label) {
+                  <tr>
+                    <td data-label="">{{ band.label }}</td>
+                    <td class="num" data-label="Signals">{{ band.total }}</td>
+                    <td class="num" data-label="It said">{{ pctOf(band.stated_pct) }}</td>
+                    <td class="num" data-label="It was right">
+                      {{ band.passes }}/{{ band.total }} ({{ pctOf(band.actual_pct) }})
+                    </td>
+                    <td
+                      class="num"
+                      data-label="Gap"
+                      [class.fail]="(band.gap ?? 0) > 10"
+                      [class.pass]="(band.gap ?? 0) <= 0"
+                    >
+                      {{ gap(band.gap) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+
     @if (modelEntries(s.by_model).length > 1) {
       <section class="card">
         <div class="card-head">

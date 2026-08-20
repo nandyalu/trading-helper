@@ -142,6 +142,29 @@ export interface TickerSummary {
   inactive_reason: string | null;
 }
 
+export interface CalibrationBand {
+  label: string;
+  total: number;
+  passes: number;
+  stated_pct: number | null;
+  actual_pct: number | null;
+  /** Claimed minus actual, in percentage points. Positive is overconfident. */
+  gap: number | null;
+}
+
+/** Whether the model's stated confidence is worth anything. `sorts_outcomes`
+ * is null until the book is large enough to answer it honestly. */
+export interface Calibration {
+  resolved: number;
+  passes: number;
+  stated_pct: number | null;
+  actual_pct: number | null;
+  gap: number | null;
+  sorts_outcomes: boolean | null;
+  verdict: string;
+  bands: CalibrationBand[];
+}
+
 export interface RestingExit {
   kind: string; // "stop" | "target"
   price: number;

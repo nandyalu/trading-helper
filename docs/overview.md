@@ -94,6 +94,24 @@ A third of the first forty signals held a level like this.
 
 When the trader names no stop on a Buy, the bot substitutes the same 2×ATR(14) level the sizing field shows, so every actionable Buy has an exit.
 
+## Is the confidence worth anything?
+
+The win probability is the one number a signal asserts rather than works out.
+Risk/reward is arithmetic on the levels, and expected value is arithmetic on the probability and the risk/reward together — so an inflated probability quietly inflates every figure computed downstream of it.
+
+The Scorecard page now checks it. Resolved signals are grouped by the confidence the model claimed, and each group's claim is set against how often it was actually right.
+
+Two ways for the number to be wrong, and the page distinguishes them:
+
+- **Overconfident** — the claim is higher than the outcome. This is the direction that costs money, because every expected value on the dashboard reads positive when it is not.
+- **Undiscriminating** — the claims can be right on average and still useless, if the model's confident calls do no better than its doubtful ones. A number that does not sort outcomes cannot inform a decision, however well centered it is.
+
+It refuses a verdict under twenty graded signals, and it refuses to say whether the number sorts outcomes under the same threshold.
+That second refusal is deliberate. On the first nineteen graded signals the bands ran 40%, 83%, and 50%, and comparing only the ends of that returns "yes, it sorts" from a shape that plainly does not.
+
+Signals where the model stated no probability are skipped rather than counted as zero — declining to make a claim is not a claim of 0%.
+The grade used is the absolute one, not vs SPY: "the thesis plays out" is a claim about the stock, and the benchmark grade asks a second question the model was never answering.
+
 ## Stop alerts
 
 Two alerts watch a held position, and they answer different questions:

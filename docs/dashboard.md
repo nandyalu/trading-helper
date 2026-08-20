@@ -83,7 +83,7 @@ Every watchdog alert, filterable by type. The two stop alerts read differently o
 | Paper | The paper book, its equity curve against SPY, and per-position closes |
 | Auto trader | The simulated account the model trades on its own: budget, cash, its equity curve, holdings with the stop and target actually resting at the broker, every position taken with its entry, exit and profit, and every order with the reason it gave |
 | Portfolio | The real book, weights, and concentration warnings |
-| Scorecard | Win rates overall, by decision, by model, and by ticker |
+| Scorecard | Win rates overall, by decision, by model, and by ticker, plus whether the model's stated confidence matches how often it is right |
 | Digest | The weekly wrap-up |
 | Regime | VIX, SPY against its 200-day average, and the yield curve |
 | Settings | Trade horizon, analysis model, sizing limits, alert thresholds, the daily sweep, and the auto trader |
