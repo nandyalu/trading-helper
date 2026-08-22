@@ -12,9 +12,17 @@ export const ALERT_TYPES: Record<string, { label: string; icon: string; urgent: 
   target: { label: 'Target reached', icon: '🎯', urgent: true },
   big_move: { label: 'Big move', icon: '📊', urgent: false },
   volume: { label: 'Volume spike', icon: '📊', urgent: false },
-  // Urgent: the money is at risk right now and the exit everyone assumes is
-  // there is not. It is an absence, so nothing else on the page implies it.
-  unguarded_position: { label: 'No exit resting', icon: '🛡️', urgent: true },
+  // Not urgent, and the reason is worth stating: every other alert here
+  // records a *moment* — a price was reached, a volume spike happened — and
+  // stays true forever, which is why showing it for three days is right. An
+  // unguarded position is a *state*. Once the exits are placed the alert is
+  // stale, but nothing retracts it, so it kept the Overview shouting about a
+  // position that had been protected two days earlier.
+  //
+  // The Overview gets that row from /api/agent/unprotected instead, which is
+  // read live and clears itself. This entry stays so the alert log keeps the
+  // record of what happened, which is a real and useful thing to look back on.
+  unguarded_position: { label: 'No exit resting', icon: '🛡️', urgent: false },
 };
 
 export function alertLabel(alertType: string): string {
