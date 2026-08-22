@@ -30,8 +30,16 @@ Grading needs no help. Each signal carries its own evaluation date and the
 nightly pass grades it like any other, which is what turns this from a
 comparison of prose into a comparison of outcomes — about two weeks later.
 
-    python -m backend.scripts.compare_model --model gemini-2.5-flash-lite \\
-        --provider google [--tickers GOOG,INTC] [--apply]
+One run:
+
+    python -m backend.scripts.compare_model --model gemini-3.5-flash-lite \\
+        --provider google [--tickers GOOG,INTC] --apply
+
+Every day, chained to the morning sweep so both models see the same session:
+
+    python -m backend.scripts.compare_model --model gemini-3.5-flash-lite \\
+        --provider google --schedule
+    python -m backend.scripts.compare_model --stop
 """
 import argparse
 import asyncio
@@ -81,7 +89,7 @@ async def _run(model: str, provider: str | None, tickers: list[str]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", required=True, help="the model to run, e.g. gemini-2.5-flash-lite")
+    parser.add_argument("--model", help="the model to run, e.g. gemini-3.5-flash-lite")
     parser.add_argument(
         "--provider",
         help="vendor for this run only, e.g. google. Omit to use the configured one.",
@@ -93,7 +101,31 @@ def main() -> int:
         help="actually run. Without it, prints what would run and stops — an "
         "analysis costs minutes of GPU or real money per ticker.",
     )
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help="run this model every day, chained to the morning sweep, until --stop.",
+    )
+    parser.add_argument(
+        "--stop", action="store_true", help="stop the daily comparison."
+    )
     args = parser.parse_args()
+
+    if args.stop:
+        analysis.set_comparison(None)
+        print("Daily comparison stopped. Signals already recorded are kept and still grade.")
+        return 0
+
+    if args.schedule:
+        analysis.set_comparison(args.model, args.provider)
+        print(f"Daily comparison on: {args.model} via {args.provider or 'the configured vendor'}.")
+        print("It runs with the morning sweep, so both models see the same session.")
+        print("Stop it with --stop. Nothing else changes: the app keeps using "
+              f"{analysis.get_model()}.")
+        return 0
+
+    if not args.model:
+        parser.error("--model is required unless you pass --stop")
 
     if args.tickers:
         tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]

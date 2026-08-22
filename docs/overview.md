@@ -139,6 +139,19 @@ Grading needs no help: each signal carries its own evaluation date and is graded
 
 Without `--apply` it prints what would run and stops, because each ticker is a full analysis — minutes of GPU, or real money at a vendor.
 
+To run it every day rather than once:
+
+```bash
+python -m backend.scripts.compare_model --model gemini-3.5-flash-lite --provider google --schedule
+python -m backend.scripts.compare_model --stop
+```
+
+Scheduled, it runs **chained to the morning sweep** rather than on a clock of its own. That is the point: a comparison on a separate schedule drifts onto a different session, and then the two models are being judged on different prices and different news as much as on their own reasoning. One Discord line reports the sweep — not one per ticker, since this is an experiment running in the background and should not crowd the day's real signals.
+
+Stopping it keeps everything already recorded. Those signals grade on their own dates like any other.
+
+**Expect to wait.** A signal is graded on its horizon, so a week of paired runs at the swing horizon starts producing verdicts about two weeks after the first one, and the comparison is only worth reading once enough have resolved. Reading the reports on day one tells you which model writes more fluently, which is not the question.
+
 ## Stop alerts
 
 Two alerts watch a held position, and they answer different questions:

@@ -244,6 +244,28 @@ async def _morning_sweep_job() -> None:
         on_failure=lambda ticker: notify(f"Daily analysis failed for {ticker} — check the logs."),
     )
 
+    # Then the same tickers through a second model, when one is being
+    # evaluated. Chained to this job rather than scheduled separately so the
+    # two models always see the same day, the same prices and the same news —
+    # a comparison run on its own clock would drift onto a different session
+    # and measure the market as much as the model.
+    model, provider = analysis.get_comparison()
+    if model:
+        log.info("Comparison sweep: %s on %s", model, provider or "the configured vendor")
+        try:
+            recorded = await analysis.run_comparison(tickers, model, provider)
+        except Exception:
+            log.exception("Comparison sweep failed")
+            return
+        # Posted once for the sweep, not once per ticker: this is an experiment
+        # running in the background, and it should not crowd the day's signals.
+        if recorded:
+            await notify(
+                f"🔬 Comparison: {len(recorded)} of {len(tickers)} tickers analysed on "
+                f"`{model}`. They grade like any other signal — see the scorecard's "
+                f"by-model table."
+            )
+
 
 def morning_sweep() -> None:
     run_on_main(_morning_sweep_job)

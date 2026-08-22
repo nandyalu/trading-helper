@@ -720,3 +720,61 @@ def format_run_cost(usage) -> str | None:
 
 def _thousands(count: int) -> str:
     return f"{count / 1000:.1f}k" if count >= 1000 else str(count)
+
+
+# The model a comparison sweep runs, and the vendor it runs on. Both empty
+# means no comparison, which is the default. Kept as settings rather than env
+# vars so the experiment can be started and stopped without a redeploy — it is
+# meant to run for a week or two, not forever.
+_COMPARISON_MODEL_KEY = "comparison_model"
+_COMPARISON_PROVIDER_KEY = "comparison_provider"
+
+
+def get_comparison() -> tuple[str | None, str | None]:
+    """(model, provider) for the daily comparison sweep, or (None, None)."""
+    model = (db.get_setting(_COMPARISON_MODEL_KEY) or "").strip()
+    provider = (db.get_setting(_COMPARISON_PROVIDER_KEY) or "").strip()
+    return (model or None, provider or None)
+
+
+def set_comparison(model: str | None, provider: str | None = None) -> None:
+    """Start or stop the daily comparison. An empty model stops it."""
+    db.set_setting(_COMPARISON_MODEL_KEY, (model or "").strip())
+    db.set_setting(_COMPARISON_PROVIDER_KEY, (provider or "").strip())
+
+
+async def run_comparison(
+    tickers: list[str], model: str, provider: str | None = None
+) -> list[Signal]:
+    """Analyse the same tickers with a second model and record what it said.
+
+    Deliberately not ``run_analyses``. That posts every signal to Discord, and a
+    comparison sweep would announce the whole watchlist a second time — these
+    signals are evidence, not news. Everything else is shared: the same
+    semaphore bounds concurrency, and each signal is recorded and graded like
+    any other, which is what makes the scorecard's by-model table fill in on
+    its own about two weeks later.
+
+    Returns the signals recorded. One ticker failing never stops the rest: a
+    vendor that 503s on a single call should cost one comparison point, not the
+    day's whole sample.
+    """
+
+    async def _one(ticker: str) -> Signal | None:
+        try:
+            final_state, decision = await propagate_ticker(ticker, model=model, provider=provider)
+        except Exception:
+            log.exception("Comparison analysis failed for %s on %s", ticker, model)
+            return None
+        try:
+            return await asyncio.to_thread(record_signal, ticker, final_state, decision)
+        except Exception:
+            log.exception("Could not record the comparison signal for %s", ticker)
+            return None
+
+    results = await asyncio.gather(*(_one(t) for t in tickers))
+    recorded = [s for s in results if s is not None]
+    log.info(
+        "Comparison sweep on %s: %d of %d recorded", model, len(recorded), len(tickers)
+    )
+    return recorded
