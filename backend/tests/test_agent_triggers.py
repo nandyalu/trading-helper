@@ -46,6 +46,22 @@ def _open(monkeypatch, is_open=True):
     monkeypatch.setattr(scheduler.watchdog, "is_us_market_hours", lambda: is_open)
 
 
+def _weekday(monkeypatch, when=datetime.datetime(2026, 8, 20, 13, 35, tzinfo=datetime.timezone.utc)):
+    """Pin the clock to a Thursday.
+
+    The batch job returns early at the weekend, so a test that exercises it
+    while reading the real clock passes five days in seven and fails on the
+    other two. Found on a Saturday, having passed all week.
+    """
+
+    class FrozenDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return when
+
+    monkeypatch.setattr(scheduler.datetime, "datetime", FrozenDatetime)
+
+
 def test_a_trigger_during_market_hours_runs_the_agent(agent_stub, monkeypatch):
     _open(monkeypatch)
     asyncio.run(scheduler._maybe_run_agent())
@@ -100,6 +116,7 @@ def test_the_batch_job_arms_the_same_cooldown(agent_stub, monkeypatch):
     """Otherwise a trigger minutes after the 13:35 batch re-plans a book that
     has just moved."""
     _open(monkeypatch)
+    _weekday(monkeypatch)
     monkeypatch.setattr(scheduler, "notify", lambda *a, **kw: asyncio.sleep(0))
     asyncio.run(scheduler._paper_agent_job())
 
