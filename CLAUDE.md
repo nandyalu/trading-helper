@@ -167,6 +167,44 @@ succeeded), ran a full analysis in <1 min vs Ollama's ~15 min, at roughly
 $0.02–0.08/analysis. If revisiting Gemini, start with `flash-lite`, not
 `3.5-flash`.
 
+### What Gemini actually bills (measured 2026-08-22, first data point)
+
+**`gemini-2.5-flash-lite` is retired.** It still appears in the models list,
+and calling it returns `404 NOT_FOUND`: "no longer available to new users.
+Please update your code to use `models/gemini-3.5-flash-lite`". Both
+`gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` work on a current key, so
+3.1 remains the fallback the capacity note above points at.
+
+One GOOG analysis on `gemini-3.5-flash-lite`: **$0.04**, from Google's billing
+dashboard rather than an estimate. It spent 90,713 prompt + 9,629 completion
+tokens over 20 calls in **1.6 minutes**, against gemma4-e2b-96k's 8.6 minutes
+on the same ticker the day before.
+
+| | |
+|---|---|
+| Effective rate | **$0.399 per 1M tokens blended** |
+| List price for the same run | $0.0513 ($0.30 in / $2.50 out per 1M) |
+| Billed | 78% of list |
+
+**Do not price this workload from the rate card.** The bill came in well under
+list, almost certainly implicit context caching: an analysis is ~20 calls
+sharing one large, mostly-identical prompt, and 90% of the tokens are input.
+Estimating from list overstates the cost by about a quarter.
+
+Projections at the measured rate, for the current 9-ticker watchlist:
+$0.36/sweep, $1.80/week, **$7.56/month**. Running the entire history to date
+(11.49M tokens) would have cost **$4.58**, against **$0.26** of marginal
+electricity — 18x, not the 29x a list-price estimate suggests.
+
+A billing cap of $10/month is set on the account. Note that this is close to
+the projected $7.56 of normal use, so it protects against a runaway loop
+rather than leaving much room for growth: adding tickers, or ever pointing the
+*main* model at Gemini, would exceed it. Intraday triggers cost nothing here —
+only the morning sweep chains a comparison run.
+
+This is one measurement. Re-derive it after the week-long comparison
+(started 2026-08-22) when there is a full billing period to average.
+
 ## Vendored TradingAgents repo
 
 It's a real nested git repo, registered as a **git submodule** of this repo
