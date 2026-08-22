@@ -7,6 +7,8 @@ running balance instead of the opening one.
 
 Pure — no LLM, no broker, no DB.
 """
+import datetime
+
 import pytest
 
 from backend.services import agent, agent_book, sandbox_broker
@@ -1788,3 +1790,50 @@ def test_adjusting_a_holding_with_nothing_resting_places_the_exits(monkeypatch):
 
     assert armed == [("INTC", 84.63, 104.56)]
     assert "placed" in result["message"]
+
+
+# --- an experiment must not reach the live book --------------------------------
+
+
+class _RecentSignal:
+    def __init__(self, ticker, model, days_ago=0):
+        self.ticker, self.model = ticker, model
+        self.signal_date = datetime.date.today() - datetime.timedelta(days=days_ago)
+
+
+def test_the_agent_ignores_signals_from_another_model(monkeypatch):
+    """A comparison sweep puts two signals per ticker in the table, sometimes
+    disagreeing. Without this the agent trades on the mix, folding an
+    experiment into the live book."""
+    monkeypatch.setattr(agent.analysis, "get_model", lambda: "gemma4-e2b-96k")
+    monkeypatch.setattr(
+        agent.db, "get_recent_signals",
+        lambda **k: [
+            _RecentSignal("GOOG", "gemma4-e2b-96k"),
+            _RecentSignal("GOOG", "gemini-2.5-flash-lite"),
+        ],
+    )
+
+    picked = agent._recent_signals()
+
+    assert [s.model for s in picked] == ["gemma4-e2b-96k"]
+
+
+def test_signals_from_before_the_model_column_are_kept(monkeypatch):
+    """They are real track record — they just cannot be attributed."""
+    monkeypatch.setattr(agent.analysis, "get_model", lambda: "gemma4-e2b-96k")
+    monkeypatch.setattr(
+        agent.db, "get_recent_signals", lambda **k: [_RecentSignal("GOOG", None)]
+    )
+
+    assert len(agent._recent_signals()) == 1
+
+
+def test_signals_older_than_the_lookback_are_still_dropped(monkeypatch):
+    monkeypatch.setattr(agent.analysis, "get_model", lambda: "gemma4-e2b-96k")
+    monkeypatch.setattr(
+        agent.db, "get_recent_signals",
+        lambda **k: [_RecentSignal("GOOG", "gemma4-e2b-96k", days_ago=30)],
+    )
+
+    assert agent._recent_signals() == []

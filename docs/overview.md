@@ -117,6 +117,28 @@ That second refusal is deliberate. On the first nineteen graded signals the band
 Signals where the model stated no probability are skipped rather than counted as zero — declining to make a claim is not a claim of 0%.
 The grade used is the absolute one, not vs SPY: "the thesis plays out" is a claim about the stock, and the benchmark grade asks a second question the model was never answering.
 
+## Comparing two models
+
+Every signal records the model that produced it, and the Scorecard's **by model** table is what that column is for: switching models teaches you nothing if the win rates blend together.
+
+To fill that table, run the watchlist through a second model without changing the one the app uses:
+
+```bash
+python -m backend.scripts.compare_model --model gemini-2.5-flash-lite --provider google --apply
+```
+
+It records into the same database, on the same day, at the same prices, from the same news. That is the point. Running the sweep twice with the deployment switched between would compare two different days — and therefore the market as much as the models. A second container with its own database would run in parallel but split the evidence, so the one table built to compare them could not see both halves.
+
+Three things it deliberately does not do:
+
+- **It posts nothing to Discord.** A comparison sweep would announce every ticker a second time, and these signals are evidence rather than news.
+- **It does not change the configured model.** The provider and model apply to that run alone.
+- **The auto trader ignores what it produces.** The agent reads only signals from the model the app is set to use, so an experiment cannot quietly reach the live book.
+
+Grading needs no help: each signal carries its own evaluation date and is graded like any other. That is what turns this from a comparison of writing into a comparison of outcomes, about two weeks later.
+
+Without `--apply` it prints what would run and stops, because each ticker is a full analysis — minutes of GPU, or real money at a vendor.
+
 ## Stop alerts
 
 Two alerts watch a held position, and they answer different questions:

@@ -124,8 +124,25 @@ def fails_conviction(signal, min_probability: float, min_risk_reward: float) -> 
 
 
 def _recent_signals() -> list:
+    """The signals the agent decides on: recent, and from the model in use.
+
+    The model filter matters as soon as a second one is being evaluated. Every
+    signal records which model produced it, so running a comparison sweep puts
+    two signals per ticker in the table — sometimes disagreeing — and without
+    this the agent would trade on the mix, quietly folding an experiment into
+    the live book. It should act on the model the app is configured to use, and
+    nothing else.
+
+    Signals from before the model column existed carry NULL and are kept: they
+    are real track record, they just cannot be attributed.
+    """
     cutoff = datetime.date.today() - datetime.timedelta(days=_SIGNAL_LOOKBACK_DAYS)
-    return [s for s in db.get_recent_signals(limit=_MAX_SIGNALS) if s.signal_date >= cutoff]
+    configured = analysis.get_model()
+    return [
+        s
+        for s in db.get_recent_signals(limit=_MAX_SIGNALS * 3)
+        if s.signal_date >= cutoff and (s.model is None or s.model == configured)
+    ][:_MAX_SIGNALS]
 
 
 # How many past trades to show individually. Enough to see a pattern, few

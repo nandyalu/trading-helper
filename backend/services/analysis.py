@@ -234,7 +234,9 @@ def list_models(*, force: bool = False) -> list[str]:
 
 
 def _build_graph(
-    model: str | None = None, tracker: llm_usage.UsageTracker | None = None
+    model: str | None = None,
+    tracker: llm_usage.UsageTracker | None = None,
+    provider: str | None = None,
 ) -> TradingAgentsGraph:
     """A fresh instance per analysis run. TradingAgentsGraph.propagate()
     mutates its own state in place (self.graph — recompiled every call,
@@ -246,9 +248,20 @@ def _build_graph(
     ``model`` overrides the configured LLM for both think stages; None reads
     the current setting. ``tracker`` counts the tokens every stage spends —
     attached here because this is the only place that sees both clients before
-    the agents start sharing them."""
+    the agents start sharing them.
+
+    ``provider`` overrides the vendor for this graph alone. The deployment sets
+    one through TRADINGAGENTS_LLM_PROVIDER, but it is an ordinary config key
+    rather than something read at import, so a caller can point a single run at
+    a different vendor without restarting the container. That is what makes a
+    like-for-like model comparison possible: the alternative — flipping the env
+    var — runs the two models on different days, on different prices and
+    different news, which compares the market as much as the models.
+    """
     config = DEFAULT_CONFIG.copy()
     config["deep_think_llm"] = config["quick_think_llm"] = model or get_model()
+    if provider:
+        config["llm_provider"] = provider
     graph = TradingAgentsGraph(config=config)
     if tracker is not None:
         llm_usage.attach(tracker, graph.deep_thinking_llm, graph.quick_thinking_llm)
@@ -266,7 +279,9 @@ def _quick_think_llm():
         return _qa_graph.quick_thinking_llm
 
 
-async def propagate_ticker(ticker: str) -> tuple[dict, str]:
+async def propagate_ticker(
+    ticker: str, model: str | None = None, provider: str | None = None
+) -> tuple[dict, str]:
     """Runs the graph — the one place every caller (API routes, Discord
     /analyze, the daily sweep, analyze-all) goes through, building a fresh
     graph (see _build_graph) and bounding concurrent runs via
@@ -287,9 +302,11 @@ async def propagate_ticker(ticker: str) -> tuple[dict, str]:
     async with _analysis_semaphore:
         trade_date = datetime.date.today().isoformat()
         horizon = await asyncio.to_thread(get_horizon)
-        model = await asyncio.to_thread(get_model)
+        # An explicit model wins over the setting, so a comparison run can name
+        # the vendor's model without changing what the app is configured to use.
+        model = model or await asyncio.to_thread(get_model)
         tracker = llm_usage.UsageTracker()
-        graph = await asyncio.to_thread(_build_graph, model, tracker)
+        graph = await asyncio.to_thread(_build_graph, model, tracker, provider)
         started = time.monotonic()
         final_state, decision = await asyncio.to_thread(
             graph.propagate, ticker, trade_date, horizon=horizon
