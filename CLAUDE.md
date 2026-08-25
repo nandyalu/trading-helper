@@ -39,8 +39,19 @@ preference).
 `ollama-pool-b`) behind an nginx round-robin named `ollama-lb`. That is stale.
 What actually runs (verified 2026-08-06):
 
-- **Four** backends: `ollama-pool-a` … `ollama-pool-d`, one AMD card each
-  (gfx1030, 8 GiB).
+- **Four** backends: `ollama-pool-a` … `ollama-pool-d`, one AMD card each.
+  The cards are **RX 6600 (gfx1032, 8 GiB)**, not gfx1030 as an earlier note
+  here claimed. They report as gfx1030 only because every pool container sets
+  `HSA_OVERRIDE_GFX_VERSION=10.3.0` — ROCm's support for gfx1032 is unofficial
+  and the override is what makes them work. Anyone adding cards who trusts the
+  old note would omit it and spend a day on it.
+
+  Each container is pinned to one card at the device level — `/dev/dri/card0`
+  plus `renderD128` for `-a`, `card1`/`renderD129` for `-b`, and so on — which
+  is why `HIP_VISIBLE_DEVICES=0` is correct in all four: it means "the only
+  card I can see", not "card zero". Four more cards would be `card4`…`card7`
+  with `renderD132`…`renderD135`, the same env, and
+  `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` raised to match the backend count.
 - `ollama-proxy` (image `ollama-proxy:local`) replaced nginx. It is a small
   FastAPI app: least-active-connections routing, `CONCURRENCY_PER_BACKEND=1`,
   `WAIT_TIMEOUT=600` (queues rather than 503s), and a `/healthz` endpoint
