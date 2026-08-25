@@ -15,6 +15,7 @@ realized P/L and average cost mean exactly what they mean everywhere else.
 """
 import datetime
 import logging
+import os
 from dataclasses import dataclass, field
 
 from backend.database import db
@@ -105,13 +106,37 @@ class Book:
         return (value / self.equity * 100) if self.equity else None
 
 
+def _default_budget() -> float:
+    """What a deployment starts with before anyone sets a budget.
+
+    An env var, because the two deployments start at different amounts and a
+    fresh database has no setting yet — the experiment would otherwise come up
+    on the live agent's $1,000 and have to be corrected by hand on first run,
+    which is exactly the kind of step that gets forgotten once and then
+    reported as a bug. Same pattern as the model: the env var is only the
+    default for an unset setting, and the settings page still wins.
+    """
+    raw = (os.environ.get("AGENT_BUDGET") or "").strip()
+    if not raw:
+        return DEFAULT_BUDGET
+    try:
+        value = float(raw)
+    except ValueError:
+        log.warning("Ignoring unparseable AGENT_BUDGET %r", raw)
+        return DEFAULT_BUDGET
+    if value <= 0:
+        log.warning("Ignoring non-positive AGENT_BUDGET %r", raw)
+        return DEFAULT_BUDGET
+    return value
+
+
 def get_budget() -> float:
     stored = db.get_setting(_BUDGET_SETTING_KEY)
     try:
-        return float(stored) if stored else DEFAULT_BUDGET
+        return float(stored) if stored else _default_budget()
     except (TypeError, ValueError):
         log.warning("Ignoring unparseable agent_budget %r", stored)
-        return DEFAULT_BUDGET
+        return _default_budget()
 
 
 def set_budget(budget: float) -> None:

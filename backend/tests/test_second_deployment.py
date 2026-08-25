@@ -133,3 +133,56 @@ def test_the_mode_decides_nothing_about_safety():
     source = inspect.getsource(deployment)
     for forbidden in ("sandbox", "account", "short", "order"):
         assert forbidden not in source.lower().replace("# ", "").split("'''")[0].split('"""')[0]
+
+
+# --- a deployment comes up correct without hand-correction ---------------------
+
+
+def test_the_budget_defaults_per_deployment(monkeypatch):
+    """A fresh database has no setting, and the two deployments start at
+    different amounts. Correcting it by hand on first run is exactly the step
+    that gets forgotten once and then reported as a bug."""
+    from backend.services import agent_book
+
+    monkeypatch.setattr(agent_book.db, "get_setting", lambda k: None)
+
+    monkeypatch.delenv("AGENT_BUDGET", raising=False)
+    assert agent_book.get_budget() == agent_book.DEFAULT_BUDGET
+
+    monkeypatch.setenv("AGENT_BUDGET", "10000")
+    assert agent_book.get_budget() == 10_000.0
+
+
+def test_a_stored_budget_beats_the_env_default(monkeypatch):
+    """The env var is only the default for an unset setting — the settings
+    page still wins, same as the model."""
+    from backend.services import agent_book
+
+    monkeypatch.setenv("AGENT_BUDGET", "10000")
+    monkeypatch.setattr(agent_book.db, "get_setting", lambda k: "2500")
+
+    assert agent_book.get_budget() == 2500.0
+
+
+@pytest.mark.parametrize("bad", ["nonsense", "-5", "0", ""])
+def test_a_bad_budget_falls_back_rather_than_breaking(monkeypatch, bad):
+    from backend.services import agent_book
+
+    monkeypatch.setattr(agent_book.db, "get_setting", lambda k: None)
+    monkeypatch.setenv("AGENT_BUDGET", bad)
+
+    assert agent_book.get_budget() == agent_book.DEFAULT_BUDGET
+
+
+def test_research_stays_free_unless_a_deployment_asks(monkeypatch):
+    """The live deployment must not start charging just because this code
+    reached it."""
+    from backend.services import research
+
+    monkeypatch.setattr(research.db, "get_setting", lambda k: None)
+
+    monkeypatch.delenv("RESEARCH_PRICE_USD", raising=False)
+    assert research.get_price() == 0.0
+
+    monkeypatch.setenv("RESEARCH_PRICE_USD", "0.05")
+    assert research.get_price() == 0.05

@@ -19,6 +19,7 @@ passthrough. $0.05 charges roughly what the vendor path costs.
 """
 import datetime
 import logging
+import os
 
 from backend.database import db
 
@@ -31,13 +32,31 @@ _PRICE_SETTING_KEY = "research_price_usd"
 DEFAULT_PRICE = 0.0
 
 
+def _default_price() -> float:
+    """The price a deployment starts at, before anyone sets one.
+
+    Zero unless RESEARCH_PRICE_USD says otherwise, so the live deployment
+    stays free even if this code is deployed there. The experiment's compose
+    sets $0.05 and comes up charging from its first analysis, rather than
+    running free until somebody remembers.
+    """
+    raw = (os.environ.get("RESEARCH_PRICE_USD") or "").strip()
+    if not raw:
+        return DEFAULT_PRICE
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        log.warning("Ignoring unparseable RESEARCH_PRICE_USD %r", raw)
+        return DEFAULT_PRICE
+
+
 def get_price() -> float:
     stored = db.get_setting(_PRICE_SETTING_KEY)
     try:
-        return max(0.0, float(stored)) if stored else DEFAULT_PRICE
+        return max(0.0, float(stored)) if stored else _default_price()
     except (TypeError, ValueError):
         log.warning("Ignoring unparseable %s %r", _PRICE_SETTING_KEY, stored)
-        return DEFAULT_PRICE
+        return _default_price()
 
 
 def set_price(usd: float) -> None:
