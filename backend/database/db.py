@@ -20,6 +20,7 @@ from backend.database.models import (
     Transaction,
     WatchlistTicker,
     ExitArmRequest,
+    ResearchCharge,
 )
 
 # --- Watchlist ---------------------------------------------------------------
@@ -748,5 +749,47 @@ def move_resting_exit(trade_id: int, price: float, *, _session: Session = None) 
     label = "stop-loss" if row.exit_kind == "stop" else "take-profit"
     row.limit_price = price
     row.reason = f"{label} resting at ${price:,.2f}"
+    _session.add(row)
+    _session.commit()
+
+
+@write_session
+def record_research_charge(
+    ticker: str,
+    amount_usd: float,
+    charged_at: datetime.datetime,
+    note: str | None = None,
+    *,
+    _session: Session = None,
+) -> int:
+    row = ResearchCharge(
+        ticker=ticker,
+        amount_usd=amount_usd,
+        charged_at=charged_at,
+        note=note,
+    )
+    _session.add(row)
+    _session.commit()
+    _session.refresh(row)
+    return row.id
+
+
+@read_session
+def get_research_charges(*, _session: Session = None) -> list[ResearchCharge]:
+    """Every research charge, oldest first."""
+    return list(_session.exec(select(ResearchCharge).order_by(ResearchCharge.id)).all())
+
+
+@write_session
+def link_research_charge(charge_id: int, signal_id: int, *, _session: Session = None) -> None:
+    """Tie a charge to the signal it bought, once that signal has an id.
+
+    A charge with no signal is not an error: the analysis ran and was billed,
+    and it simply produced nothing recordable.
+    """
+    row = _session.get(ResearchCharge, charge_id)
+    if row is None:
+        return
+    row.signal_id = signal_id
     _session.add(row)
     _session.commit()

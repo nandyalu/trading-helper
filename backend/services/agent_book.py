@@ -18,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 
 from backend.database import db
+from backend.services import research
 from backend.services.positions import compute_position
 
 log = logging.getLogger("trading-bot.agent_book")
@@ -67,6 +68,10 @@ class Book:
     cash: float
     realized_pnl: float
     holdings: list[Holding] = field(default_factory=list)
+    # What has been spent having tickers analysed. Already deducted from cash
+    # and from realized_pnl; carried separately so a page can show how much of
+    # a loss was research rather than trading, which are different problems.
+    research_spent: float = 0.0
 
     @property
     def invested(self) -> float:
@@ -165,7 +170,17 @@ def build_book(price_lookup=None) -> Book:
                 )
             )
 
-    return Book(budget=budget, cash=budget - spent + received, realized_pnl=realized, holdings=holdings)
+    # Research comes out of the same pocket as the trades. Charged at zero it
+    # is a no-op, which is how the live deployment behaves; the experiment
+    # deployment sets a price and the agent has to choose what to look at.
+    researched = research.total_spent()
+    return Book(
+        budget=budget,
+        cash=budget - spent + received - researched,
+        realized_pnl=realized - researched,
+        holdings=holdings,
+        research_spent=researched,
+    )
 
 
 @dataclass
@@ -378,7 +393,7 @@ def equity_curve(trades=None, today: datetime.date | None = None) -> list[Equity
     The calendar comes from SPY, not from the held tickers, so the line does
     not develop gaps on a day a thinly-traded holding printed no bar.
     """
-    from backend.services import bars
+    from backend.services import research, bars
 
     today = today or datetime.date.today()
     filled = [
@@ -407,6 +422,9 @@ def equity_curve(trades=None, today: datetime.date | None = None) -> list[Equity
         }
 
     budget = get_budget()
+    # Research is spent on the day it was charged, so the curve steps down
+    # then rather than being smeared across the whole span.
+    research_by_day = research.spent_by_day()
     by_day: dict[datetime.date, list] = {}
     for trade in filled:
         by_day.setdefault(day_of(trade), []).append(trade)
@@ -418,6 +436,7 @@ def equity_curve(trades=None, today: datetime.date | None = None) -> list[Equity
     # printed no bar — a missing quote is not a position worth zero.
     last_close: dict[str, float] = {}
     for session in sessions:
+        cash -= research_by_day.get(session, 0.0)
         for trade in by_day.get(session, []):
             amount = trade.quantity * trade.price
             if trade.side == "buy":

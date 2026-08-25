@@ -126,5 +126,9 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
    - done: `AGENT_ONLY` hides the real and paper books and skips the jobs that maintain them. It decides nothing about safety, and a test asserts the module never mentions accounts, orders or shorting — a flag about what to display must not drift into being a flag about what is safe
    - done: `dockge/analyst-bot.compose.yaml`, a second stack from the same image
    - done: the margin account is capped at $10,000 in Webull's own UI as well as by the app's budget. The API offers no way to cap an account, so the app must not depend on that cap existing
-   - next: set the budget setting to $10,000 on first run, charge $0.05 an analysis, then the candidate menu
+   - done: research charging. `research_price_usd` is a setting defaulting to **0, meaning free**, so the live deployment is untouched while the model comparison runs beside it. The experiment sets $0.05. Charges are stored rather than derived from a price times a count, because the price is a setting and settings change — a charge is something that happened, and re-pricing history would rewrite a book already reported.
+   - done: the charge lands in `propagate_ticker`, so an analysis that produced no signal is still billed. The work happened either way, and research you learned nothing from is the normal case rather than an accounting error. It is linked to the signal afterwards when there is one.
+   - done: the mechanical baseline pays too. It reads the same analyses; charging the agent alone would handicap it against its own yardstick and break the comparison this app exists for. SPY reads nothing and pays nothing.
+   - done: research comes out of cash and out of `realized_pnl`, and is carried separately on the book so a page can show how much of a loss was research rather than trading — different problems.
+   - next: set the budget to $10,000 on the experiment's first run, then the candidate menu
 5. The candidate menu and the agent's spend decision.

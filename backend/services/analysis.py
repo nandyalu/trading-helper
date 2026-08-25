@@ -20,7 +20,7 @@ from tradingagents.llm_clients.openai_client import OPENAI_COMPATIBLE_PROVIDERS
 from backend.database import db
 from backend.database.models import Signal
 from backend.discord_bot.notify import notify
-from backend.services import bars, llm_usage, watchdog
+from backend.services import bars, llm_usage, research, watchdog
 from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
 from backend.services.signals import (
@@ -313,6 +313,14 @@ async def propagate_ticker(
         )
         final_state["llm_model"] = model
         final_state["llm_usage"] = tracker.finish(time.monotonic() - started)
+        # Billed here rather than after the signal is recorded, because the
+        # work happened either way. An analysis that produced nothing — a
+        # delisted ticker, an unparseable answer — still cost what it cost,
+        # and research you learned nothing from is the normal case rather
+        # than an accounting error. Free unless a price is set.
+        final_state["research_charge_id"] = await asyncio.to_thread(
+            research.charge, ticker
+        )
         return final_state, decision
 
 
@@ -530,6 +538,10 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     }
     if reports:
         db.add_signal_reports(signal_id, reports)
+    # Tie the charge to what it bought, now that the signal has an id.
+    charge_id = final_state.get("research_charge_id")
+    if charge_id:
+        db.link_research_charge(charge_id, signal_id)
     return db.get_signal(signal_id)
 
 

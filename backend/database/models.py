@@ -177,6 +177,34 @@ class ExitArmRequest(SQLModel, table=True):
     message: str | None = None  # what happened, for the page that shows it
 
 
+class ResearchCharge(SQLModel, table=True):
+    """What the agent paid to have one ticker analysed.
+
+    Research is free to the agent today, so there is no pressure to choose
+    what to look at — it is handed a watchlist. Charging for it makes "what is
+    worth researching" a decision that can be graded, and makes the question
+    the app exists to answer honest: whether the model earns its keep should
+    include the cost of running the model.
+
+    Stored rather than derived from a price times a count. The price is a
+    setting and settings change; a charge is something that happened, and
+    re-pricing history every time the setting moves would rewrite a book that
+    has already been reported.
+
+    ``signal_id`` is NULL when the analysis produced no signal — a delisted
+    ticker, a failed run. The work was still done and is still charged, which
+    is the point: research you paid for and learned nothing from is the normal
+    case, not an accounting error.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    charged_at: datetime.datetime = Field(index=True)
+    amount_usd: float
+    signal_id: int | None = Field(default=None, foreign_key="signal.id")
+    note: str | None = None
+
+
 class PaperSnapshot(SQLModel, table=True):
     """End-of-day valuation of the paper book, recorded by the daily task —
     the series behind the equity curve in /paper. One row per day (re-runs

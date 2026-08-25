@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass, field
 
 from backend.database import db
-from backend.services import agent_book
+from backend.services import agent_book, research
 from backend.services.positions import get_current_price
 from backend.services.signals import BUYISH_DECISIONS, SELLISH_DECISIONS
 
@@ -166,13 +166,22 @@ def _mechanical_strategy(budget: float, since: datetime.date) -> Strategy:
         price_now = get_current_price(ticker)
         open_value += shares * (price_now if price_now is not None else entry)
 
+    # It reads the same analyses the agent does, so it pays for them too.
+    # Charging the agent alone would handicap it against its own yardstick and
+    # quietly break the one comparison this module exists to make. SPY reads
+    # nothing and pays nothing, which is the honest asymmetry: it is the
+    # "was any of this worth doing" baseline.
+    researched = research.total_spent()
+    note = f"equal weight, {_MECHANICAL_SLOTS} slots"
+    if researched:
+        note += f", less ${researched:,.2f} of research"
     return Strategy(
         name="Mechanical signal-follower",
-        equity=cash + open_value,
+        equity=cash + open_value - researched,
         invested=sum(shares * entry for shares, entry in held.values()),
-        cash=cash,
+        cash=cash - researched,
         trades=trades,
-        note=f"equal weight, {_MECHANICAL_SLOTS} slots",
+        note=note,
     )
 
 
