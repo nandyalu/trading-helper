@@ -167,7 +167,7 @@ succeeded), ran a full analysis in <1 min vs Ollama's ~15 min, at roughly
 $0.02–0.08/analysis. If revisiting Gemini, start with `flash-lite`, not
 `3.5-flash`.
 
-### What Gemini actually bills (measured 2026-08-22, first data point)
+### What Gemini actually bills (measured 2026-08-22 and 2026-08-25)
 
 **`gemini-2.5-flash-lite` is retired.** It still appears in the models list,
 and calling it returns `404 NOT_FOUND`: "no longer available to new users.
@@ -175,35 +175,53 @@ Please update your code to use `models/gemini-3.5-flash-lite`". Both
 `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` work on a current key, so
 3.1 remains the fallback the capacity note above points at.
 
-One GOOG analysis on `gemini-3.5-flash-lite`: **$0.04**, from Google's billing
-dashboard rather than an estimate. It spent 90,713 prompt + 9,629 completion
-tokens over 20 calls in **1.6 minutes**, against gemma4-e2b-96k's 8.6 minutes
-on the same ticker the day before.
+Speed is not in doubt and is the reason to care: a Flash-Lite analysis takes
+**1.2-1.6 minutes** against gemma4-e2b-96k's **7-10**, on the same tickers the
+same morning. A nine-ticker sweep is ~11 minutes of wall clock against ~85 of
+GPU.
 
-| | |
-|---|---|
-| Effective rate | **$0.399 per 1M tokens blended** |
-| List price for the same run | $0.0513 ($0.30 in / $2.50 out per 1M) |
-| Billed | 78% of list |
+The cost is less settled.
 
-**Do not price this workload from the rate card.** The bill came in well under
-list, almost certainly implicit context caching: an analysis is ~20 calls
-sharing one large, mostly-identical prompt, and 90% of the tokens are input.
-Estimating from list overstates the cost by about a quarter.
+**Two measurements, and they disagree.** Price this workload at list until a
+full billing period settles it.
 
-Projections at the measured rate, for the current 9-ticker watchlist:
-$0.36/sweep, $1.80/week, **$7.56/month**. Running the entire history to date
-(11.49M tokens) would have cost **$4.58**, against **$0.26** of marginal
-electricity — 18x, not the 29x a list-price estimate suggests.
+| | 22 Aug — 1 analysis | 25 Aug — 9 analyses |
+|---|---|---|
+| Tokens | 100,342 | 996,065 |
+| Completion share | 9.6% | 8.5% |
+| Billed | $0.04 | $0.50 |
+| Implied blended rate | $0.399 / 1M | **$0.502 / 1M** |
+| List for the same tokens | $0.0513 | $0.484 |
+| **Billed vs list** | **78%** | **103%** |
 
-A billing cap of $10/month is set on the account. Note that this is close to
-the projected $7.56 of normal use, so it protects against a runaway loop
-rather than leaving much room for growth: adding tickers, or ever pointing the
-*main* model at Gemini, would exceed it. Intraday triggers cost nothing here —
+The first reading looked like an implicit-caching discount and was written up
+here as one. The second says otherwise, and three explanations fit without
+being distinguishable from the dashboard: a single $0.04 line item rounds
+coarsely and may simply have displayed $0.0513 as $0.04; caching may behave
+differently for one analysis than for nine dispatched together; or the $0.50
+may carry trailing usage that had not settled on the 22nd.
+
+**So use list — $0.30 in / $2.50 out per 1M.** It sat within 3% of the larger
+sample, and it does not depend on caching behaviour nobody here has verified.
+An earlier note in this file claimed the rate card overstates the cost by a
+quarter. On the evidence since, that was one reading over-generalized.
+
+Projections at the 25 Aug rate, for the current 9-ticker watchlist:
+**$0.056/analysis, $0.50/sweep, $2.50/week, $10.58/month.**
+
+Note the month figure now **exceeds the $10/month billing cap** set on the
+account. The week-long comparison is only $2.50 and fits easily, but running
+this indefinitely would trip the cap, and adding tickers or ever pointing the
+*main* model at Gemini would trip it sooner. Intraday triggers cost nothing —
 only the morning sweep chains a comparison run.
 
-This is one measurement. Re-derive it after the week-long comparison
-(started 2026-08-22) when there is a full billing period to average.
+Also worth carrying forward: **a single-ticker sample understates the average.**
+The 22 Aug GOOG run was 100k tokens; the nine-ticker sweep averaged 111k, with
+several tickers at 106-137k. Estimating a sweep from one small run was
+optimistic by about 10% before any pricing question.
+
+Re-derive both the rate and these projections at the end of the comparison
+week (started 2026-08-25, the first properly paired day).
 
 ## Vendored TradingAgents repo
 
