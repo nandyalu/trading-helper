@@ -325,6 +325,10 @@ class SettingsOut(BaseModel):
     # backend/services/agent.py on why it stays off until calibration earns it.
     agent_min_win_probability: float
     agent_min_risk_reward: float
+    # True when this deployment runs the autonomous-analyst experiment and has
+    # no real book or local paper book to show. Presentation only — it decides
+    # nothing about whether orders are simulated.
+    agent_only: bool = False
 
 
 class SettingsPatchIn(BaseModel):

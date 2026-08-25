@@ -23,6 +23,7 @@ const SERVER_SETTINGS: Settings = {
   agent_budget: 1000,
   agent_min_win_probability: 0,
   agent_min_risk_reward: 0,
+  agent_only: false,
 };
 
 /** Stands in for the HTTP-backed service: records what was sent, and lets a

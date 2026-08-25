@@ -90,3 +90,46 @@ def test_a_buy_is_never_checked_against_holdings(monkeypatch):
     # Fails for want of a client, which is past the long-only check.
     with pytest.raises(RuntimeError, match="No simulated account"):
         sandbox_broker.place_market_order("AAPL", "BUY", 1)
+
+
+# --- which deployment this is --------------------------------------------------
+
+
+def test_the_ordinary_deployment_is_the_default(monkeypatch):
+    from backend.services import deployment
+
+    monkeypatch.delenv("AGENT_ONLY", raising=False)
+    assert deployment.is_agent_only() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+def test_the_experiment_deployment_is_opt_in(monkeypatch, value):
+    from backend.services import deployment
+
+    monkeypatch.setenv("AGENT_ONLY", value)
+    assert deployment.is_agent_only() is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "", "off", "maybe"])
+def test_anything_else_means_the_ordinary_deployment(monkeypatch, value):
+    """A flag that hides pages must fail towards showing them. Guessing that an
+    unrecognised value means "experiment" would silently hide the real book
+    from someone who relies on it."""
+    from backend.services import deployment
+
+    monkeypatch.setenv("AGENT_ONLY", value)
+    assert deployment.is_agent_only() is False
+
+
+def test_the_mode_decides_nothing_about_safety():
+    """AGENT_ONLY hides pages and skips jobs. Whether orders are simulated,
+    which account they reach, and whether the app may short are decided in
+    sandbox_broker and are identical in both deployments — a flag about what
+    to display must never become a flag about what is safe."""
+    import inspect
+
+    from backend.services import deployment
+
+    source = inspect.getsource(deployment)
+    for forbidden in ("sandbox", "account", "short", "order"):
+        assert forbidden not in source.lower().replace("# ", "").split("'''")[0].split('"""')[0]

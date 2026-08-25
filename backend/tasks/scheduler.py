@@ -26,6 +26,7 @@ from backend.services import (
     analysis,
     broker,
     candidates,
+    deployment,
     listings,
     paper,
     quotes,
@@ -191,6 +192,11 @@ async def _daily_signals_job() -> None:
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
         return
     await _evaluate_pending_signals()
+    # The paper book is a thing a person follows by hand. The experiment
+    # deployment has no such book, so snapshotting one would write a row of
+    # zeroes every evening and draw a flat line nobody asked for.
+    if deployment.is_agent_only():
+        return
     try:
         await asyncio.to_thread(paper.record_daily_snapshot)  # equity-curve point for /paper
     except Exception:
@@ -347,6 +353,11 @@ async def _broker_sync_job() -> None:
     watchlist and position log so today's analyses cover everything held.
     Posts only when something changed."""
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
+        return
+    # There is no real portfolio to mirror in the experiment deployment, and
+    # its watchlist is the agent's own choice rather than a reflection of
+    # anyone's holdings.
+    if deployment.is_agent_only():
         return
     if not broker.is_configured():
         return

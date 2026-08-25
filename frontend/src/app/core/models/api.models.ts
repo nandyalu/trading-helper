@@ -306,6 +306,10 @@ export interface Settings {
   /** The conviction floor. Zero means off, which is the default. */
   agent_min_win_probability: number;
   agent_min_risk_reward: number;
+  /** True when this deployment runs the autonomous-analyst experiment and has
+   * no real book or local paper book. Presentation only — it decides nothing
+   * about whether orders are simulated. */
+  agent_only: boolean;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;

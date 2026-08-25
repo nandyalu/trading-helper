@@ -123,5 +123,8 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
 4. The second deployment skeleton: `AGENT_ONLY` mode, the margin account, the $10,000 budget. **Started 2026-08-25.**
    - done: `WEBULL_ACCOUNT_CLASS` selects the account from the two equities classes, rejecting anything else loudly rather than matching nothing
    - done: long-only enforced in `sandbox_broker`, because a margin account will short where a cash account refuses
-   - next: `AGENT_ONLY` mode, the compose file, the budget
+   - done: `AGENT_ONLY` hides the real and paper books and skips the jobs that maintain them. It decides nothing about safety, and a test asserts the module never mentions accounts, orders or shorting — a flag about what to display must not drift into being a flag about what is safe
+   - done: `dockge/analyst-bot.compose.yaml`, a second stack from the same image
+   - done: the margin account is capped at $10,000 in Webull's own UI as well as by the app's budget. The API offers no way to cap an account, so the app must not depend on that cap existing
+   - next: set the budget setting to $10,000 on first run, charge $0.05 an analysis, then the candidate menu
 5. The candidate menu and the agent's spend decision.

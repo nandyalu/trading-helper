@@ -2,6 +2,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
+import { SettingsService } from './core/services/settings.service';
+
 /** One destination in the sidebar. `icon` names a symbol in the sprite at the
  * top of app.html. */
 interface NavItem {
@@ -29,6 +31,7 @@ const THEME_KEY = 'th-theme';
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly settingsService = inject(SettingsService);
 
   /** Grouped so eleven links do not read as one undifferentiated column.
    * "Today" is what needs a decision now; "Track record" is evidence about
@@ -40,11 +43,22 @@ export class App {
     { path: '/alerts', label: 'Alerts', icon: 'bell' },
   ];
 
-  protected readonly bookNav: NavItem[] = [
+  /** True when this deployment is the autonomous-analyst experiment, which
+   * has no real portfolio and no hand-followed paper book. Those pages are
+   * hidden rather than shown empty: an empty Portfolio reads as "you hold
+   * nothing", which is a different statement from "there is no such book
+   * here". */
+  private readonly agentOnly = signal(false);
+
+  private readonly allBookNav: NavItem[] = [
     { path: '/portfolio', label: 'Portfolio', icon: 'briefcase' },
     { path: '/paper', label: 'Paper book', icon: 'file' },
     { path: '/agent', label: 'Auto trader', icon: 'zap' },
   ];
+
+  protected readonly bookNav = computed(() =>
+    this.agentOnly() ? this.allBookNav.filter((item) => item.path === '/agent') : this.allBookNav,
+  );
 
   protected readonly recordNav: NavItem[] = [
     { path: '/scorecard', label: 'Scorecard', icon: 'target' },
@@ -67,7 +81,7 @@ export class App {
     if (url === '/') return 'Overview';
     const all = [
       ...this.primaryNav,
-      ...this.bookNav,
+      ...this.bookNav(),
       ...this.recordNav,
       { path: '/settings', label: 'Settings', icon: '' },
     ];
@@ -78,6 +92,13 @@ export class App {
 
   constructor() {
     this.applyTheme(this.theme());
+    // Which deployment this is decides what the sidebar may offer. Read once
+    // at startup: it is a property of the container, not of the session, and
+    // it cannot change while the page is open.
+    void this.settingsService
+      .load()
+      .then(() => this.agentOnly.set(this.settingsService.settings()?.agent_only ?? false))
+      .catch(() => this.agentOnly.set(false));
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {

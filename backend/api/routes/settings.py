@@ -5,7 +5,7 @@ this just gives them one JSON shape instead of four Discord commands."""
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.services import agent, agent_book, analysis, broker, paper, quotes, sizing, watchdog
+from backend.services import agent, agent_book, analysis, broker, deployment, paper, quotes, sizing, watchdog
 from backend.api.schemas import ActionResultOut, SettingsOut, SettingsPatchIn
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -30,6 +30,7 @@ def _current_settings() -> SettingsOut:
         daily_sweep_enabled=db.get_setting("daily_sweep") != "off",
         agent_enabled=agent.is_enabled(),
         agent_budget=agent_book.get_budget(),
+        agent_only=deployment.is_agent_only(),
         agent_min_win_probability=agent.get_conviction()[0],
         agent_min_risk_reward=agent.get_conviction()[1],
     )
