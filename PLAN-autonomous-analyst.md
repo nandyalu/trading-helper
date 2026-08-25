@@ -13,7 +13,7 @@ Give the agent $10,000 and charge it a fixed $0.10 for every analysis it runs. I
 ### The economics
 
 - **Budget $10,000**, against the current agent's $1,000.
-- **$0.10 per analysis**, fixed, regardless of which model ran it. A fixed price keeps the comparison stable while the model question is still open, and it is roughly what an analysis costs at 4 debate rounds on a paid vendor — see the prerequisites, because that figure is a guess until measured.
+- **A fixed price per analysis**, regardless of which model ran it. A fixed price keeps the comparison stable while the model question is still open. Measured at 4 rounds it is **$0.1347 on Flash-Lite and $0.0066 in local electricity** — 20x apart — so the fixed price is a deliberate choice about scarcity rather than a passthrough of cost. $0.13-0.15 charges roughly what the vendor path costs; $0.10 is a round number slightly under it. Either is defensible; pretending it is "the cost" is not.
 - At 9 analyses a day that is $226.80 a year, a **2.27% hurdle** on $10,000. At 15 a day it is 3.8%. Both leave room; on the current $1,000 budget the same price would be a 22.7% hurdle, which is not a constraint but a rigged game.
 - **The baselines pay too.** The mechanical signal-follower consumes the same analyses, so it is charged for them. SPY buy-and-hold consumes none and pays nothing. Charging the agent alone would handicap it against its own yardstick and quietly break the one measurement the app exists for.
 
@@ -84,7 +84,30 @@ Three things follow.
 
 **Nothing suggests it is better.** Same decision, and the trade plan came out *shorter* — 1,275 characters against 1,569. That is one ticker on one day and settles nothing, but it is the opposite of the expected direction, and the assumption that more deliberation produces a better call is now the weakest load-bearing part of this plan. Before committing, run several tickers at both settings and compare the graded outcomes, not the prose.
 
-The local model's numbers are the other half of this and are being measured separately; wall clock is the figure that matters there, since 2.4x on an 8.6-minute analysis is roughly 21 minutes, and nine of those need the GPU expansion to fit before the open.
+**Measured 2026-08-25, the same GOOG on `gemma4-e2b-96k`:**
+
+| Rounds | Decision | Prompt | Completion | Calls | Minutes | Cost |
+|---|---|---|---|---|---|---|
+| 1/1 | Hold | 96,025 | 22,554 | 16 | 7.7 | $0.0028 |
+| 4/4 | **Overweight** | 321,482 | 48,294 | 32 | **18.1** | $0.0066 |
+
+**The local model changed its mind, and Flash-Lite did not.** Hold at one round, Overweight at four, on identical inputs. That is the first evidence that rounds do anything at all — and there is a plausible mechanism: `gemma4-e2b-96k` answers Hold in 79% of all the signals it has ever produced, and a longer bull-versus-bear debate forces it to engage with the bull case instead of defaulting to no action. If more rounds mostly cure a Hold bias, that is worth having.
+
+It is still one ticker on one day, and a changed decision is not a better one. But it moves the question from "does this do anything" to "does this do the right thing", which is a question graded outcomes can answer.
+
+The token growth matches Flash-Lite almost exactly — prompt 3.3x, completion 2.1x — so the superlinear prompt growth is a property of the pipeline rather than of either model.
+
+**Wall clock is not the binding constraint after all.** At 18.1 minutes an analysis, against the 155 minutes between the 11:00 sweep and the 13:35 decision:
+
+| Tickers | 4 GPUs | 8 GPUs |
+|---|---|---|
+| 9 | 54 min | 36 min |
+| 15 | 72 min | 36 min |
+| 20 | 90 min | 54 min |
+
+Every one of those fits. The GPU expansion still buys headroom, and it halves the sweep at 15+ tickers, but **4 rounds does not require it** — which means prerequisite 2 is an optimization rather than a blocker.
+
+**One consequence for the price.** At 4 rounds an analysis really costs $0.1347 on Flash-Lite and $0.0066 in local electricity — a factor of 20. A single fixed price is therefore **a deliberate choice about scarcity, not a passthrough of cost**, and the plan should say so rather than implying $0.10 is what the work costs. It is roughly the vendor cost, and roughly 20x the local one.
 
 **2. The GPU expansion.**
 
