@@ -13,8 +13,11 @@ Give the agent $10,000 and charge it a fixed $0.10 for every analysis it runs. I
 ### The economics
 
 - **Budget $10,000**, against the current agent's $1,000.
-- **A fixed price per analysis**, regardless of which model ran it. A fixed price keeps the comparison stable while the model question is still open. Measured at 4 rounds it is **$0.1347 on Flash-Lite and $0.0066 in local electricity** — 20x apart — so the fixed price is a deliberate choice about scarcity rather than a passthrough of cost. $0.13-0.15 charges roughly what the vendor path costs; $0.10 is a round number slightly under it. Either is defensible; pretending it is "the cost" is not.
-- At 9 analyses a day that is $226.80 a year, a **2.27% hurdle** on $10,000. At 15 a day it is 3.8%. Both leave room; on the current $1,000 budget the same price would be a 22.7% hurdle, which is not a constraint but a rigged game.
+- **A fixed price per analysis**, regardless of which model ran it. A fixed price keeps the comparison stable while the model question is still open.
+- **At 1 round** — see prerequisite 1, which settled the round count — an analysis really costs **$0.0488 on Flash-Lite and $0.0028 in local electricity**, a factor of 17. So a single fixed price is **a deliberate choice about scarcity, not a passthrough of cost**, and the plan should not pretend otherwise.
+- **$0.05** charges roughly what the vendor path costs and is the natural starting price. On $10,000 at 9 analyses a day that is $113 a year, a **1.13% hurdle**; at 15 a day, 1.9%. Both are gentle, which is the right place to start — the constraint can always be tightened once there is evidence about how the agent spends.
+- $0.10 remains defensible as a deliberately sharper constraint, roughly double the vendor cost, giving a 2.27% hurdle at 9 a day. What is not defensible is calling either figure "the cost".
+- On the current $1,000 budget, $0.10 would be a 22.7% hurdle — not a constraint but a rigged game. The $10,000 budget is what makes a research charge meaningful at all.
 - **The baselines pay too.** The mechanical signal-follower consumes the same analyses, so it is charged for them. SPY buy-and-hold consumes none and pays nothing. Charging the agent alone would handicap it against its own yardstick and quietly break the one measurement the app exists for.
 
 ### What is charged
@@ -31,7 +34,11 @@ Give the agent $10,000 and charge it a fixed $0.10 for every analysis it runs. I
 
 ### The wall-clock limit
 
-Money does not model time. Twenty analyses is hours of GPU, and the agent decides at 13:35 UTC while the sweep has to finish before the open. **A hard cap on analyses per day is needed regardless of what the agent can afford** — 12-15 is the starting guess, and it depends on the GPU expansion.
+Money does not model time, so **a hard cap on analyses per day is needed regardless of what the agent can afford.**
+
+At 1 round the local model takes about 8 minutes an analysis, against the 155 minutes between the 11:00 sweep and the 13:35 decision. On four GPUs that is roughly 20 analyses inside the window with margin, and on eight, about 40. The cap is therefore a safety rail rather than a binding constraint — 15-20 is a sensible starting number, and it does not depend on the GPU expansion.
+
+(Measured at 4 rounds, 18.1 minutes an analysis, even 20 tickers still fit on four GPUs in 90 minutes. Wall clock was never going to be what stopped this.)
 
 ### Deployment
 
@@ -61,53 +68,40 @@ The prompt currently opens "You manage a small paper-trading account", and sever
 
 ## Prerequisites, to check before building
 
-**1. What 4 debate rounds actually costs, and whether it is better.**
+**1. What 4 debate rounds actually costs, and whether it is better. — ANSWERED 2026-08-25. Stay at 1 round.**
 
-`max_debate_rounds` and `max_risk_discuss_rounds` are both `1` today and both settable by env var (`TRADINGAGENTS_MAX_DEBATE_ROUNDS`, `TRADINGAGENTS_MAX_RISK_ROUNDS`), so this is configuration, not code.
+`max_debate_rounds` and `max_risk_discuss_rounds` are both `1` and both settable by env var (`TRADINGAGENTS_MAX_DEBATE_ROUNDS`, `TRADINGAGENTS_MAX_RISK_ROUNDS`), so this was configuration, not code.
 
-The whole price model rests on $0.10 being roughly the real cost at 4 rounds. Measure it. And nobody has checked that more rounds *improve* the output — that assumption is doing a lot of work here and is cheap to test. Measure tokens, wall clock, and cost on the same ticker at 1 round and at 4, on both the local model and Flash-Lite.
+**Cost, on one GOOG run each:**
 
-If 4 rounds costs far less than $0.10, the internal price is arbitrary and should be re-set to something defensible. If it costs far more, the wall-clock cap matters more than the money cap.
-
-**Measured 2026-08-25, GOOG on `gemini-3.5-flash-lite`:**
-
-| Rounds | Decision | Prompt | Completion | Calls | Minutes | Cost | Plan length |
-|---|---|---|---|---|---|---|---|
-| 1/1 | Hold | 84,004 | 9,447 | 19 | 1.2 | $0.0488 | 1,569 chars |
-| 4/4 | Hold | 282,326 | 19,997 | 36 | 2.9 | **$0.1347** | 1,275 chars |
-
-Three things follow.
-
-**$0.10 is close but slightly low.** Four rounds costs $0.135 on a paid vendor, so the internal price should be $0.13-0.15 rather than $0.10 if the intent is to charge roughly what it costs. At $0.135 and 9 analyses a day the hurdle on $10,000 is 3.1% a year, still comfortable.
-
-**Prompt tokens grow faster than the round count** — 3.4x for 4x the rounds, against 2.1x for completion — because each debate turn re-sends the accumulated history. Cost scales with the square of the conversation, not with its length, which matters if anyone later argues for 8 rounds.
-
-**Nothing suggests it is better.** Same decision, and the trade plan came out *shorter* — 1,275 characters against 1,569. That is one ticker on one day and settles nothing, but it is the opposite of the expected direction, and the assumption that more deliberation produces a better call is now the weakest load-bearing part of this plan. Before committing, run several tickers at both settings and compare the graded outcomes, not the prose.
-
-**Measured 2026-08-25, the same GOOG on `gemma4-e2b-96k`:**
-
-| Rounds | Decision | Prompt | Completion | Calls | Minutes | Cost |
+| Model | Rounds | Decision | Prompt | Completion | Minutes | Cost |
 |---|---|---|---|---|---|---|
-| 1/1 | Hold | 96,025 | 22,554 | 16 | 7.7 | $0.0028 |
-| 4/4 | **Overweight** | 321,482 | 48,294 | 32 | **18.1** | $0.0066 |
+| Flash-Lite | 1/1 | Hold | 84,004 | 9,447 | 1.2 | $0.0488 |
+| Flash-Lite | 4/4 | Hold | 282,326 | 19,997 | 2.9 | $0.1347 |
+| gemma4-e2b-96k | 1/1 | Hold | 96,025 | 22,554 | 7.7 | $0.0028 |
+| gemma4-e2b-96k | 4/4 | Overweight | 321,482 | 48,294 | 18.1 | $0.0066 |
 
-**The local model changed its mind, and Flash-Lite did not.** Hold at one round, Overweight at four, on identical inputs. That is the first evidence that rounds do anything at all — and there is a plausible mechanism: `gemma4-e2b-96k` answers Hold in 79% of all the signals it has ever produced, and a longer bull-versus-bear debate forces it to engage with the bull case instead of defaulting to no action. If more rounds mostly cure a Hold bias, that is worth having.
+Prompt tokens grew 3.3-3.4x for 4x the rounds against 2.1x for completion, on both models, because each debate turn re-sends the accumulated history. **Cost scales with the square of the conversation, not its length** — worth knowing if anyone later argues for eight rounds.
 
-It is still one ticker on one day, and a changed decision is not a better one. But it moves the question from "does this do anything" to "does this do the right thing", which is a question graded outcomes can answer.
+That single local run changed its decision, which looked like the first evidence that rounds do something. It was not.
 
-The token growth matches Flash-Lite almost exactly — prompt 3.3x, completion 2.1x — so the superlinear prompt growth is a property of the pipeline rather than of either model.
+**Then all nine tickers, both settings, back to back** (re-run rather than compared against the morning sweep, so price movement could not be mistaken for a rounds effect):
 
-**Wall clock is not the binding constraint after all.** At 18.1 minutes an analysis, against the 155 minutes between the 11:00 sweep and the 13:35 decision:
-
-| Tickers | 4 GPUs | 8 GPUs |
+| | 1 round | 4 rounds |
 |---|---|---|
-| 9 | 54 min | 36 min |
-| 15 | 72 min | 36 min |
-| 20 | 90 min | 54 min |
+| Decisions | Hold 7, Overweight 2 | Hold 7, Buy 1, Overweight 1 |
+| **Hold share** | **78%** | **78%** |
+| Tokens | 1,261,156 | 3,298,997 (2.6x) |
+| GPU minutes | 82 | 189 (2.3x) |
+| Signals keeping both levels | 6/9 | 6/9 |
 
-Every one of those fits. The GPU expansion still buys headroom, and it halves the sweep at 15+ tickers, but **4 rounds does not require it** — which means prerequisite 2 is an optimization rather than a blocker.
+Four of nine decisions changed — CRWV and NOK became *less* directional, FXAIX and INTC *more* — and they cancelled out. **The distribution is identical.** The hypothesis that a longer bull-versus-bear debate would cure this model's 78% Hold bias is refuted.
 
-**One consequence for the price.** At 4 rounds an analysis really costs $0.1347 on Flash-Lite and $0.0066 in local electricity — a factor of 20. A single fixed price is therefore **a deliberate choice about scarcity, not a passthrough of cost**, and the plan should say so rather than implying $0.10 is what the work costs. It is roughly the vendor cost, and roughly 20x the local one.
+**And the changes do not reproduce.** GOOG at 4/4 returned Overweight in the first measurement and Hold in the sweep an hour later, on the same day and the same inputs. Two runs at the same setting disagreed with each other, so none of the four "changes" above can be attributed to the round count. They are consistent with ordinary run-to-run variance in a 2B model, and the single-sample result that started this was noise read as signal.
+
+**Decision: proceed at 1 round.** Four rounds costs 2.3x the time and 2.6x the tokens for no measurable change in what comes out. The price loses its "roughly what 4 rounds costs" justification with it — at 1 round an analysis is **$0.0488 on Flash-Lite and $0.0028 in local electricity**.
+
+Both sets are recorded under `gemma4-e2b-96k@1round` and `@4rounds`, so they grade separately on their own dates and the scorecard's by-model table will say in a fortnight whether the 4-round calls were *individually* better despite the identical distribution. Revisit only if those grades surprise. Total cost of answering this: about 7 cents of electricity.
 
 **2. The GPU expansion.**
 
@@ -123,7 +117,7 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
 
 ## Order of work
 
-1. Measure the round count (prerequisite 1). **Starting here.**
+1. ~~Measure the round count (prerequisite 1).~~ **Done 2026-08-25 — staying at 1 round.**
 2. Add the GPUs (prerequisite 2) — independent of everything else, and the wall-clock headroom for a bigger candidate menu depends on it.
 3. Charge for research in the *existing* agent at a small price, and show it on the equity curve. Cheapest way to learn whether a research cost changes the picture at all, before building an economy on it.
 4. The second deployment skeleton: `AGENT_ONLY` mode, the margin account, the $10,000 budget.
