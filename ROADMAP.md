@@ -381,6 +381,12 @@ the bot itself at the container's web root (backend/app.py, port 8080, host port
 `DOCS_HOST_PORT`). Rebuild the image to republish; `python -m zensical serve` for local
 preview.
 
+## Next track — the autonomous analyst *(planned, not started)*
+
+A second, separate experiment: give an agent $10,000, charge it $0.10 per analysis, and let it choose what to research from a curated candidate menu rather than handing it a fixed watchlist. It runs as a second deployment of this codebase against the idle sandbox margin account, and is never told the account is simulated.
+
+See [PLAN-autonomous-analyst.md](PLAN-autonomous-analyst.md) for the full design, what was rejected and why, and the prerequisites that must be answered first.
+
 ## Deliberate non-goals (for now)
 - **Real order execution** — the bot informs decisions; it doesn't place trades.
 - **Paper shorting** — Sell signals close longs only; revisit if the scorecard shows
