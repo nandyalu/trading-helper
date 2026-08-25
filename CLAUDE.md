@@ -182,16 +182,31 @@ GPU.
 
 The cost is less settled.
 
-**Two measurements, and they disagree.** Price this workload at list until a
-full billing period settles it.
+**Always price input and output separately. Never use a blended rate.**
+
+List is $0.30 per 1M input and $2.50 per 1M output — an 8x gap — so a blended
+figure is a function of the completion share, not a property of the model:
+
+| Completion share | Implied blended rate |
+|---|---|
+| 8.5% (a Flash-Lite sweep) | $0.487 / 1M |
+| 16.0% (gemma4's history) | $0.652 / 1M |
+| 25% | $0.850 / 1M |
+
+This is not academic. An earlier revision of this file derived $0.399/1M from a
+single Flash-Lite run and applied it to gemma4's 11.49M-token history, which
+runs at 16% completion. That produced **$4.59** where the correct split-rate
+answer is **$7.49** — 39% low, and it replaced a figure that had been right.
+Blending was the entire error.
+
+**Two measurements, and they disagree.** Priced at list, with rates split:
 
 | | 22 Aug — 1 analysis | 25 Aug — 9 analyses |
 |---|---|---|
-| Tokens | 100,342 | 996,065 |
+| Prompt / completion | 90,713 / 9,629 | 911,876 / 84,189 |
 | Completion share | 9.6% | 8.5% |
+| List cost | $0.051 | $0.484 |
 | Billed | $0.04 | $0.50 |
-| Implied blended rate | $0.399 / 1M | **$0.502 / 1M** |
-| List for the same tokens | $0.0513 | $0.484 |
 | **Billed vs list** | **78%** | **103%** |
 
 The first reading looked like an implicit-caching discount and was written up
@@ -201,19 +216,29 @@ coarsely and may simply have displayed $0.0513 as $0.04; caching may behave
 differently for one analysis than for nine dispatched together; or the $0.50
 may carry trailing usage that had not settled on the 22nd.
 
-**So use list — $0.30 in / $2.50 out per 1M.** It sat within 3% of the larger
-sample, and it does not depend on caching behaviour nobody here has verified.
-An earlier note in this file claimed the rate card overstates the cost by a
-quarter. On the evidence since, that was one reading over-generalized.
+**So estimate at list.** It sat within 3% of the larger sample and does not
+rest on caching behaviour nobody here has verified.
 
-Projections at the 25 Aug rate, for the current 9-ticker watchlist:
+Projections for the current 9-ticker watchlist, at the 25 Aug measurement:
 **$0.056/analysis, $0.50/sweep, $2.50/week, $10.58/month.**
 
-Note the month figure now **exceeds the $10/month billing cap** set on the
-account. The week-long comparison is only $2.50 and fits easily, but running
-this indefinitely would trip the cap, and adding tickers or ever pointing the
-*main* model at Gemini would trip it sooner. Intraday triggers cost nothing —
-only the morning sweep chains a comparison run.
+Note the month figure **exceeds the $10/month billing cap** on the account. The
+week-long comparison is only $2.50 and fits easily, but running this
+indefinitely would trip the cap, and adding tickers or ever pointing the *main*
+model at Gemini would trip it sooner. Intraday triggers cost nothing — only the
+morning sweep chains a comparison run.
+
+**Against self-hosting.** Running the whole history to date on Flash-Lite —
+9,656,261 prompt + 1,837,356 completion — would have cost **$7.49** at list,
+against **$0.26** of marginal GPU electricity (11.76 GPU-hours x 100 W at
+$0.22/kWh). That is **29x**.
+
+But marginal is the right comparison only because the host is a shared home
+server that would be powered anyway. Its wall meter read 22.48 kWh for 21 days
+of August — **$4.95, at an average draw of 44 W** — of which the analyses were
+5%. Load the idle 42 W onto the trading bot and the two costs converge; leave
+it as the shared overhead it is, and self-hosting wins by an order of
+magnitude. Cost is therefore not the reason to move to a vendor. Speed is.
 
 Also worth carrying forward: **a single-ticker sample understates the average.**
 The 22 Aug GOOG run was 100k tokens; the nine-ticker sweep averaged 111k, with
