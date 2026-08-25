@@ -15,8 +15,8 @@ Give the agent $10,000 and charge it a fixed $0.10 for every analysis it runs. I
 - **Budget $10,000**, against the current agent's $1,000.
 - **A fixed price per analysis**, regardless of which model ran it. A fixed price keeps the comparison stable while the model question is still open.
 - **At 1 round** — see prerequisite 1, which settled the round count — an analysis really costs **$0.0488 on Flash-Lite and $0.0028 in local electricity**, a factor of 17. So a single fixed price is **a deliberate choice about scarcity, not a passthrough of cost**, and the plan should not pretend otherwise.
-- **$0.05** charges roughly what the vendor path costs and is the natural starting price. On $10,000 at 9 analyses a day that is $113 a year, a **1.13% hurdle**; at 15 a day, 1.9%. Both are gentle, which is the right place to start — the constraint can always be tightened once there is evidence about how the agent spends.
-- $0.10 remains defensible as a deliberately sharper constraint, roughly double the vendor cost, giving a 2.27% hurdle at 9 a day. What is not defensible is calling either figure "the cost".
+- **$0.05 is the chosen price** — roughly what the vendor path costs at 1 round. On $10,000 at 9 analyses a day that is $113 a year, a **1.13% hurdle**; at 15 a day, 1.9%. Both are gentle, which is the right place to start — the constraint can always be tightened once there is evidence about how the agent spends.
+- $0.10 would be defensible as a deliberately sharper constraint — roughly double the vendor cost, a 2.27% hurdle at 9 a day — and is where to go if $0.05 turns out not to make the agent choose. What is not defensible is calling either figure "the cost".
 - On the current $1,000 budget, $0.10 would be a 22.7% hurdle — not a constraint but a rigged game. The $10,000 budget is what makes a research charge meaningful at all.
 - **The baselines pay too.** The mechanical signal-follower consumes the same analyses, so it is charged for them. SPY buy-and-hold consumes none and pays nothing. Charging the agent alone would handicap it against its own yardstick and quietly break the one measurement the app exists for.
 
@@ -120,5 +120,8 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
 1. ~~Measure the round count (prerequisite 1).~~ **Done 2026-08-25 — staying at 1 round.**
 2. Add the GPUs (prerequisite 2) — independent of everything else, and the wall-clock headroom for a bigger candidate menu depends on it.
 3. Charge for research in the *existing* agent at a small price, and show it on the equity curve. Cheapest way to learn whether a research cost changes the picture at all, before building an economy on it.
-4. The second deployment skeleton: `AGENT_ONLY` mode, the margin account, the $10,000 budget.
+4. The second deployment skeleton: `AGENT_ONLY` mode, the margin account, the $10,000 budget. **Started 2026-08-25.**
+   - done: `WEBULL_ACCOUNT_CLASS` selects the account from the two equities classes, rejecting anything else loudly rather than matching nothing
+   - done: long-only enforced in `sandbox_broker`, because a margin account will short where a cash account refuses
+   - next: `AGENT_ONLY` mode, the compose file, the budget
 5. The candidate menu and the agent's spend decision.

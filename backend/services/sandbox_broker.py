@@ -23,16 +23,29 @@ and validates nothing.
 """
 import datetime
 import logging
+import os
 import uuid
 
 from backend.services import quotes
 
 log = logging.getLogger("trading-bot.sandbox_broker")
 
-# The one account class this equities-only app trades. The sandbox also exposes
-# Crypto, Futures, Events Cash, and Individual Margin accounts, none of which
-# should ever receive an order from here.
-_TRADEABLE_ACCOUNT_CLASS = "INDIVIDUAL_CASH"
+# Which simulated account this deployment trades. The sandbox exposes five —
+# Crypto, Futures, Events Cash, Individual Cash and Individual Margin — and
+# only the last two are equities accounts this app could ever use.
+#
+# It is configurable because a second deployment runs the autonomous-analyst
+# experiment against the *other* equities account, so the two never share a
+# book. It is configurable from a fixed set rather than from free text: a typo
+# in an env var must not be able to point order flow at the crypto or futures
+# account.
+_EQUITY_ACCOUNT_CLASSES = ("INDIVIDUAL_CASH", "INDIVIDUAL_MARGIN")
+_DEFAULT_ACCOUNT_CLASS = "INDIVIDUAL_CASH"
+
+# Every simulated account number observed on the sandbox host is DEM-prefixed.
+# Treated as a required marker rather than a curiosity: if an account without
+# it ever appears while the sandbox flag is on, something is wrong enough to
+# stop rather than trade.
 
 # Every simulated account number observed on the sandbox host is DEM-prefixed.
 # Treated as a required marker rather than a curiosity: if an account without
@@ -41,6 +54,23 @@ _TRADEABLE_ACCOUNT_CLASS = "INDIVIDUAL_CASH"
 _SIMULATED_ACCOUNT_PREFIX = "DEM"
 
 _account_id: str | None = None
+
+
+def tradeable_account_class() -> str:
+    """The account class this deployment trades.
+
+    Read per call rather than at import so a test can change it, and validated
+    against the known equities classes so a mistyped env var fails loudly here
+    instead of quietly selecting nothing — or, worse, something.
+    """
+    configured = (os.environ.get("WEBULL_ACCOUNT_CLASS") or "").strip().upper()
+    if not configured:
+        return _DEFAULT_ACCOUNT_CLASS
+    if configured not in _EQUITY_ACCOUNT_CLASSES:
+        raise ValueError(
+            f"WEBULL_ACCOUNT_CLASS must be one of {_EQUITY_ACCOUNT_CLASSES}, got {configured!r}"
+        )
+    return configured
 
 
 class NotSandboxError(RuntimeError):
@@ -80,20 +110,21 @@ def get_paper_account_id(*, refresh: bool = False) -> str | None:
         return None
     from webull.trade.trade.v2.account_info_v2 import AccountV2
 
+    wanted = tradeable_account_class()
     for account in _rows(AccountV2(client).get_account_list()):
-        if str(account.get("account_class", "")).upper() != _TRADEABLE_ACCOUNT_CLASS:
+        if str(account.get("account_class", "")).upper() != wanted:
             continue
         number = str(account.get("account_number", ""))
         if not number.startswith(_SIMULATED_ACCOUNT_PREFIX):
             log.error(
                 "Account %s is class %s but its number is not simulated — refusing to use it",
                 number,
-                _TRADEABLE_ACCOUNT_CLASS,
+                wanted,
             )
             return None
         _account_id = str(account.get("account_id"))
         return _account_id
-    log.error("No %s account found on the sandbox host", _TRADEABLE_ACCOUNT_CLASS)
+    log.error("No %s account found on the sandbox host", wanted)
     return None
 
 
@@ -141,6 +172,41 @@ def get_positions() -> dict[str, float] | None:
     return held
 
 
+def _assert_not_short(ticker: str, quantity: float) -> None:
+    """Refuse a sell larger than the account actually holds.
+
+    This app is long-only, and until now the *broker* enforced that for free:
+    a cash account rejects an oversized sell outright with
+    GENERATE_NEW_SHORT_POSITION. A margin account does not — it accepts the
+    order and opens a short.
+
+    So the moment a deployment points at the margin account, the backstop that
+    has been catching this vanishes, and the rule has to live here instead.
+    ``agent_book.validate`` already refuses the agent's own oversized sells;
+    this catches the other way in, which is a bug in this app's own code —
+    a stale quantity in a reset, a ledger that has drifted from the account.
+
+    Unknown positions are not treated as zero. If the position read fails we
+    cannot prove the sell is covered, but we also cannot prove it is naked,
+    and refusing every exit because a quote call failed would leave real
+    positions unprotected. It logs and allows.
+    """
+    held = get_positions()
+    if held is None:
+        log.warning(
+            "Could not read positions before selling %s — allowing, but the "
+            "long-only check did not run",
+            ticker,
+        )
+        return
+    have = held.get(ticker.upper().strip(), 0.0)
+    if quantity > have + 1e-9:
+        raise ValueError(
+            f"refusing to sell {quantity:g} {ticker}: the account holds {have:g}. "
+            "This app is long-only, and a margin account will happily short."
+        )
+
+
 def place_market_order(ticker: str, side: str, quantity: float) -> dict:
     """Place a day market order on the simulated account.
 
@@ -155,6 +221,8 @@ def place_market_order(ticker: str, side: str, quantity: float) -> dict:
         raise ValueError(f"side must be BUY or SELL, got {side!r}")
     if quantity <= 0:
         raise ValueError(f"quantity must be positive, got {quantity}")
+    if side == "SELL":
+        _assert_not_short(ticker, quantity)
 
     client = quotes.get_api_client()
     account_id = get_paper_account_id()
@@ -356,6 +424,10 @@ def place_exit_bracket(
         raise ValueError(f"target price must be positive, got {target_price}")
     if stop_price is None and target_price is None:
         return []
+    # These rest against shares that already exist, so the same rule applies.
+    # A bracket's exit legs are exempt: they are placed with the entry that
+    # creates the position, and the broker ties the three together.
+    _assert_not_short(ticker, quantity)
 
     client = quotes.get_api_client()
     account_id = get_paper_account_id()
