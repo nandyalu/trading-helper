@@ -69,6 +69,23 @@ The whole price model rests on $0.10 being roughly the real cost at 4 rounds. Me
 
 If 4 rounds costs far less than $0.10, the internal price is arbitrary and should be re-set to something defensible. If it costs far more, the wall-clock cap matters more than the money cap.
 
+**Measured 2026-08-25, GOOG on `gemini-3.5-flash-lite`:**
+
+| Rounds | Decision | Prompt | Completion | Calls | Minutes | Cost | Plan length |
+|---|---|---|---|---|---|---|---|
+| 1/1 | Hold | 84,004 | 9,447 | 19 | 1.2 | $0.0488 | 1,569 chars |
+| 4/4 | Hold | 282,326 | 19,997 | 36 | 2.9 | **$0.1347** | 1,275 chars |
+
+Three things follow.
+
+**$0.10 is close but slightly low.** Four rounds costs $0.135 on a paid vendor, so the internal price should be $0.13-0.15 rather than $0.10 if the intent is to charge roughly what it costs. At $0.135 and 9 analyses a day the hurdle on $10,000 is 3.1% a year, still comfortable.
+
+**Prompt tokens grow faster than the round count** — 3.4x for 4x the rounds, against 2.1x for completion — because each debate turn re-sends the accumulated history. Cost scales with the square of the conversation, not with its length, which matters if anyone later argues for 8 rounds.
+
+**Nothing suggests it is better.** Same decision, and the trade plan came out *shorter* — 1,275 characters against 1,569. That is one ticker on one day and settles nothing, but it is the opposite of the expected direction, and the assumption that more deliberation produces a better call is now the weakest load-bearing part of this plan. Before committing, run several tickers at both settings and compare the graded outcomes, not the prose.
+
+The local model's numbers are the other half of this and are being measured separately; wall clock is the figure that matters there, since 2.4x on an 8.6-minute analysis is roughly 21 minutes, and nine of those need the GPU expansion to fit before the open.
+
 **2. The GPU expansion.**
 
 Four more RX 6600s from an idle mining rig, with their own PSU. The cards are **gfx1032**; they work because every pool container sets `HSA_OVERRIDE_GFX_VERSION=10.3.0`, which the four existing ones already do. New backends need `/dev/dri/card4`…`card7` with `renderD132`…`renderD135`, the same env, and `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` raised to 8 to match the backend count, or the extra cards idle.
