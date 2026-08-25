@@ -186,3 +186,72 @@ def test_research_stays_free_unless_a_deployment_asks(monkeypatch):
 
     monkeypatch.setenv("RESEARCH_PRICE_USD", "0.05")
     assert research.get_price() == 0.05
+
+
+# --- one trade stream per app key ----------------------------------------------
+
+
+def test_the_stream_can_be_switched_off(monkeypatch):
+    """Webull allows one subscription per app key, so a second deployment
+    sharing a key would only ever be refused. Not starting is better than
+    being told no on a timer."""
+    from backend.services import trade_stream
+
+    monkeypatch.setenv("TRADE_STREAM", "0")
+    assert trade_stream.start() is False
+
+
+def test_a_permanent_refusal_stops_retrying(monkeypatch):
+    """The refusal lasts as long as the other process runs, so a 60-second
+    reconnect loop is pure noise against someone else's API."""
+    from backend.services import trade_stream
+
+    attempts = []
+
+    class Client:
+        on_connect = on_events_message = on_log = None
+
+        def __init__(self, *a, **k):
+            attempts.append(1)
+
+        def do_subscribe(self, accounts):
+            raise RuntimeError("RESOURCE_EXHAUSTED:appKey already has an active subscription")
+
+    import webull.trade.trade_events_client as module
+
+    monkeypatch.setattr(module, "TradeEventsClient", Client)
+    monkeypatch.setattr(
+        trade_stream._stop, "wait",
+        lambda *a: pytest.fail("a permanent refusal must not be retried on a timer"),
+    )
+
+    trade_stream._run("DEM1", "key", "secret")
+
+    assert attempts == [1], "it should give up after the first refusal"
+
+
+def test_an_ordinary_drop_still_reconnects(monkeypatch):
+    """A network blip is temporary and worth retrying — only the
+    already-subscribed refusal is permanent."""
+    from backend.services import trade_stream
+
+    attempts = []
+
+    class Client:
+        on_connect = on_events_message = on_log = None
+
+        def __init__(self, *a, **k):
+            attempts.append(1)
+
+        def do_subscribe(self, accounts):
+            raise RuntimeError("connection reset by peer")
+
+    import webull.trade.trade_events_client as module
+
+    monkeypatch.setattr(module, "TradeEventsClient", Client)
+    # Stop after the first sleep so the loop terminates.
+    monkeypatch.setattr(trade_stream._stop, "wait", lambda *a: True)
+
+    trade_stream._run("DEM1", "key", "secret")
+
+    assert attempts == [1]

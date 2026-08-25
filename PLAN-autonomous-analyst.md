@@ -130,5 +130,10 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
    - done: the charge lands in `propagate_ticker`, so an analysis that produced no signal is still billed. The work happened either way, and research you learned nothing from is the normal case rather than an accounting error. It is linked to the signal afterwards when there is one.
    - done: the mechanical baseline pays too. It reads the same analyses; charging the agent alone would handicap it against its own yardstick and break the comparison this app exists for. SPY reads nothing and pays nothing.
    - done: research comes out of cash and out of `realized_pnl`, and is carried separately on the book so a page can show how much of a loss was research rather than trading — different problems.
-   - next: set the budget to $10,000 on the experiment's first run, then the candidate menu
+   - done: `AGENT_BUDGET` and `RESEARCH_PRICE_USD` start a fresh deployment at the right numbers, as defaults for unset settings only — the settings page still wins
+   - **deployed 2026-08-25.** Three things bit on first start, all recorded here because none is obvious:
+     - Dockge runs `compose pull` before `up`, and `trading-bot:local` has no registry prefix, so Docker resolves it to Docker Hub and fails with "pull access denied". `pull_policy: never` fixes it.
+     - Dockge resolved the named volume to a bind mount under `/opt/stacks/`, which Docker creates **root-owned**. The container runs as `appuser` (uid 1000) and could not create the database — "unable to open database file". `sudo chown -R 1000:1000` on that directory fixes it. The live stack avoids this only because its named volume was initialised from the image, ownership included.
+     - **Webull allows one live trade-event subscription per app key, not per account.** Two deployments sharing a key cannot both stream; the second is refused with `RESOURCE_EXHAUSTED` whichever account it asks for. The experiment runs with `TRADE_STREAM=0` and settles fills on the 15-minute poll, which was always the guarantee the stream sat on top of. A second app key would give it the stream back.
+   - next: the candidate menu
 5. The candidate menu and the agent's spend decision.

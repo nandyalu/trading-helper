@@ -36,6 +36,16 @@ log = logging.getLogger("trading-bot.trade_stream")
 # why nothing here can place an order.
 _SANDBOX_EVENTS_HOST = "events-api.sandbox.webull.com"
 
+# Webull allows one live subscription per *app key*, not per account. Two
+# deployments sharing a key therefore cannot both stream: the second is
+# refused with RESOURCE_EXHAUSTED no matter which account it asks for.
+#
+# That refusal is permanent for as long as the other process is running, so
+# retrying it on a timer is pure noise against someone else's API. The stream
+# stops instead and says why — and stopping costs only latency, because the
+# fifteen-minute poll behind it is the actual guarantee.
+_ALREADY_SUBSCRIBED = "already has an active subscription"
+
 class _MuteThisThread:
     """A stdout proxy that drops writes from the stream thread only.
 
@@ -127,7 +137,15 @@ def _run(account_id: str, app_key: str, app_secret: str) -> None:
             _client.on_events_message = _on_event
             _client.on_log = lambda level, text: log.debug("stream: %s", str(text)[:300])
             _client.do_subscribe([account_id])
-        except Exception:
+        except Exception as exc:
+            if _ALREADY_SUBSCRIBED in str(exc):
+                log.warning(
+                    "Another process already holds this app key's trade stream, so this one "
+                    "will not start. Fills are still settled by the 15-minute poll — the "
+                    "stream is a latency improvement, not the guarantee. Give this "
+                    "deployment its own Webull app key to have both."
+                )
+                return
             log.exception("Trade event stream dropped")
         # do_subscribe returns when the stream ends, retries exhausted included.
         # Reconnecting is safe because settle_pending is idempotent — it only
@@ -146,7 +164,13 @@ def start() -> bool:
 
     Never fatal: the app runs fine without it, just with the old fifteen-minute
     latency on a resting exit.
+
+    ``TRADE_STREAM=0`` switches it off entirely, for a deployment that shares an
+    app key with another and would only be refused.
     """
+    if (os.environ.get("TRADE_STREAM") or "").strip().lower() in ("0", "false", "no", "off"):
+        log.info("Trade event stream disabled by TRADE_STREAM — the 15-minute poll still runs")
+        return False
     global _thread, _loop
     if is_running():
         return True
