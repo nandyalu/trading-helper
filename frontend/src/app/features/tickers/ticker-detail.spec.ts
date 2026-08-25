@@ -69,6 +69,8 @@ const EVENTS: TickerEvents = {
       win_probability: 64,
       risk_reward: 2.5,
       expected_value_r: 0.75,
+      cost_usd: null,
+      cost_basis: null,
     },
     {
       id: 1,
@@ -100,6 +102,8 @@ const EVENTS: TickerEvents = {
       win_probability: null,
       risk_reward: null,
       expected_value_r: null,
+      cost_usd: null,
+      cost_basis: null,
     },
   ],
   alerts: [

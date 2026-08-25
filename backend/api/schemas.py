@@ -8,7 +8,7 @@ as a plain field) instead of hand-building dicts.
 """
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class OrmModel(BaseModel):
@@ -54,6 +54,30 @@ class SignalOut(OrmModel):
     win_probability: float | None
     risk_reward: float | None
     expected_value_r: float | None
+    # What this run cost. NULL when it was never measured — a zero would read
+    # as a free analysis rather than an unrecorded one.
+    cost_usd: float | None = None
+    # "vendor" (a list-price estimate) or "electricity" (a self-hosted run's
+    # GPU draw). Kept apart because they are not the same kind of dollar.
+    cost_basis: str | None = None
+
+    @model_validator(mode="after")
+    def _price_the_run(self):
+        """Derived here rather than at every call site, and never stored.
+
+        Prices change; a dollar figure written into the row would freeze one
+        day's rate card into the record and quietly stop matching. The tokens
+        are the fact, the cost is the reading.
+        """
+        from backend.services import llm_cost
+
+        cost = llm_cost.estimate(
+            self.model, self.prompt_tokens, self.completion_tokens, self.duration_seconds
+        )
+        if cost is not None:
+            self.cost_usd = round(cost.usd, 4)
+            self.cost_basis = cost.basis
+        return self
 
 
 class SignalDetailOut(SignalOut):

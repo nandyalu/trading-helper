@@ -207,6 +207,15 @@ Recording both, per run, from the provider's own accounting rather than an estim
 
 A run that was never measured stores nothing rather than zero, and shows nothing rather than a free run.
 
+Each signal now shows what its run **cost**, and the two kinds of cost are kept apart because they are not the same kind of dollar:
+
+- A **vendor** figure is estimated at list price, input and output priced separately. They differ by roughly eight times, so a single blended rate is a property of the workload's output ratio rather than of the model — blending one derived from a 9%-output run into a 16%-output history understated it by 39%.
+- A **self-hosted** figure is the electricity the GPU actually drew, at 100 W for the length of the run. Reporting $0.00 would be the wrong kind of true: it reads as free, when it is really paid for in GPU time.
+
+Neither is stored. Prices change, and a dollar figure written into the row would freeze one day's rate card into the record and quietly stop matching. The tokens are the fact; the cost is the reading.
+
+A vendor figure is an estimate, not the invoice. Two billed readings so far came in at 78% and 103% of list.
+
 ## The auto trader
 
 A simulated Webull account the model trades on its own, inside a budget you set (default $1,000).

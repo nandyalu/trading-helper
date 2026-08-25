@@ -43,7 +43,13 @@ export interface Signal {
   stop_loss: number | null;
   win_probability: number | null; // 0-100
   risk_reward: number | null;
-  expected_value_r: number | null; // signed, in R-multiples
+  expected_value_r: number | null;
+  /** What the run cost. NULL when it was never measured — a zero would read as
+   * a free analysis rather than an unrecorded one. */
+  cost_usd: number | null;
+  /** "vendor" (a list-price estimate) or "electricity" (a self-hosted run's
+   * GPU draw). Not the same kind of dollar, so they are never added up. */
+  cost_basis: string | null; // signed, in R-multiples
 }
 
 export interface SignalDetail extends Signal {

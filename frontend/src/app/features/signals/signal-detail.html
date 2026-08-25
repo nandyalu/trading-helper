@@ -216,12 +216,21 @@
           <h2>What this run cost</h2>
           <p class="hint">
             A self-hosted model is paid for in GPU time, a cloud one in tokens — and cloud providers
-            charge more for output than input. Both are recorded so the two can be compared when it
-            matters.
+            charge several times more for output than input, so the two are priced separately. A
+            vendor figure is an estimate at list price, not the invoice.
           </p>
         </div>
         <div class="card-body">
           <dl class="meta-grid">
+            @if (s.cost_usd !== null) {
+              <div>
+                <dt>Cost</dt>
+                <dd>
+                  <strong>{{ cost(s.cost_usd) }}</strong>
+                  <span class="stat-note">{{ costBasis(s.cost_basis) }}</span>
+                </dd>
+              </div>
+            }
             @if (s.model) {
               <div>
                 <dt>Model</dt>

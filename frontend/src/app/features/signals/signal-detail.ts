@@ -80,6 +80,18 @@ export class SignalDetailPage {
     return value ? value.replace('T', ' ').slice(0, 16) : '—';
   }
 
+  /** Sub-cent runs are the normal case for a self-hosted model, so two decimal
+   * places would round every one of them to $0.00 and hide the comparison this
+   * figure exists to make. */
+  protected cost(usd: number | null): string {
+    if (usd === null) return '—';
+    return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+  }
+
+  protected costBasis(basis: string | null): string {
+    return basis === 'vendor' ? 'estimated at list price' : 'GPU electricity';
+  }
+
   protected duration(seconds: number): string {
     const whole = Math.round(seconds);
     const minutes = Math.floor(whole / 60);
