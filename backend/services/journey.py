@@ -21,10 +21,14 @@ new high, a drawdown past a threshold — those are facts about the series, and
 naming them is what turns a list of days into a shape.
 """
 import datetime
+import logging
+import os
 from dataclasses import dataclass, field
 
 from backend.database import db
 from backend.services import agent_book, research
+
+log = logging.getLogger("trading-bot.journey")
 
 # How far the book must fall from its best before the fall is worth naming.
 # Below this, ordinary daily movement would litter the story with "drawdown"
@@ -237,3 +241,87 @@ def to_markdown(days: list[Day], title: str = "The analyst's journey") -> str:
 
     flush_quiet()
     return "\n".join(out).rstrip() + "\n"
+
+
+# Beside the database and the logs, in the volume that survives a rebuild.
+# A story kept only inside a container is a story you lose the first time you
+# change an environment variable.
+JOURNEY_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "journey")
+
+_MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+_GENERATED_NOTE = (
+    "<!-- Generated from the agent's own book. Edits here are overwritten on "
+    "the next write; put commentary in JOURNEY.md instead. -->"
+)
+
+
+def month_summary(days: list[Day], budget: float) -> list[str]:
+    """The month in four numbers, so a file can be read on its own.
+
+    A monthly post that opens with the 3rd and ends with the 28th tells a
+    reader nothing about whether the month was good or bad.
+    """
+    opened = sum(len(d.opened) for d in days)
+    closed = sum(len(d.closed) for d in days)
+    spent = sum(d.research_spent for d in days)
+    priced = [d for d in days if d.equity is not None]
+    lines = [
+        f"- **{opened}** position(s) opened, **{closed}** closed",
+        f"- **${spent:,.2f}** spent on research",
+    ]
+    if priced:
+        start, end = priced[0].equity, priced[-1].equity
+        move = (end / start - 1) * 100 if start else 0.0
+        lines.append(f"- Book **${start:,.2f} → ${end:,.2f}** ({move:+.1f}% over the month)")
+        lines.append(f"- Against the starting balance: **{(end / budget - 1) * 100:+.1f}%**")
+    return lines
+
+
+def write_month_files(root: str | None = None, budget: float | None = None) -> list[str]:
+    """Write one markdown file per month, under a folder per year.
+
+    Regenerated from the book each time rather than appended to. Appending
+    would duplicate every day on a re-run, and the file is a derived artifact —
+    the book is the source. The header says so, because a generated file that
+    looks hand-written invites someone to edit it and lose the work.
+
+    Returns the paths written. Never raises: failing to write the story must
+    not fail whatever job was kind enough to ask for it.
+    """
+    root = root or JOURNEY_DIR
+    budget = budget if budget is not None else agent_book.get_budget()
+    days = build(budget)
+    if not days:
+        return []
+
+    by_month: dict[tuple[int, int], list[Day]] = {}
+    for day in days:
+        by_month.setdefault((day.date.year, day.date.month), []).append(day)
+
+    written: list[str] = []
+    for (year, month), month_days in sorted(by_month.items()):
+        name = _MONTH_NAMES[month - 1]
+        title = f"The analyst's journey — {name} {year}"
+        body = to_markdown(month_days, title=title)
+        # The summary goes after the title line, where a reader meets it before
+        # the day-by-day detail.
+        lines = body.split("\n")
+        head, rest = lines[:2], lines[2:]
+        document = "\n".join(
+            head + month_summary(month_days, budget) + ["", _GENERATED_NOTE, ""] + rest
+        )
+        try:
+            folder = os.path.join(root, str(year))
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, f"{month:02d}-{name}.md")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(document)
+        except OSError:
+            log.exception("Could not write the journey for %s %s", name, year)
+            continue
+        written.append(path)
+    return written

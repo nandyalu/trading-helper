@@ -163,3 +163,75 @@ def test_tickers_keep_their_case(data):
 
     assert "GOOG" in text
     assert "goog" not in text
+
+
+# --- one file per month, under a folder per year -------------------------------
+
+
+def test_a_file_is_written_per_month_under_its_year(data, tmp_path):
+    data["curve"] = [Point("2026-07-30", 10_000.0), Point("2026-08-03", 10_100.0)]
+
+    written = journey.write_month_files(root=str(tmp_path), budget=10_000)
+
+    assert (tmp_path / "2026" / "07-July.md").exists()
+    assert (tmp_path / "2026" / "08-August.md").exists()
+    assert len(written) == 2
+
+
+def test_a_month_file_opens_with_the_month_in_numbers(data, tmp_path):
+    """A post that opens on the 3rd and ends on the 28th tells a reader
+    nothing about whether the month went well."""
+    data["lots"] = [
+        journey_lot := Lot("NVDA", 3, 100.0, "2026-08-03", exit=110.0, exit_day="2026-08-10",
+                           pnl=30.0, held=7),
+    ]
+    data["curve"] = [Point("2026-08-03", 10_000.0), Point("2026-08-31", 10_300.0)]
+    data["charges"] = {datetime.date(2026, 8, 3): 0.45}
+
+    journey.write_month_files(root=str(tmp_path), budget=10_000)
+    text = (tmp_path / "2026" / "08-August.md").read_text()
+
+    assert "The analyst's journey — August 2026" in text
+    assert "**1** position(s) opened, **1** closed" in text
+    assert "$0.45** spent on research" in text
+    assert "+3.0% over the month" in text
+
+
+def test_rewriting_a_month_does_not_duplicate_it(data, tmp_path):
+    """Appending would double every day on a re-run. The file is derived; the
+    book is the source."""
+    data["lots"] = [Lot("NVDA", 3, 100.0, "2026-08-03")]
+    data["curve"] = [Point("2026-08-03", 10_000.0)]
+
+    journey.write_month_files(root=str(tmp_path), budget=10_000)
+    journey.write_month_files(root=str(tmp_path), budget=10_000)
+    text = (tmp_path / "2026" / "08-August.md").read_text()
+
+    assert text.count("Bought 3 NVDA") == 1
+
+
+def test_the_file_says_it_is_generated(data, tmp_path):
+    """A generated file that looks hand-written invites someone to edit it and
+    lose the work."""
+    data["curve"] = [Point("2026-08-03", 10_000.0)]
+
+    journey.write_month_files(root=str(tmp_path), budget=10_000)
+    text = (tmp_path / "2026" / "08-August.md").read_text()
+
+    assert "Generated" in text
+    assert "JOURNEY.md" in text
+
+
+def test_an_unwritable_folder_does_not_raise(data, monkeypatch, tmp_path):
+    """Failing to write the story must not fail the job that asked for it."""
+    data["curve"] = [Point("2026-08-03", 10_000.0)]
+    monkeypatch.setattr(
+        journey.os, "makedirs", lambda *a, **k: (_ for _ in ()).throw(OSError("read-only"))
+    )
+
+    assert journey.write_month_files(root=str(tmp_path), budget=10_000) == []
+
+
+def test_an_empty_book_writes_nothing(data, tmp_path):
+    assert journey.write_month_files(root=str(tmp_path), budget=10_000) == []
+    assert not (tmp_path / "2026").exists()

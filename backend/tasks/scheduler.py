@@ -27,6 +27,7 @@ from backend.services import (
     broker,
     candidates,
     deployment,
+    journey,
     listings,
     paper,
     quotes,
@@ -195,6 +196,14 @@ async def _daily_signals_job() -> None:
     # The paper book is a thing a person follows by hand. The experiment
     # deployment has no such book, so snapshotting one would write a row of
     # zeroes every evening and draw a flat line nobody asked for.
+    # After grading, so the day's verdicts are in the story it writes.
+    try:
+        written = await asyncio.to_thread(journey.write_month_files)
+        if written:
+            log.info("Journey written: %s", ", ".join(written))
+    except Exception:
+        log.exception("Could not write the journey")
+
     if deployment.is_agent_only():
         return
     try:

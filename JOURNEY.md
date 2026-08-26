@@ -1,6 +1,17 @@
 # The analyst's journey — what we changed, and why
 
-The app writes its own chronicle: what was bought, what it cost, what the agent said about it, day by day. Read it at `/api/agent/journey`, or on the Auto trader page. Every sentence there is derived from a trade, a charge or a decision pass, so it cannot drift from the book.
+The app writes its own chronicle: what was bought, what it cost, what the agent said about it, day by day. Every sentence there is derived from a trade, a charge or a decision pass, so it cannot drift from the book.
+
+Read it at `/api/agent/journey`, or as files: one per month, under a folder per year, in the data volume beside the database and the logs.
+
+```
+data/journey/2026/08-August.md
+data/journey/2026/09-September.md
+```
+
+They are rewritten after grading each evening, and `python -m backend.scripts.write_journey` regenerates them on demand. Each opens with the month in four numbers — positions opened and closed, research spent, where the book started and finished — so a file can be read on its own rather than only as part of a series. That is what makes them publishable later: a month is a post.
+
+**They are generated, and rewriting them is how they stay true.** Do not edit them; the next write discards it. Commentary goes here.
 
 **This file is the other half, and it is the half the app cannot write.** It knows the agent changed its mind. It does not know that we changed the prompt the week before, or introduced a research charge, or settled the debate-round count by running an experiment. Without that, a month of chronicle is a sequence of events with no causes — and the causes are the only part anyone can learn from.
 
