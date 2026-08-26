@@ -39,7 +39,7 @@ preference).
 `ollama-pool-b`) behind an nginx round-robin named `ollama-lb`. That is stale.
 What actually runs (verified 2026-08-06):
 
-- **Four** backends: `ollama-pool-a` … `ollama-pool-d`, one AMD card each.
+- **Seven** backends: `ollama-pool-a` … `ollama-pool-g`, one AMD card each (three added 2026-08-26).
   The cards are **RX 6600 (gfx1032, 8 GiB)**, not gfx1030 as an earlier note
   here claimed. They report as gfx1030 only because every pool container sets
   `HSA_OVERRIDE_GFX_VERSION=10.3.0` — ROCm's support for gfx1032 is unofficial
@@ -48,10 +48,15 @@ What actually runs (verified 2026-08-06):
 
   Each container is pinned to one card at the device level — `/dev/dri/card0`
   plus `renderD128` for `-a`, `card1`/`renderD129` for `-b`, and so on — which
-  is why `HIP_VISIBLE_DEVICES=0` is correct in all four: it means "the only
-  card I can see", not "card zero". Four more cards would be `card4`…`card7`
-  with `renderD132`…`renderD135`, the same env, and
-  `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` raised to match the backend count.
+  is why `HIP_VISIBLE_DEVICES=0` is correct in every one: it means "the only
+  card I can see", not "card zero". `-e`…`-g` follow the same pattern on
+  `card4`…`card6` with `renderD132`…`renderD134`.
+
+  `ollama/build.sh` **discovers** the backend list from running containers
+  rather than hardcoding it. It used to hardcode `a`…`d`, and three cards were
+  added without anyone thinking to edit it — which would have built the next
+  custom model on four of seven backends and failed three runs in seven,
+  intermittently and with no obvious cause.
 - `ollama-proxy` (image `ollama-proxy:local`) replaced nginx. It is a small
   FastAPI app: least-active-connections routing, `CONCURRENCY_PER_BACKEND=1`,
   `WAIT_TIMEOUT=600` (queues rather than 503s), and a `/healthz` endpoint
@@ -73,9 +78,16 @@ containers' docker-bridge IPs are reachable from the host
 ollama-pool-a`), so pointing `OLLAMA_BASE_URL` at `http://<ip>:11434/v1` pins a
 run to one card.
 
-That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` (currently 4) the knob that
-decides GPU utilization, and it should equal the backend count. Anything above
-it just queues in the proxy.
+That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` the knob that decides GPU
+utilization. With one deployment it should equal the backend count; anything
+above just queues in the proxy.
+
+**With two deployments sharing the pool, the sum across them is what must not
+exceed the backend count**, because both sweep at 11:00 UTC and contend. Seven
+backends split 5 (live) / 2 (analyst): the live sweep has a fixed nine tickers,
+the analyst usually fewer. Overshooting the sum is not fatal — the proxy queues
+rather than refusing — but `WAIT_TIMEOUT=600` is ten minutes against an
+eight-minute analysis, so a third wave of queued work starts timing out.
 
 Every multi-ticker caller must go through `analysis.run_analyses()`, which
 dispatches with `asyncio.gather` and lets the shared semaphore do the bounding.
@@ -89,11 +101,11 @@ backend has no recent entries), or `curl localhost:11435/healthz`.
 
 ## Custom context builds (`ollama/`)
 
-`ollama/*.Modelfile` plus `ollama/build.sh`, which installs one on all four
-backends — a model on only one backend fails three runs in four, since the
-proxy spreads analyses across them. See `ollama/README.md` for the numbers.
+`ollama/*.Modelfile` plus `ollama/build.sh`, which installs one on every
+backend it finds running — a model missing from some of them fails that share
+of runs, since the proxy spreads analyses across all of them. See `ollama/README.md` for the numbers.
 
-The non-obvious part, measured 2026-08-11 on the 8 GiB gfx1030 cards: **the
+The non-obvious part, measured 2026-08-11 on the 8 GiB cards: **the
 compute graph is what limits context, not the KV cache.** The cache is already
 `q4_0` (flash attention is on) and costs 2.6 GiB at 96k, while the compute
 graph at the default `num_batch 512` wants 5.1 GiB and pushes 40% of a
