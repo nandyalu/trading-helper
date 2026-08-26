@@ -47,7 +47,7 @@ At 1 round the local model takes about 8 minutes an analysis, against the 155 mi
 What separates is the *deployment*, which is what isolation actually requires:
 
 - its own container, volume, database and Discord channel
-- the idle `INDIVIDUAL_MARGIN` account `DEM67245`, funded with $1,000,000 and currently untouched — the live agent uses `INDIVIDUAL_CASH` `DEM8XW69`
+- the sandbox's idle **margin** account, which the live agent does not touch — it uses the **cash** one. Both are simulated and `DEM`-prefixed; the identifiers are deliberately not written down here, because this repo is public. Read them from `get_account_list()`.
 - an `AGENT_ONLY` mode that hides the real-book and paper-book pages
 
 Fork later if the experiment develops a reason to diverge. Fork because it diverged, not in anticipation.
@@ -114,6 +114,24 @@ This changes the electricity numbers. The measured 44 W average and the $0.26 ma
 **3. The current experiment must finish first.**
 
 The Gemini comparison runs to about 1 September. A separate deployment does not disturb it, so building can start — but do not change the *existing* agent's inputs until the model comparison has produced graded results, or two variables move at once and neither answer is clean.
+
+## Publishing — decided 2026-08-26, deferred until a month of data
+
+**The intent is to publish this and invite others to run it on more capable models.** The decision is made; the timing is not now. Revisit once the analyst has roughly a month of its own data — call it late September 2026.
+
+**Why wait.** The experiment has produced nothing yet: zero decision passes, zero trades, and a candidate menu built the same evening. Announcing now announces an intention. The asset *is* the data, and there is none.
+
+**What the headline must not be.** Not "an AI that trades". The live agent is down 4% over thirteen days, answers Hold 78% of the time, and has lost money on four of its six closed positions. Anyone who reads the journey will see that within a minute, so a claim of profit would be both false and immediately falsifiable.
+
+**What it should be.** The measurement, not the trading. Plenty of projects wire a model to a broker; almost none can say whether it worked. This one carries a vs-SPY baseline and a mechanical signal-follower that needs no model at all, calibration that refuses a verdict under twenty graded signals *and* refuses to say whether stated confidence sorts outcomes, cost per decision split by input and output with self-hosted runs priced in electricity, and a written record of what the model got wrong — four debate rounds changing nothing, four small models unable to drive a tool-calling loop, invented price levels on a third of early signals. The trading is what makes any of that measurable; it is not the point.
+
+**Publish findings before code.** The journey and the negative results need no extraction, carry no support burden, and are the genuinely novel part. Package the code only if someone asks — interest first, work second.
+
+**Do not extract "just the analyst" into its own repository.** That is the fork rejected above, for reasons that have not changed: thirty service modules, most of which the analyst depends on. If the code is ever published it is this repository, with the experiment as its headline.
+
+**Barriers a reader will hit**, worth stating plainly in any announcement: Webull developer sandbox credentials, an LLM endpoint, and Docker. That is a narrow audience however good the idea is.
+
+**Housekeeping done 2026-08-26.** This repository is already public. Sandbox account identifiers were removed from this file; they remain in one unpushed commit and are simulated accounts, useless without the API key and secret, so rewriting forty commits of history to remove them is disproportionate. Read identifiers from `get_account_list()` rather than writing them down here again.
 
 ## Order of work
 
