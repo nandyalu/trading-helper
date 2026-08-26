@@ -193,10 +193,10 @@ async def _daily_signals_job() -> None:
     if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
         return
     await _evaluate_pending_signals()
-    # The paper book is a thing a person follows by hand. The experiment
-    # deployment has no such book, so snapshotting one would write a row of
-    # zeroes every evening and draw a flat line nobody asked for.
-    # After grading, so the day's verdicts are in the story it writes.
+    # Written every evening, after grading, so the day's verdicts are in the
+    # story rather than a day behind. Each run regenerates the month files
+    # from the book, so today lands in the current month's file beside
+    # yesterday — a timeline, not a folder of one-day notes.
     try:
         written = await asyncio.to_thread(journey.write_month_files)
         if written:
@@ -204,6 +204,9 @@ async def _daily_signals_job() -> None:
     except Exception:
         log.exception("Could not write the journey")
 
+    # The paper book is a thing a person follows by hand. The experiment
+    # deployment has no such book, so snapshotting one would write a row of
+    # zeroes every evening and draw a flat line nobody asked for.
     if deployment.is_agent_only():
         return
     try:
