@@ -36,7 +36,7 @@ Give the agent $10,000 and charge it a fixed $0.10 for every analysis it runs. I
 
 Money does not model time, so **a hard cap on analyses per day is needed regardless of what the agent can afford.**
 
-At 1 round the local model takes about 8 minutes an analysis, against the 155 minutes between the 11:00 sweep and the 13:35 decision. On four GPUs that is roughly 20 analyses inside the window with margin, and on eight, about 40. The cap is therefore a safety rail rather than a binding constraint — 15-20 is a sensible starting number, and it does not depend on the GPU expansion.
+At 1 round the local model takes about 8 minutes an analysis, against the 155 minutes between the 11:00 sweep and the 13:35 decision. On four GPUs that is roughly 20 analyses inside the window with margin, and on eight, about 40. The cap is therefore a safety rail rather than a binding constraint, and it does not depend on the GPU expansion. **Set to 15** (`agent._MAX_RESEARCH_PER_DAY`), which leaves room for the holdings the sweep analyses anyway.
 
 (Measured at 4 rounds, 18.1 minutes an analysis, even 20 tickers still fit on four GPUs in 90 minutes. Wall clock was never going to be what stopped this.)
 
@@ -119,7 +119,7 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
 
 **The intent is to publish this and invite others to run it on more capable models.** The decision is made; the timing is not now. Revisit once the analyst has roughly a month of its own data — call it late September 2026.
 
-**Why wait.** The experiment has produced nothing yet: zero decision passes, zero trades, and a candidate menu built the same evening. Announcing now announces an intention. The asset *is* the data, and there is none.
+**Why wait.** The experiment has produced nothing yet: zero decision passes and zero trades, with the candidate menu finished only on the evening of 2026-08-26. Announcing now announces an intention. The asset *is* the data, and there is none.
 
 **What the headline must not be.** Not "an AI that trades". The live agent is down 4% over thirteen days, answers Hold 78% of the time, and has lost money on four of its six closed positions. Anyone who reads the journey will see that within a minute, so a claim of profit would be both false and immediately falsifiable.
 
@@ -154,5 +154,12 @@ The Gemini comparison runs to about 1 September. A separate deployment does not 
      - Dockge resolved the named volume to a bind mount under `/opt/stacks/`, which Docker creates **root-owned**. The container runs as `appuser` (uid 1000) and could not create the database — "unable to open database file". `sudo chown -R 1000:1000` on that directory fixes it. The live stack avoids this only because its named volume was initialised from the image, ownership included.
      - **Webull allows one live trade-event subscription per app key, not per account.** Two deployments sharing a key cannot both stream; the second is refused with `RESOURCE_EXHAUSTED` whichever account it asks for. The experiment runs with `TRADE_STREAM=0` and settles fills on the 15-minute poll, which was always the guarantee the stream sat on top of. A second app key would give it the stream back.
    - done: the journey. `AgentRun` persists each decision pass including the skipped ones, because "switched off for four days" is part of the story and a book you can only read on the days money moved is a ledger. `journey.py` assembles the chronicle from trades, charges, passes and the equity curve, detects milestones from the series rather than declaring them, and exports markdown at `/api/agent/journey`. `JOURNEY.md` carries the half the app cannot write — why *we* changed something. The chronicle is also written to `data/journey/<year>/<month>.md`, one file per month, rewritten after grading each evening: a month is a post, which is what makes it publishable without reformatting a year of it by hand.
-   - next: the candidate menu
-5. The candidate menu and the agent's spend decision.
+   - **done 2026-08-26: the candidate menu and the agent's spend decision** — see item 5.
+5. ~~The candidate menu and the agent's spend decision.~~ **Done 2026-08-26.** This was the piece the whole experiment was waiting on: until it existed the analyst had an empty watchlist and nothing to decide about.
+   - The prompt carries a menu of screened candidates with price, day change and volume, the price of an analysis, and the daily limit. It appears **only when research is charged for** — a menu the agent can take from for free is just a longer watchlist somebody else chose, so the live deployment's prompt is untouched.
+   - A `side: "research"` action commissions one. Never free-form: the menu comes from `candidates.py`, which screens for liquidity and excludes anything up more than 30%. A model naming its own tickers invents symbols and picks the day's pump, and a price floor does not catch that because the pump is what lifted the price over the floor.
+   - **The answer arrives tomorrow, not in the same pass.** Commissioning adds the ticker to the watchlist, which *is* the commission because the morning sweep reads it. An analyst does not hand over a report the instant you ask, and same-breath research would let the agent act with no cost to being wrong about what was worth studying — which is the cost the whole experiment is built to impose.
+   - Python screens it like everything else: on the menu, not already tracked, inside the daily cap of 15, and affordable. Research spends before any buy listed after it, or the same dollar gets committed twice.
+   - **The daily cap applies whatever the cash allows.** Money does not model time: the sweep has to finish before the open, and an agent with cash to burn could otherwise queue more GPU-hours than there are hours.
+   - One bug found by asking how the charge reached the balance, and worth remembering: it was billed at *both* the commission and the analysis, so a researched ticker cost double what the prompt quoted. The charge belongs to the analysis and now lands only in `propagate_ticker`, which already bills every ticker the sweep touches including the held ones nobody commissioned.
+   - **Untested against a live model.** The plumbing has tests; whether a 2B model reliably emits `side: "research"` against a menu is unknown until the first real pass. If it ignores the menu entirely, that is the first thing to read in the journey.
