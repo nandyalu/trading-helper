@@ -20,6 +20,7 @@ from backend.database.models import (
     Transaction,
     WatchlistTicker,
     ExitArmRequest,
+    AgentRun,
     ResearchCharge,
 )
 
@@ -793,3 +794,42 @@ def link_research_charge(charge_id: int, signal_id: int, *, _session: Session = 
     row.signal_id = signal_id
     _session.add(row)
     _session.commit()
+
+
+@write_session
+def record_agent_run(
+    ran_at: datetime.datetime,
+    reasoning: str = "",
+    placed: int = 0,
+    rejected: int = 0,
+    failed: int = 0,
+    adjusted: int = 0,
+    skipped: str | None = None,
+    equity: float | None = None,
+    cash: float | None = None,
+    research_spent: float | None = None,
+    *,
+    _session: Session = None,
+) -> int:
+    row = AgentRun(
+        ran_at=ran_at,
+        reasoning=(reasoning or "")[:4000],
+        placed=placed,
+        rejected=rejected,
+        failed=failed,
+        adjusted=adjusted,
+        skipped=skipped,
+        equity=equity,
+        cash=cash,
+        research_spent=research_spent,
+    )
+    _session.add(row)
+    _session.commit()
+    _session.refresh(row)
+    return row.id
+
+
+@read_session
+def get_agent_runs(*, _session: Session = None) -> list[AgentRun]:
+    """Every decision pass, oldest first — the spine of the journey."""
+    return list(_session.exec(select(AgentRun).order_by(AgentRun.ran_at)).all())

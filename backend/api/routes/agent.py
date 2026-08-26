@@ -6,6 +6,7 @@ the agent decides what to trade, and there is no endpoint that lets the
 dashboard place an order of its own.
 """
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 
 from backend.api.schemas import (
     AgentBookOut,
@@ -18,7 +19,7 @@ from backend.api.schemas import (
     UnprotectedPositionOut,
 )
 from backend.database import db
-from backend.services import agent, agent_book, agent_performance, quotes, ticker_book
+from backend.services import agent, agent_book, agent_performance, journey, quotes, ticker_book
 from backend.services.positions import get_current_price
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -159,3 +160,16 @@ def arm_exits(ticker: str):
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return ActionResultOut(message=result["message"])
+
+
+@router.get("/journey", response_class=PlainTextResponse)
+def get_journey():
+    """The agent's story so far, as markdown.
+
+    Plain text rather than JSON because the point is to read it, or paste it
+    somewhere. Every sentence is derived from a trade, a charge, a decision
+    pass or a graded signal that already exists, so it cannot drift from the
+    book — and the half it cannot write, why *we* changed something, belongs
+    to a person in JOURNEY.md.
+    """
+    return journey.to_markdown(journey.build())

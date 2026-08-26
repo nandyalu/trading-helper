@@ -177,6 +177,36 @@ class ExitArmRequest(SQLModel, table=True):
     message: str | None = None  # what happened, for the page that shows it
 
 
+class AgentRun(SQLModel, table=True):
+    """One decision pass, and what the agent said about it.
+
+    The reasoning used to go to Discord and evaporate. That left the record
+    with trades but no account of the days between them — and "it sat still
+    for six days and then bought" is a story in which the sitting still is the
+    interesting part. A book you can only read on the days money moved is a
+    ledger, not a history.
+
+    ``skipped`` holds why a pass did nothing at all: the market was shut, the
+    agent was switched off, the model returned nothing readable. Those are
+    different from "it considered the day and chose to wait", and a journey
+    that conflated them would credit the agent with patience it never showed.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    ran_at: datetime.datetime = Field(index=True)
+    reasoning: str = ""
+    placed: int = 0
+    rejected: int = 0
+    failed: int = 0
+    adjusted: int = 0
+    skipped: str | None = None
+    # The book as it stood when the pass finished, so the narrative never has
+    # to recompute a past day's equity from prices that have since moved.
+    equity: float | None = None
+    cash: float | None = None
+    research_spent: float | None = None
+
+
 class ResearchCharge(SQLModel, table=True):
     """What the agent paid to have one ticker analysed.
 

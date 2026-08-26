@@ -1037,10 +1037,13 @@ def run_once() -> AgentRun:
     anyway, but failing here means the model is never even asked, so a
     misconfigured deployment costs nothing instead of a full analysis.
     """
+    # Skipped passes are recorded too. Four days of "switched off" is part of
+    # the story — a journey that showed only the days something happened would
+    # credit the agent with patience it never had the chance to show.
     if not quotes.is_sandbox():
-        return AgentRun(skipped="Webull is not in sandbox mode — refusing to trade.")
+        return _skip("Webull is not in sandbox mode — refusing to trade.")
     if not is_enabled():
-        return AgentRun(skipped="The trading agent is switched off.")
+        return _skip("The trading agent is switched off.")
     # Checked before the model is asked, not after. Orders are placed at market,
     # and the venue refuses those outside the session
     # (CAN_NOT_TRADING_FOR_FIXGW_NOT_READY_MARKET), so deciding first spends a
@@ -1048,8 +1051,8 @@ def run_once() -> AgentRun:
     # decision made on a closed market's prices is stale by the next open
     # anyway, which is why the 13:35 batch re-decides rather than replaying it.
     if not watchdog.is_us_market_hours():
-        return AgentRun(
-            skipped="The US market is closed, so no order could be placed. "
+        return _skip(
+            "The US market is closed, so no order could be placed. "
             "The agent decides automatically each weekday at 13:35 UTC, "
             "five minutes after the open."
         )
@@ -1130,7 +1133,43 @@ def run_once() -> AgentRun:
     if run.placed:
         settle_pending()
         run.book = agent_book.build_book(price_lookup=prices.get)
+    _record_run(run)
     return run
+
+
+def _skip(why: str) -> "AgentRun":
+    """A pass that never reached the model, recorded rather than dropped."""
+    run = AgentRun(skipped=why)
+    _record_run(run)
+    return run
+
+
+def _record_run(run: "AgentRun") -> None:
+    """Write down what this pass decided, including when it decided nothing.
+
+    The reasoning used to go to Discord and evaporate, which left the record
+    with trades and no account of the days between them. A book you can only
+    read on the days money moved is a ledger, not a history.
+
+    Never raises. A pass that traded successfully must not be reported as a
+    failure because the note about it could not be filed.
+    """
+    book = run.book
+    try:
+        db.record_agent_run(
+            ran_at=datetime.datetime.now(datetime.timezone.utc),
+            reasoning=run.reasoning,
+            placed=len(run.placed),
+            rejected=len(run.rejected),
+            failed=len(run.failed),
+            adjusted=len(run.adjusted),
+            skipped=run.skipped,
+            equity=book.equity if book else None,
+            cash=book.cash if book else None,
+            research_spent=book.research_spent if book else None,
+        )
+    except Exception:
+        log.exception("Could not record the agent run")
 
 
 def format_stop_fill(fill: dict) -> str:
