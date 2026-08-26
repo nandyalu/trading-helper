@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Build one Modelfile on every backend in the Ollama pool.
+# Build one Modelfile into the Ollama pool.
 #
-# A model has to exist on every backend or the proxy's round-robin sends some
-# analyses to one that doesn't have it. `ollama create` is cheap — it reuses
-# the base model's blobs and writes only a new manifest — so rebuilding
-# everywhere costs almost nothing.
+# Every pool container bind-mounts the *same* host directory at
+# /root/.ollama/models, so a model created through any one of them is
+# immediately visible to all of them. Building once is enough.
 #
-# The backend list is discovered rather than written down. It was hardcoded to
-# a..d, and three cards were added without anyone thinking to edit this file —
-# which would have built the next model on four of seven backends and failed
-# three runs in seven, intermittently and with no obvious cause.
+# This script used to loop over a hardcoded a..d, which was wasteful rather
+# than wrong — it wrote the same manifest seven times into one directory. The
+# note in CLAUDE.md that a model could end up on some backends and not others,
+# failing that share of runs, described a failure the shared mount makes
+# impossible. It is gone.
 #
-# Usage: ./build.sh kotakneo-128k.Modelfile [name]
-#        name defaults to the Modelfile's basename without the extension.
+# The loop is kept only as a *check*: build on one, then confirm every running
+# backend can see it. That costs one `ollama list` each and catches the day
+# somebody gives a container its own models volume.
 set -euo pipefail
 
 modelfile=${1:?usage: build.sh <Modelfile> [name]}
@@ -22,15 +23,28 @@ if [ ${#backends[@]} -eq 0 ]; then
   echo "No running ollama-pool-* containers found." >&2
   exit 1
 fi
-echo "Building on ${#backends[@]} backend(s): ${backends[*]}"
+
+builder=${backends[0]}
+docker exec -i "$builder" sh -c "cat > /tmp/${name}.Modelfile" < "$modelfile"
+# ollama create draws its progress on stderr; only the failure matters here.
+docker exec "$builder" ollama create "$name" -f "/tmp/${name}.Modelfile" >/dev/null 2>&1
+echo "$builder: created $name (shared models directory)"
 echo
 
+missing=0
 for backend in "${backends[@]}"; do
-  docker exec -i "$backend" sh -c "cat > /tmp/${name}.Modelfile" < "$modelfile"
-  # ollama create draws its progress on stderr; only the failure matters here.
-  docker exec "$backend" ollama create "$name" -f "/tmp/${name}.Modelfile" >/dev/null 2>&1
-  echo "$backend: created $name"
+  if docker exec "$backend" ollama list 2>/dev/null | awk '{print $1}' | grep -qx "${name}:latest"; then
+    echo "  $backend: sees it"
+  else
+    echo "  $backend: MISSING — does it have its own models volume?" >&2
+    missing=1
+  fi
 done
+if [ "$missing" -ne 0 ]; then
+  echo >&2
+  echo "A backend that cannot see the model fails its share of analyses." >&2
+  exit 1
+fi
 
 echo
 echo "Loaded placement (want 100% GPU — a CPU split means the context is too large):"

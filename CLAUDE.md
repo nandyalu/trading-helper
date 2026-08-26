@@ -52,11 +52,11 @@ What actually runs (verified 2026-08-06):
   card I can see", not "card zero". `-e`…`-g` follow the same pattern on
   `card4`…`card6` with `renderD132`…`renderD134`.
 
-  `ollama/build.sh` **discovers** the backend list from running containers
-  rather than hardcoding it. It used to hardcode `a`…`d`, and three cards were
-  added without anyone thinking to edit it — which would have built the next
-  custom model on four of seven backends and failed three runs in seven,
-  intermittently and with no obvious cause.
+  **Every pool container bind-mounts the same host directory** at
+  `/root/.ollama/models` (`/opt/stacks/ollama-gpus/ollama/models`), so a model
+  pulled or built through any one of them is immediately visible to all. There
+  is no per-backend model state to keep in sync, and adding a card needs no
+  model work at all.
 - `ollama-proxy` (image `ollama-proxy:local`) replaced nginx. It is a small
   FastAPI app: least-active-connections routing, `CONCURRENCY_PER_BACKEND=1`,
   `WAIT_TIMEOUT=600` (queues rather than 503s), and a `/healthz` endpoint
@@ -101,9 +101,12 @@ backend has no recent entries), or `curl localhost:11435/healthz`.
 
 ## Custom context builds (`ollama/`)
 
-`ollama/*.Modelfile` plus `ollama/build.sh`, which installs one on every
-backend it finds running — a model missing from some of them fails that share
-of runs, since the proxy spreads analyses across all of them. See `ollama/README.md` for the numbers.
+`ollama/*.Modelfile` plus `ollama/build.sh`. **An earlier note here said a
+model has to be installed on every backend or the proxy sends some analyses to
+one that lacks it. That was wrong**: the pool shares one models directory, so
+building once reaches all of them. The script builds on the first backend and
+then checks the rest can see it, which is cheap and catches the day somebody
+gives a container its own volume. See `ollama/README.md` for the numbers.
 
 The non-obvious part, measured 2026-08-11 on the 8 GiB cards: **the
 compute graph is what limits context, not the KV cache.** The cache is already
