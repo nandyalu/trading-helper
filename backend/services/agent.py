@@ -546,17 +546,20 @@ def _price_map(tickers) -> dict[str, float | None]:
     return {ticker: get_current_price(ticker) for ticker in sorted(set(tickers))}
 
 
+# Lifted out of _ask so it can be hashed alongside the rest of the prompt.
+# A change here changes the agent's behaviour as surely as a change to the
+# rules, and an experiment that cannot tell which prompt produced which
+# decision cannot attribute a change in behaviour to anything.
+SYSTEM_PROMPT = (
+    "You are a disciplined paper-trading portfolio manager. You answer "
+    "with JSON only — no prose outside it. You never spend more cash "
+    "than you have and never sell shares you do not hold."
+)
+
+
 def _ask(prompt: str) -> str:
     response = analysis._quick_think_llm().invoke(
-        [
-            (
-                "system",
-                "You are a disciplined paper-trading portfolio manager. You answer "
-                "with JSON only — no prose outside it. You never spend more cash "
-                "than you have and never sell shares you do not hold.",
-            ),
-            ("human", prompt),
-        ]
+        [("system", SYSTEM_PROMPT), ("human", prompt)]
     )
     content = response.content
     if isinstance(content, list):

@@ -324,6 +324,164 @@ until you also commit the updated gitlink here: `git add TradingAgents && git
 commit -m "..."` from the trading-helper root. `git status` at the root shows
 `TradingAgents` as dirty/ahead whenever the two are out of sync.
 
+## The auto trader: methodology, and a changelog
+
+**This section is the record of what the agent is and how it got that way. Add
+to the changelog whenever its behaviour changes — a reworded rule, a new number
+in the prompt, a different limit. Behaviour is mostly prompt, so an experiment
+that runs for a month across three prompt revisions has three experiments in it
+and no way to tell them apart afterwards unless someone wrote down when the
+question changed.**
+
+Record the date, what changed, and **why**. The why is the part that stops the
+same idea being re-proposed in three weeks, and it is the part nobody can
+reconstruct later.
+
+### What the agent is shown
+
+One prompt per decision pass, assembled by `agent.build_prompt()`. In order:
+
+1. **The regime line** when one is available — VIX, SPY against its 200-day
+   average, the yield curve, as one sentence.
+2. **The account**: total budget, uninvested cash, total equity with its return
+   against the budget, realized profit. The *broker's* balance is never shown.
+   The simulated account holds $1,000,000 and the agent is given a small
+   fraction of it; if that number reached the prompt the budget would be
+   meaningless.
+3. **Holdings**, one line each: quantity, average cost, current price, market
+   value, unrealized profit, share of the account, days held, what is resting
+   at the broker under it, and what selling all of it would raise. A holding
+   with no resting exit says `NOTHING is resting to close it` — the agent
+   cannot move an exit it cannot see, nor notice one that was never placed.
+4. **Recent analyst signals**, up to 12 from the last 3 days, filtered to the
+   model the app is configured to use. Each carries the decision, the current
+   price, the suggested entry, stop and target, the model's own chance of
+   working, the risk/reward and the expected value in R-multiples — plus, in
+   plain words, how many whole shares the cash could buy. That last part is
+   computed in Python, because the model proposed $1,944 of buys against
+   $1,000 of cash on a live run when it was left to do the arithmetic.
+5. **Its own track record**: closed trades, how many were profitable, the net
+   result, the average holding period, and the last six individually with what
+   the analyst had said at entry. Once it has bought on a Hold signal twice, it
+   is told how that worked out specifically — that being the pattern it
+   actually falls into.
+6. **The rules** (below), then the JSON shape to answer in.
+
+### The rules, verbatim
+
+The system message:
+
+> You are a disciplined paper-trading portfolio manager. You answer with JSON
+> only — no prose outside it. You never spend more cash than you have and never
+> sell shares you do not hold.
+
+The rules block:
+
+- The buys you place must cost `$X` or less in total, added up across every buy.
+  Not each — in total.
+- Orders execute in the order you list them, so a sell frees its cash for a buy
+  listed after it. To buy something you cannot currently afford, sell something
+  first and put that sell earlier in the list.
+- You may only sell shares you hold. No shorting, no options. Whole shares only.
+- What the analysts' decisions mean: Buy means they expect it to rise. Sell
+  means they expect it to fall, so exit it if you hold it. Hold means no action
+  is recommended — if you do not own it, a Hold is not a reason to buy it.
+- Some signals carry how good the analyst thought the bet was. [...] Signals
+  without these numbers are not worse bets, only ones where the analyst did not
+  say.
+- You can also move the stop and take-profit on something you already hold,
+  without buying or selling any of it. Use side `adjust` [...]
+- Doing nothing is a valid answer, and often the right one.
+- Before answering, add up what your buys cost and check it against your cash.
+
+Three of those exist because of a specific failure and should not be trimmed as
+padding: the total-not-each wording, the sell-to-fund ordering, and the
+explanation of what a Hold means. Each was added after the model got that exact
+thing wrong on a live run.
+
+### What Python enforces, regardless of what the model says
+
+The division is deliberate and load-bearing: **the model decides what and how
+much; Python refuses what cannot be executed as stated, and never resizes.**
+Resizing would quietly turn its decision into a different one, and then the
+record would be of a strategy nobody chose.
+
+- **Orders are screened against a running book, not the opening one.** Three
+  buys that are each affordable alone are not necessarily affordable together.
+- **An unaffordable order is dropped, not shrunk.**
+- **Sells cannot exceed holdings** — and since the margin account will short
+  where a cash account refuses, that is now enforced in `sandbox_broker` too
+  rather than inherited from the account type.
+- **Exit levels that would execute on placement are refused**: a stop at or
+  above the price, a target at or below it.
+- **A refused order is fed back once** and the model asked again, which is how
+  it learns it may sell to fund a buy.
+
+### How a position is opened and protected
+
+A buy goes out as a **bracket**: a `MASTER` entry with `STOP_PROFIT` and
+`STOP_LOSS` legs, one submission, one shared combo id. The broker activates the
+exits when the entry fills, so the shares are never held with nothing under
+them. The entry is a marketable limit rather than a market order because Webull
+refuses a `MARKET` master — and the limit caps slippage, which matters on an
+app-enforced budget.
+
+When the stated stop is unusable, one is derived from 2×ATR(14) at the moment
+of purchase. When a combo is refused — which happens routinely, because a cash
+account will not accept one against unsettled funds — it falls back to a market
+order plus separately-armed exits.
+
+### The changelog
+
+Newest first. Every entry says what changed and why.
+
+**2026-08-25 — the agent may move its own exits.** A `side: "adjust"` action,
+with a new stop, target or both, on something already held. Before this, exits
+were fixed when a position opened and untouched until it closed, so re-reading
+a holding every morning taught the agent nothing it could act on short of
+selling: GOOG spent a week with a $377.09 take-profit while each day's analysis
+put the end of the move at $345.00. Python still refuses a level that would
+execute on placement, and a level already where it was asked for is skipped
+rather than re-sent.
+
+**2026-08-25 — holdings now show what is resting under them.** The prompt lists
+each position's live stop and target, and says `NOTHING is resting to close it`
+when there is none. Added with the adjust action, and required by it: the agent
+cannot sensibly move an exit it cannot see.
+
+**2026-08-25 — signals are filtered to the configured model.** Running a second
+model for comparison puts two signals per ticker in the table, sometimes
+disagreeing. Without the filter the agent traded on the mixture, folding an
+experiment into the live book.
+
+**2026-08-25 — a conviction floor, switched off.** Minimum chance of working
+and minimum risk/reward, both defaulting to zero. Off deliberately: the chance
+of working is the model's own claim, and until the Scorecard's calibration says
+it is honest *and* that it sorts outcomes, a threshold on it is arbitrary
+discipline. A signal stating no number fails the floor rather than passing it,
+or the floor could be dodged by not answering.
+
+**2026-08-13 — buys go out as brackets.** Previously the exits were armed after
+the buy returned, which meant they were validated while the account still held
+nothing and read as a new short. Two positions were bought that day and neither
+got its exits.
+
+**2026-08-13 — an ATR stop is derived when the stated one is unusable.** Both
+of that day's unprotected positions were bought days after their signal, by
+which time the price had fallen through the stated stop and the level was
+correctly discarded — leaving nothing. `record_signal` already substituted an
+ATR stop, but only for Buy and Overweight, and the agent buys on Holds too.
+
+**2026-08-13 — an unguarded position is announced.** It used to be silent: no
+alert, no ledger row, and the only way to find out was to look at the broker.
+
+### Before changing the prompt
+
+Note the change here **first**, with the date and the reason. A month of runs
+across an undocumented prompt revision cannot be analysed, and the temptation
+to reconstruct the reasoning afterwards produces a story about what we would
+like to have been thinking.
+
 ## Per-run cost telemetry
 
 `backend/services/llm_usage.py` counts what each analysis spends: wall-clock
