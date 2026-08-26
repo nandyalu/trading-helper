@@ -200,6 +200,15 @@ class AgentRun(SQLModel, table=True):
     failed: int = 0
     adjusted: int = 0
     skipped: str | None = None
+    # What the agent tried and was refused, as JSON: ticker, side, quantity
+    # and the reason, for each.
+    #
+    # Counts alone throw away the interesting half. "3 rejected" says nothing;
+    # "it tried to buy $1,944 against $1,000 of cash" is a finding, and it is
+    # the kind that explains a whole week of the agent behaving oddly. The
+    # placed orders need no copy here — they are in agenttrade — but a refusal
+    # leaves no other trace at all.
+    refusals: str | None = None
     # The book as it stood when the pass finished, so the narrative never has
     # to recompute a past day's equity from prices that have since moved.
     equity: float | None = None

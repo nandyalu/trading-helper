@@ -1837,3 +1837,51 @@ def test_signals_older_than_the_lookback_are_still_dropped(monkeypatch):
     )
 
     assert agent._recent_signals() == []
+
+
+# --- what the agent was refused, and why ---------------------------------------
+
+
+def test_refusals_are_kept_with_their_reasons():
+    """A count throws away the interesting half. "3 rejected" says nothing;
+    "it tried to buy $1,944 against $1,000 of cash" explains a week."""
+    import json
+
+    run = agent.AgentRun()
+    run.rejected = [
+        agent_book.Rejection(ticker="AAA", side="buy", quantity=5, why="costs 1944 of 1000 cash")
+    ]
+    run.failed = [({"ticker": "BBB", "side": "buy", "quantity": 1}, "broker said no")]
+
+    entries = json.loads(agent._refusals_json(run))
+
+    assert len(entries) == 2
+    assert entries[0]["why"] == "costs 1944 of 1000 cash"
+    assert entries[0]["refused_by"] == "screening"
+    assert entries[1]["refused_by"] == "broker"
+
+
+def test_screening_and_broker_refusals_are_told_apart():
+    """Different meanings, different fixes: one is the agent asking for
+    something impossible, the other the venue refusing something reasonable."""
+    import json
+
+    run = agent.AgentRun()
+    run.rejected = [agent_book.Rejection(ticker="A", side="buy", quantity=1, why="no cash")]
+    run.failed = [({"ticker": "B", "side": "buy", "quantity": 1}, "unsettled funds")]
+
+    kinds = {e["refused_by"] for e in json.loads(agent._refusals_json(run))}
+
+    assert kinds == {"screening", "broker"}
+
+
+def test_a_run_that_was_refused_nothing_stores_nothing():
+    assert agent._refusals_json(agent.AgentRun()) is None
+
+
+def test_unserialisable_refusals_do_not_break_the_run(monkeypatch):
+    """Recording the note must never fail the pass that traded successfully."""
+    run = agent.AgentRun()
+    run.rejected = [agent_book.Rejection(ticker="A", side="buy", quantity=object(), why="x")]
+
+    assert agent._refusals_json(run) is None  # must not raise

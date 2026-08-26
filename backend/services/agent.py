@@ -1137,6 +1137,32 @@ def run_once() -> AgentRun:
     return run
 
 
+def _refusals_json(run: "AgentRun") -> str | None:
+    """Everything the agent asked for and did not get, with the reason.
+
+    Screened refusals and broker failures are kept apart because they mean
+    different things: the first is the agent asking for something impossible,
+    the second is the venue saying no to something reasonable. Reading a month
+    of runs, those point at different fixes.
+    """
+    entries = [
+        {"ticker": r.ticker, "side": r.side, "quantity": r.quantity,
+         "why": r.why, "refused_by": "screening"}
+        for r in run.rejected
+    ] + [
+        {"ticker": o.get("ticker"), "side": o.get("side"), "quantity": o.get("quantity"),
+         "why": why, "refused_by": "broker"}
+        for o, why in run.failed
+    ]
+    if not entries:
+        return None
+    try:
+        return json.dumps(entries)[:4000]
+    except (TypeError, ValueError):
+        log.exception("Could not serialise this run's refusals")
+        return None
+
+
 def _skip(why: str) -> "AgentRun":
     """A pass that never reached the model, recorded rather than dropped."""
     run = AgentRun(skipped=why)
@@ -1164,6 +1190,7 @@ def _record_run(run: "AgentRun") -> None:
             failed=len(run.failed),
             adjusted=len(run.adjusted),
             skipped=run.skipped,
+            refusals=_refusals_json(run),
             equity=book.equity if book else None,
             cash=book.cash if book else None,
             research_spent=book.research_spent if book else None,
