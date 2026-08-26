@@ -139,17 +139,16 @@ def test_research_spends_before_a_later_buy_sees_the_cash(charging):
 # --- commissioning it ----------------------------------------------------------
 
 
-def test_commissioning_tracks_the_ticker_and_charges(charging, monkeypatch):
+def test_commissioning_tracks_the_ticker(charging, monkeypatch):
     """Tracking is how the analysis gets run: the morning sweep reads the
     watchlist, so adding the ticker is the commission."""
-    tracked, charged = [], []
+    tracked = []
     monkeypatch.setattr(agent.db, "add_to_watchlist", lambda t: tracked.append(t))
-    monkeypatch.setattr(agent.research, "charge", lambda t, note=None: charged.append(t))
     run = agent.AgentRun()
 
     agent._commission_research({"ticker": "AAA", "side": "research"}, run)
 
-    assert tracked == ["AAA"] and charged == ["AAA"]
+    assert tracked == ["AAA"]
     assert run.researched == ["AAA"]
     assert run.acted is True, "a pass that only researched is not an idle pass"
 
@@ -158,10 +157,6 @@ def test_a_failed_commission_is_reported_not_charged(charging, monkeypatch):
     monkeypatch.setattr(
         agent.db, "add_to_watchlist",
         lambda t: (_ for _ in ()).throw(RuntimeError("database is locked")),
-    )
-    monkeypatch.setattr(
-        agent.research, "charge",
-        lambda t, note=None: pytest.fail("nothing was commissioned, so nothing is owed"),
     )
     run = agent.AgentRun()
 
@@ -178,3 +173,18 @@ def test_a_broken_screener_leaves_the_agent_deciding_without_a_menu(monkeypatch)
     )
 
     assert agent._candidate_menu() == []
+
+
+def test_a_commissioned_ticker_is_charged_once_not_twice(charging, monkeypatch):
+    """The charge belongs to the analysis and lands when the analysis runs.
+    Billing at the commission too charged a ticker once for asking and once
+    for the work."""
+    charges = []
+    monkeypatch.setattr(agent.db, "add_to_watchlist", lambda t: None)
+    monkeypatch.setattr(agent.research, "charge", lambda t, note=None: charges.append(t))
+    run = agent.AgentRun()
+
+    agent._commission_research({"ticker": "AAA", "side": "research"}, run)
+
+    assert charges == [], "commissioning must not bill; propagate_ticker does"
+    assert run.researched == ["AAA"]

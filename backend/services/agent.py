@@ -1300,9 +1300,17 @@ def _commission_research(order: dict, run: "AgentRun") -> None:
     the agent could research and act on the same breath with no cost to being
     wrong about what was worth studying.
 
-    Charged here rather than when the sweep runs. The decision to spend was
-    made now, and a charge that landed tomorrow would let the agent commission
-    more than its cash on a day the sweep had not yet happened.
+    **Nothing is charged here.** The charge belongs to the analysis and lands
+    when the analysis runs, in propagate_ticker, which already bills every
+    ticker the sweep touches — including the ones held rather than
+    commissioned. Charging at both ends billed a commissioned ticker twice:
+    once for asking and once for the work.
+
+    That leaves the agent able to commission slightly more than its cash on a
+    day the sweep has not happened yet. The daily cap bounds that exposure to
+    fifteen analyses, so at any sane price it is cents against a four-figure
+    budget — a far smaller problem than double-billing, and one the
+    affordability screen still catches in the ordinary case.
     """
     ticker = order["ticker"]
     try:
@@ -1311,7 +1319,6 @@ def _commission_research(order: dict, run: "AgentRun") -> None:
         log.exception("Could not track %s for research", ticker)
         run.failed.append((order, "could not be added to the watchlist"))
         return
-    research.charge(ticker, note="commissioned by the agent")
     run.researched.append(ticker)
     log.info("Agent commissioned research on %s", ticker)
 
