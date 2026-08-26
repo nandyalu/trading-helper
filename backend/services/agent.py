@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass, field
 
 from backend.database import db
-from backend.services import agent_book, analysis, quotes, sandbox_broker, watchdog
+from backend.services import agent_book, analysis, candidates, quotes, research, sandbox_broker, watchdog
 from backend.services.positions import get_current_price
 from backend.services.sizing import get_atr, suggest_position
 
@@ -197,6 +197,9 @@ def build_prompt(
     closed: list[agent_book.ClosedTrade] | None = None,
     regime_line: str | None = None,
     horizon_days: int | None = None,
+    menu: list | None = None,
+    price: float = 0.0,
+    max_research: int = 0,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -327,6 +330,28 @@ def build_prompt(
         floors.append(f"risk/reward of at least {min_risk_reward:.2f}")
     conviction_line = " and ".join(floors)
 
+    if menu:
+        lines += [
+            "",
+            f"You may pay ${price:,.2f} to have a stock analysed. That money comes out of the "
+            f"same cash you trade with, so it is a real cost and a bad choice of what to "
+            f"study is a loss like any other. You may research at most {max_research} today.",
+            "",
+            "Nothing has been analysed on these yet — they are screened for being liquid and "
+            "actively traded, not for being good. Researching one buys you an analyst's "
+            "opinion tomorrow, not a position today:",
+        ]
+        for candidate in menu:
+            move = f", {candidate.change_pct:+.1f}% today" if candidate.change_pct is not None else ""
+            lines.append(
+                f"- {candidate.ticker}: {candidate.name[:40]} at ${candidate.price:,.2f}"
+                f"{move}, {candidate.volume_m:,.1f}M shares traded"
+            )
+        lines.append(
+            "Anything you already hold is analysed every day whether you ask or not, and "
+            "charged the same — you own the cost of finding your own exit."
+        )
+
     lines += [
         "",
         "Rules:",
@@ -361,6 +386,17 @@ def build_prompt(
         "  Raising a stop as a position gains is how a profit is protected; today's",
         "  analysis is what tells you where the thesis now breaks. If a holding has",
         "  nothing resting on it, an adjust places the exits for the first time.",
+        *(
+            [
+                "- To have something analysed, use side \"research\" with a ticker from the",
+                "  list above and no quantity. You will see the analyst's answer tomorrow and",
+                "  can decide then. Choosing what to study is the only way anything new ever",
+                "  enters this account, and paying to study something you then ignore is how",
+                "  the money leaves it.",
+            ]
+            if menu
+            else []
+        ),
         "- Doing nothing is a valid answer, and often the right one.",
         *(
             [
@@ -415,6 +451,7 @@ def screen(
     book: agent_book.Book,
     prices: dict[str, float | None],
     signals_by_ticker: dict | None = None,
+    menu: set[str] | None = None,
 ):
     """Split proposed orders into (accepted, rejected), applying each accepted
     one to a running copy of the book.
@@ -433,6 +470,13 @@ def screen(
     A floor of zero, which is the default, skips the check entirely.
     """
     min_probability, min_risk_reward = get_conviction()
+    # Research is spent from the same cash as the trades, and it is spent
+    # first: a buy listed after it must see the money already gone, or the
+    # agent could commit the same dollar twice.
+    research_price = research.get_price()
+    max_research = _max_research_per_day()
+    researched: list[str] = []
+    already_researched = set(db.get_watchlist())
     cash = book.cash
     held = {h.ticker: h.quantity for h in book.holdings}
     accepted: list[dict] = []
@@ -440,6 +484,28 @@ def screen(
 
     for order in orders:
         ticker = str(order.get("ticker", "")).upper().strip()
+        if str(order.get("side", "")).lower().strip() == "research":
+            # Neither a buy nor a sell: it moves cash but no shares, and what
+            # it buys is an opinion tomorrow rather than a position today.
+            why = None
+            if menu is not None and ticker not in menu:
+                why = "not on today's candidate list"
+            elif ticker in already_researched:
+                why = "already being researched today"
+            elif len(researched) >= max_research:
+                why = f"the daily research limit of {max_research} is reached"
+            elif cash < research_price:
+                why = f"costs ${research_price:,.2f} and only ${cash:,.2f} is left"
+            if why:
+                rejected.append(
+                    agent_book.Rejection(ticker=ticker, side="research", quantity=0, why=why)
+                )
+                continue
+            cash -= research_price
+            researched.append(ticker)
+            accepted.append({**order, "ticker": ticker, "side": "research", "quantity": 0})
+            continue
+
         if str(order.get("side", "")).lower().strip() == "adjust":
             # Moves no cash and no shares, so the running-balance machinery
             # below has nothing to say about it. What it does need is a
@@ -567,7 +633,7 @@ def _ask(prompt: str) -> str:
     return str(content)
 
 
-def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=None):
+def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=None, menu=None):
     """(reasoning, accepted, rejected), with one correction pass.
 
     A refused order is information the model never sees otherwise: it proposed
@@ -583,21 +649,27 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     are harder to reason about than one.
     """
     by_ticker = {s.ticker: s for s in signals}
-    reasoning, proposed = parse_decision(_ask(build_prompt(book, signals, prices, closed=closed, regime_line=regime_line, horizon_days=horizon_days)))
-    accepted, rejected = screen(proposed, book, prices, by_ticker)
+    menu_tickers = {c.ticker for c in menu} if menu else None
+    reasoning, proposed = parse_decision(_ask(build_prompt(
+        book, signals, prices, closed=closed, regime_line=regime_line,
+        horizon_days=horizon_days, menu=menu, price=research.get_price(),
+        max_research=_max_research_per_day(),
+    )))
+    accepted, rejected = screen(proposed, book, prices, by_ticker, menu_tickers)
     if not rejected:
         return reasoning, accepted, rejected
 
     log.info("Re-asking after %d refused order(s): %s", len(rejected), [r.why for r in rejected])
     retry_reasoning, retry_proposed = parse_decision(
         _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed,
-                     regime_line=regime_line, horizon_days=horizon_days))
+                     regime_line=regime_line, horizon_days=horizon_days, menu=menu,
+                     price=research.get_price(), max_research=_max_research_per_day()))
     )
     if not retry_proposed:
         # A retry that proposes nothing is a decision to stand pat; keep the
         # first answer's accepted orders rather than discarding them.
         return reasoning, accepted, rejected
-    retry_accepted, retry_rejected = screen(retry_proposed, book, prices, by_ticker)
+    retry_accepted, retry_rejected = screen(retry_proposed, book, prices, by_ticker, menu_tickers)
     return retry_reasoning or reasoning, retry_accepted, retry_rejected
 
 
@@ -613,12 +685,16 @@ class AgentRun:
     # opened or closed, but the risk on an open one changed, which is worth
     # reporting rather than folding into "no trades".
     adjusted: list[str] = field(default_factory=list)
+    # Tickers it paid to have analysed. Not a trade — the position it may or
+    # may not take is tomorrow's decision — but money left the account, so a
+    # pass that only researched is not an idle pass.
+    researched: list[str] = field(default_factory=list)
     book: agent_book.Book | None = None
     skipped: str | None = None  # why the run did nothing at all
 
     @property
     def acted(self) -> bool:
-        return bool(self.placed or self.adjusted)
+        return bool(self.placed or self.adjusted or self.researched)
 
 
 def format_run_embed(run: AgentRun) -> "discord.Embed":
@@ -689,6 +765,40 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
 
     embed.set_footer(text="Simulated account — no real money")
     return embed
+
+
+# How many analyses the agent may commission in one day, whatever it can
+# afford. Money does not model time: the sweep has to finish before the open,
+# and an agent with cash to burn could otherwise queue more GPU-hours than
+# there are hours.
+_MAX_RESEARCH_PER_DAY = 15
+
+
+def _max_research_per_day() -> int:
+    return _MAX_RESEARCH_PER_DAY
+
+
+# How many screened names to show. Enough to choose from, few enough that the
+# list does not crowd out the holdings and signals above it — and every extra
+# line is prompt tokens on every pass, whether or not anything is researched.
+_MENU_SIZE = 15
+
+
+def _candidate_menu() -> list:
+    """Screened names the agent may pay to have analysed.
+
+    Never free-form. A model naming its own tickers invents symbols, reaches
+    illiquid things with no price data, and picks the day's pump — a raw screen
+    once returned a stock up 927%, which the price floor alone does not catch
+    because the pump is what lifted the price over the floor. candidates.py
+    already filters for liquidity and excludes anything up more than 30%.
+    """
+    try:
+        found = candidates.fetch_candidates()
+    except Exception:
+        log.exception("Could not screen for candidates — the agent decides without a menu")
+        return []
+    return found[:_MENU_SIZE]
 
 
 def _place(
@@ -1074,9 +1184,13 @@ def run_once() -> AgentRun:
     # naming.
     decisions = {s.id: s.decision for s in db.get_recent_signals(limit=200) if s.id}
     closed = agent_book.closed_trades(decisions=decisions)
+    # Only fetched when research is actually charged for. Without a price the
+    # agent has no scarcity to reason about, and a menu it can take from for
+    # free would just be a longer watchlist someone else chose.
+    menu = _candidate_menu() if research.is_charging() else None
     reasoning, accepted, rejected = _decide(
         book, signals, prices, closed=closed,
-        regime_line=current_regime_line(), horizon_days=_horizon_days(),
+        regime_line=current_regime_line(), horizon_days=_horizon_days(), menu=menu,
     )
 
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
@@ -1089,6 +1203,9 @@ def run_once() -> AgentRun:
     # stated by the trader, discarded if implausible against the traded price.
     targets = {s.ticker: s.price_target for s in signals if s.price_target}
     for order in accepted:
+        if order["side"] == "research":
+            _commission_research(order, run)
+            continue
         if order["side"] == "adjust":
             outcome = adjust_exits(order["ticker"], order.get("stop"), order.get("target"))
             log.info("Adjust %s: %s", order["ticker"], outcome["message"])
@@ -1171,6 +1288,32 @@ def _skip(why: str) -> "AgentRun":
     run = AgentRun(skipped=why)
     _record_run(run)
     return run
+
+
+def _commission_research(order: dict, run: "AgentRun") -> None:
+    """Pay for an analysis and put the ticker where the sweep will find it.
+
+    Tracking is how the analysis actually gets run: the morning sweep reads
+    the watchlist, so adding the ticker is the commission. The answer arrives
+    tomorrow, which is the honest shape — an analyst does not hand over a
+    report the instant you ask for one, and pretending otherwise would mean
+    the agent could research and act on the same breath with no cost to being
+    wrong about what was worth studying.
+
+    Charged here rather than when the sweep runs. The decision to spend was
+    made now, and a charge that landed tomorrow would let the agent commission
+    more than its cash on a day the sweep had not yet happened.
+    """
+    ticker = order["ticker"]
+    try:
+        db.add_to_watchlist(ticker)
+    except Exception:
+        log.exception("Could not track %s for research", ticker)
+        run.failed.append((order, "could not be added to the watchlist"))
+        return
+    research.charge(ticker, note="commissioned by the agent")
+    run.researched.append(ticker)
+    log.info("Agent commissioned research on %s", ticker)
 
 
 def _record_run(run: "AgentRun") -> None:

@@ -435,6 +435,14 @@ order plus separately-armed exits.
 
 Newest first. Every entry says what changed and why.
 
+**2026-08-26 — the agent chooses what to research.** A `side: "research"` action, and a menu of screened candidates in the prompt with what an analysis costs. This is the point of the analyst experiment: the live agent is measured on decisions given a fixed watchlist, and this one decides what is worth looking at at all. Commissioning a ticker adds it to the watchlist — which *is* the commission, since the morning sweep reads the watchlist — and charges immediately, because the decision to spend was made now and a charge landing tomorrow would let it commission more than its cash.
+
+The menu is never free-form. A model naming its own tickers invents symbols, reaches illiquid things with no price data, and picks the day's pump; `candidates.py` already screens for liquidity and excludes anything up more than 30%, which matters because a raw screen once returned a stock up 927% and a price floor does not catch that — the pump is what lifted the price over the floor.
+
+The answer arrives **tomorrow**, not in the same pass. That is the honest shape: an analyst does not hand over a report the instant you ask, and same-breath research would let the agent act with no cost to being wrong about what was worth studying. A daily cap of 15 applies regardless of cash, because money does not model time and the sweep has to finish before the open.
+
+The whole section only appears when research is actually charged for. A menu the agent can take from for free is just a longer watchlist somebody else chose.
+
 **2026-08-25 — the agent may move its own exits.** A `side: "adjust"` action,
 with a new stop, target or both, on something already held. Before this, exits
 were fixed when a position opened and untouched until it closed, so re-reading
