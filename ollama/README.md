@@ -165,26 +165,30 @@ Split the seven backends **4 (live) / 3 (analyst)** rather than 5/2, so the anal
 
 All three builds keep Gemma's published standard sampling — temperature 1, top_k 64, top_p 0.95, per <https://ollama.com/library/gemma4>. Changing the model and the sampling in one step would leave no way to tell which one moved the result, and the recommended values are not a starting point to tune away from.
 
-## A fast model that fails: `lfm2.5:8b`
+## `lfm2.5:8b`: rejected, then fixed
 
-Run the whole harness before believing any of it. This model passes the first two steps better than anything else measured here and fails the last two.
+The most useful entry in this file, because the rejection was wrong and the record of why is worth more than the verdict was.
 
-| Step | Result |
-|---|---|
-| 1. Fit | **Best measured.** 25 of 25 layers on the GPU at 128k, 6.1 GiB, nothing in host RAM |
-| 2. Prefill | **Best measured.** 2,138 tok/s, against e4b-qat's 1,126 |
-| 3. Candidate menu | **Fails.** 2 runs of 8 at its shipped sampling, against e4b-qat's 4 of 4 |
-| 4. Tool calling | **Fails.** 4 structured-output failures per run, and every price invented |
+Run the whole harness before believing any of it. This model passed the first two steps better than anything else measured here and failed the last two — and then every failure turned out to be a defect in this app rather than in the model.
 
-Two AAPL runs, on a day AAPL closed at **$313.45**:
-
-| | Run 1 | Run 2 |
+| Step | First verdict | After the fixes |
 |---|---|---|
-| Time | 9m06s | 7m31s |
-| Structured-output failures | 4 | 4 |
-| Figures near the real close | 0 of 6 | 0 of 3 |
-| What it cited instead | $188-196 | $144-150 |
-| Completion share | 34% | 35% |
+| 1. Fit | **Best measured.** 25 of 25 layers on the GPU at 128k, 6.1 GiB | unchanged |
+| 2. Prefill | **Best measured.** 2,138 tok/s against e4b-qat's 1,126 | unchanged |
+| 3. Candidate menu | Fails. 2 runs of 8 against e4b-qat's 4 of 4 | **still fails** |
+| 4. Tool calling | Fails. 4 structured-output failures a run, every price invented | **passes** |
+
+Two AAPL runs before the fixes and two after:
+
+| | Before | After |
+|---|---|---|
+| Structured-output failures | 4, 4 | **0, 0** |
+| Figures near the real close | 0 of 6, 0 of 3 | **7 of 9, 5 of 6** |
+| What it cited | $188-196, then $144-150 | 315.18 against a 315.20 close |
+| Market report | 532 and 0 chars | 5,319 and 4,358 chars |
+| Prompt share | 66%, 65% | 74%, 74% |
+
+**Three fixes did it, and none is specific to this model:** `json_schema` structured output, removing every price field from `TraderProposal`, and rescaling a sentiment score the model answered on a 0-100 scale. The same three took `gemma4-e4b-qat-128k` from one structured-output failure a run to none.
 
 Three things here are worth carrying to the next model.
 
@@ -193,6 +197,18 @@ Three things here are worth carrying to the next model.
 **Prices from two different years prove invention.** Run 1 cited roughly AAPL in 2024 and run 2 roughly AAPL in 2023. A stale cache would be wrong the same way twice.
 
 **A vendor's tool-calling claim is a reason to test, not evidence.** This model's card names tool calling as a strength and it declares the `tools` capability. Both are true. A tool-calling benchmark asks whether a model picks the right function from a list; this pipeline asks whether it carries the returned number into a structured field twenty calls later. Those are different questions.
+
+### Where it stands now
+
+**Viable for the live bot, at 2.5x the speed.** The live deployment reads a fixed watchlist, so the menu weakness does not apply to it. Every `Signal` records its model, so the Scorecard's `by_model` breakdown is what settles whether the decisions are as good — which is the only honest comparison and the reason that breakdown exists.
+
+**Not the analyst's model.** It chose from the candidate menu in 2 runs of 8 at its shipped sampling, against `gemma4:e4b-it-qat`'s 4 of 4. That is a judgement failure rather than a format one, so none of the three fixes touches it, and choosing what to research is the entire analyst experiment.
+
+Raising the temperature to 1 reached 4 of 4, and neither of the two runs that scored was usable: one researched 11 of the 15 names, which is not a choice, and another named a ticker that was not on the menu at all.
+
+**Watch the prompt share.** 74% against gemma4's 82-84%: it still reads less and talks more, and that ratio is what caught the fabrication in the first place. It sits inside the healthy band and the fixes did not move it.
+
+**The lesson is about the harness, not the model.** Four earlier models were rejected on the same evidence and never retested. This one was rejected, and the rejection turned out to be measuring our own defects. Any of those four may deserve another run now — the docs say not to retest them without a fix for tool calling, and there is now a fix for tool calling.
 
 ## Sampling: use Gemma's published values
 

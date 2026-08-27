@@ -271,7 +271,22 @@ roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured
 2026-08-11). An earlier "2-3 minutes" figure here was wrong: 7 matches both
 that run and days of observed sweeps.
 
-**Five models have now been tested against this pipeline and all five failed
+**`lfm2.5:8b` was the fifth rejection and it no longer stands (2026-08-27).**
+Every failure behind it was a defect in this app, and three fixes landed the
+same day: `json_schema` structured output, no price fields on `TraderProposal`,
+and a rescaled sentiment score. It went from 4 structured-output failures a run
+to 0 in each of two, and from citing nothing near the real close to 7 of 9 and
+5 of 6 — including 315.18 against a 315.20 close. **It is viable for the live
+bot at 2.5x the speed, and still wrong for the analyst**, which needs the
+candidate-menu decision it makes in only 2 runs of 8. Full record in
+[ollama/README.md](ollama/README.md).
+
+**That should cast doubt on the four below, not confirm them.** They were
+rejected on the same evidence, before any of these fixes existed, and none has
+been retested since. The instruction not to retest them "without a fix for tool
+calling" has been met.
+
+**Five models were tested against this pipeline and all five failed
 the same way** (kotakneo and alma-trader 2026-08-11; `llama3.2:3b` and
 `phi4-mini` 2026-08-12; `lfm2.5:8b` 2026-08-27). They cannot drive
 TradingAgents' tool-calling loop: either they print the tool call as text and
