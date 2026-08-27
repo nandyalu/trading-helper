@@ -128,16 +128,16 @@ At 190 examples a day, a month of sweeps gives about 5,700. That is enough, and 
 
 One trace file is one analysis, named `<ticker>-<run id>.jsonl` under a folder per day. Each line holds the messages that went in, the tool calls the model made, the tool results it received, and what it answered.
 
-Measured on a real `gemma4-e4b-qat-128k` run of AAPL:
+Measured on two real `gemma4-e4b-qat-128k` runs of AAPL:
 
-| | |
-|---|---|
-| Calls captured | 21 |
-| Calls where the model called a tool | 12 |
-| Tool results captured | 43 |
-| File size | **0.34 MB** |
+| | Run 1 | Run 2 |
+|---|---|---|
+| Calls captured | 21 | 21 |
+| Calls where the model called a tool | 12 | — |
+| Tool results captured | 43 | — |
+| File size | 336 KB | 468 KB |
 
-At nine analyses a day that is about **3 MB a day and 92 MB a month**, which is small enough that retention is not worth designing yet.
+Call it **0.4 MB an analysis**, which at nine a day is roughly **3.6 MB a day and 110 MB a month**. That is small enough that retention is not worth designing yet. The spread between two runs of the same ticker on the same day is 40%, so treat any single measurement here as an estimate.
 
 **`Signal.trace_id` is the part that matters.** It joins a trace to the signal it produced, and that signal gets graded weeks later against what the market did. **That lets you train on the runs that turned out to be right**, rather than on every run the teacher happened to produce. It is the advantage this app has and a public dataset does not.
 
