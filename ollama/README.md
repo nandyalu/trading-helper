@@ -154,9 +154,11 @@ Two AAPL runs of each build. Runs marked *paired* were dispatched together on se
 
 ### The cost, stated plainly
 
-**13-17 minutes per analysis against 7.** That is the whole price of the decision, and it is not small. The analyst runs at `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=2`, so six tickers is three waves. At the paired figure of 17.4 minutes — which is the honest one, because two analyses do run together — that is **52 minutes**, against an hour between the sweep starting and the market opening. There is very little slack, and none at all on a morning when the live bot is sweeping the same cards.
+**13-17 minutes per analysis against 7.** Use the paired 17.4 minutes, because two analyses really do run together. The sweep starts at 11:00 UTC and has until `earnings_check` at 13:00 puts its own analyses on the same pool — **two hours**. At three concurrent that is about **20 tickers**, against roughly 51 on e2b. Six tickers is two waves and comfortable.
 
-Raise the analyst's concurrency **before** the first sweep, not after one overruns. The pool has seven backends and the live sweep uses five, so the sum is already at the limit; the two deployments contend at 11:00 UTC and `WAIT_TIMEOUT=600` is ten minutes against a seventeen-minute analysis. Splitting 4/3 instead of 5/2 halves the analyst's waves. After that the knobs are: lower the daily research cap, then move the sweep earlier. Going back to e2b costs the feature this model was chosen for.
+The ceiling is reached by the watchlist growing, not by any single morning. Commissioning a ticker adds it to the watchlist and nothing in the agent ever removes one, so at the 4-6 names a run it picks, the sweep hits 20 tickers in about four days. Fixing that needs a watchlist cap or an ageing rule — a code change, not a setting. It is the thing to build before the analyst has been commissioning for a week.
+
+Split the seven backends **4 (live) / 3 (analyst)** rather than 5/2, so the analyst needs fewer waves. Overshooting the sum is not dangerous — the proxy holds a backend for one call, not one analysis, so extra work queues for seconds rather than timing out (ten concurrent requests against seven backends all succeeded, slowest 38.4s) — but matching the sum to the backend count is what keeps every card busy.
 
 All three builds keep Gemma's published standard sampling — temperature 1, top_k 64, top_p 0.95, per <https://ollama.com/library/gemma4>. Changing the model and the sampling in one step would leave no way to tell which one moved the result, and the recommended values are not a starting point to tune away from.
 

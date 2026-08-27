@@ -88,12 +88,27 @@ That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` the knob that decides GPU
 utilization. With one deployment it should equal the backend count; anything
 above just queues in the proxy.
 
-**With two deployments sharing the pool, the sum across them is what must not
+**With two deployments sharing the pool, the sum across them is what should not
 exceed the backend count**, because both sweep at 11:00 UTC and contend. Seven
-backends split 5 (live) / 2 (analyst): the live sweep has a fixed nine tickers,
-the analyst usually fewer. Overshooting the sum is not fatal — the proxy queues
-rather than refusing — but `WAIT_TIMEOUT=600` is ten minutes against an
-eight-minute analysis, so a third wave of queued work starts timing out.
+backends split 4 (live) / 3 (analyst).
+
+**Overshooting the sum costs latency, not failures, and an earlier note here
+was wrong about why.** It said `WAIT_TIMEOUT=600` is ten minutes against an
+eight-minute analysis, so a third wave of queued work would start timing out.
+That misreads the proxy: it holds a backend for **one LLM call**, releasing it
+in the response streamer's `finally`, not for a whole analysis. A call is a
+minute or two, so the timeout has enormous margin. Verified 2026-08-27 — ten
+concurrent requests against seven backends all succeeded, the slowest in 38.4
+seconds. Match the sum to the backend count to keep the cards busy, not to
+avoid an error that cannot happen.
+
+**A card holds one model at a time.** Loading `gemma4-e4b-qat-128k` on a
+backend already holding `gemma4-e2b-96k` evicts the smaller model, even though
+1.9 GiB and 3.7 GiB would both fit in the 8 GiB. So two deployments running
+different models will occasionally reload one on a card the other just used.
+The warm-model preference keeps a sequential run on its own card, so this only
+bites at wave boundaries, and it costs one load — 6 to 40 seconds against a
+7-to-17-minute analysis. Not worth engineering around.
 
 Every multi-ticker caller must go through `analysis.run_analyses()`, which
 dispatches with `asyncio.gather` and lets the shared semaphore do the bounding.
@@ -203,14 +218,24 @@ so it is not new with e4b and not a reason to tune sampling down. It does mean
 a single analysis is one sample, and the Scorecard's `by_model` breakdown is
 the only honest way to compare two models.
 
-**Timing is the real cost, and it needs acting on before the first sweep, not
-after one overruns.** At `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=2` the analyst
-needs three waves for six tickers, which at the paired 17.4 minutes is **52
-minutes against the hour before the open** — and the live sweep contends for
-the same cards at 11:00 UTC, with `WAIT_TIMEOUT=600` being ten minutes against
-a seventeen-minute analysis. Split the seven backends 4/3 rather than 5/2
-before switching. After that, lower the research cap or move the sweep earlier;
-reverting to e2b gives up the feature e4b was chosen for.
+**Timing is the real cost, and the binding limit is the watchlist, not the
+hour.** The sweep runs at 11:00 UTC and has until `earnings_check` at 13:00 —
+**two hours**, not the one an earlier note here assumed. At three concurrent
+and the paired 17.4 minutes per analysis, that is about **20 tickers**, against
+roughly 51 on e2b's 7 minutes. Six tickers is two waves and comfortable.
+
+The problem is that **the analyst's watchlist only grows.** Commissioning a
+ticker calls `db.add_to_watchlist` (`agent.py:1317`) and nothing in the agent
+ever removes one — `/untrack` is the only route, and it is manual. At the 4-6
+names a run it picks, the sweep reaches the 20-ticker ceiling in about four
+days of commissioning and then starts running into `earnings_check`, which
+puts its own analyses on the same pool. `_MAX_RESEARCH_PER_DAY = 15` does not
+help, because the limit is cumulative rather than per-day.
+
+So before the analyst has been commissioning for a week, it needs either a
+watchlist cap or a rule that ages out a ticker it has stopped holding and
+stopped asking about. That is a code change, not a setting. Reverting to e2b
+only postpones it, and gives up the feature e4b was chosen for.
 
 **Sampling stays at Gemma's published values** — temperature 1 / top_k 64 /
 top_p 0.95 (<https://ollama.com/library/gemma4>). `gemma4-e2b-96k` briefly ran
