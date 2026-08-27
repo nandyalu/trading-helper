@@ -123,3 +123,78 @@ The bug needs a holding and a menu in the same prompt. The analyst holds nothing
 The change waits for that comparison, which only reads correctly if the live deployment keeps analysing at the speed its graded signals were produced at. The watchlist ceiling of twelve then has to be measured again at five concurrent rather than scaled, because analyses on these cards compete for host memory bandwidth and the time does not divide evenly.
 
 **Still zero decision passes and zero trades.** Everything above is preparation. Tomorrow morning is the first time the agent tests any of it.
+
+## 2026-08-27, later — The agent bought its first research, and we stopped asking the model for prices
+
+**The entry above ends by saying tomorrow morning is the first test. It was this morning.** The sweep ran at 11:00 UTC and the agent commissioned three analyses — NVDA, CRM and SMCI — for $0.15. That is the candidate menu working for the first time, after three mornings of "no research", and it is the reason we accepted a model twice as slow.
+
+Everything below happened in the hours around that, so this entry is the same day as the one before it.
+
+### A model that looked perfect and was not
+
+`lfm2.5:8b` arrived claiming tool calling as a strength. It is the fastest model that has ever fit these cards: 2,138 tok/s reading against `gemma4-e4b-qat-128k`'s 1,126, all 25 layers on the GPU at the full 128k, every weight on the card. On speed alone it was the obvious upgrade.
+
+Then it invented every price in two runs out of two. AAPL closed at $313.45; it cited $188-196 in one run and $144-150 in the other — roughly the stock in 2024, then in 2023. A stale cache would be wrong the same way twice, so that is recall from training.
+
+Three things came out of rejecting it, and the third is the one worth keeping:
+
+- **The tell we had been relying on did not fire.** The four models rejected before this were caught by a collapse in prompt tokens, because a model that never fetched has far less to read. This one read 77-96k and invented anyway. What caught it was the **completion share** — 34-35% against the working family's 14-17%. It read enough and then talked over what it read.
+- **A vendor's tool-calling claim is a reason to test, not evidence.** A benchmark asks whether a model picks the right function from a list. This pipeline asks whether it carries the returned number into a field twenty calls later.
+- **The speed was real and bought nothing**, which is the fifth time that has been true here.
+
+### So we stopped asking models for prices at all
+
+Rejecting a fifth model made the pattern impossible to ignore. Every one of them failed the same way, and we had been treating it as a knowledge problem — the models quote prices from two years ago, so they must need newer data or a retrieval step.
+
+**They already had today's price.** `lfm2.5:8b` read 96,000 prompt tokens and cited nothing near the real close. Back on 2026-08-06, gemma4-e2b's market report carried the right prices in the same run where its trader wrote $2,000 for a stock at $356.62. The model does not need to know the price. It needs to copy the price it was given.
+
+That reframing made the fix cheap rather than expensive, and two of them landed today.
+
+**The server now constrains the answer.** Structured output on a local model asks for `json_schema` instead of function calling, so ollama constrains the sampler and a malformed answer stops being possible rather than becoming less likely. `lfm2.5:8b` went from 4 structured-output failures per run to 0 in each of two; the analyst's own model went from 1 per run to 0, and has logged 0 across every run since.
+
+**The trader has no price field.** `TraderProposal` no longer carries entry, stop or target. The model states two distances — how far the stop sits in ATRs, and how much the trade aims to make as a multiple of what it risks — and Python computes the levels from the verified close and ATR. A field that does not exist cannot be filled from memory, which is stronger than any instruction not to.
+
+SMCI is the first signal recorded that way, and the arithmetic is checkable from the row itself. The model asked for 1.5 ATRs and 2.0R. The stored risk is $37.85 − $34.16 = $3.69, and $3.69 ÷ 1.5 = $2.46, which is SMCI's actual ATR. The reward is $7.36, exactly twice the risk.
+
+Compare the two analysed before the rebuild. NVDA came back with no entry at all, so its stop fell to the ATR fallback. CRM's levels were the model's own — plausible, and *checked* afterwards rather than correct by construction. SMCI's cannot be wrong in that way.
+
+### The market report that was not a market report
+
+Two runs came back with a market report of 532 and 0 characters, against about 5,000 before. It looked exactly like the change we had just made.
+
+**It was not.** The traces of every run that day showed the market analyst failing intermittently in two ways, including once before any of this existed. Reading the record is what settled it, and the trace capture built earlier the same day is the only reason there was a record to read.
+
+The cause is one line. An analyst decides it is finished when the model returns no tool calls:
+
+```python
+if len(result.tool_calls) == 0:
+    report = result.content
+```
+
+That reads two things as one. "I am finished, here is the report" and "I tried to call a tool and typed it as prose" both arrive as an empty list, so a model narrating its intent gets the narration filed as the finished report. Our own analyst had a 532-character market report reading "I will call `get_stock_data` first", and nothing logged a problem.
+
+We built three fixes and measured them one at a time. Two survived.
+
+| Fix | What it does | Measured | Kept |
+|---|---|---|---|
+| Detect | Retry when the answer is ungrounded | 4 of 4, from 0 of 3 | Yes |
+| Prompt | Tell the model to call, not describe | 13 of 17 either way | **No** |
+| Salvage | Execute a written-out call | Recovered the one real case in every trace | As a fallback |
+
+**The prompt fix was the cheap idea and it did nothing.** "Call the tools. Do not describe the call you are about to make" measured 13 of 17 with it and 13 of 17 without. It is reverted, and the number to beat is written where anyone would look before proposing it again. Had we not measured it separately it would have shipped and been credited with the detection fix's result.
+
+**Detection needed two checks, and the obvious one was weaker.** Reading the text catches a fenced JSON block naming a tool. It does not catch a model that writes "### Phase 1: Detailed Swing Trade Planning" — prose naming no tool, and indistinguishable from a report by content alone.
+
+What gives that one away is the conversation rather than the words: if nothing ever returned a tool result and the model is not asking for one, the answer was composed from no data. With only the text check the live test recovered 3 of 6 and the detector never fired once, so those three were luck. With the structural check it is 4 of 4.
+
+**Two things we learned about the stack.** Ollama ignores `tool_choice` — sending `required` behaves exactly like `auto` and like sending nothing — so the standard lever for forcing a call is not available here. And the model is not incapable: asked directly for AAPL's price data it called correctly every time, and asked to think aloud about its plan first it narrated every time. The prompt decides it, which is why the prompt fix looked so promising.
+
+### What the app now keeps
+
+Every LLM call of every analysis is written to disk, about 0.4 MB a run. **A dataset of past runs cannot be collected afterwards**, and five rejected models make a fine-tune worth leaving the door open to, so the capture exists before anyone has decided to attempt one. `Signal.trace_id` joins a trace to the signal it produced, and that signal gets graded weeks later — which means a future training set can keep only the runs the market agreed with.
+
+It has already paid for itself twice today, as the only way to tell an intermittent market-analyst failure from a regression we had just caused.
+
+### Where this leaves the experiment
+
+Three tickers tracked, $0.15 spent, and no trades yet. The agent sees these three signals for the first time at 13:35 UTC tomorrow, and that is the first pass with the whole loop closed: choose what to research, read the answer, decide what to do about it.
