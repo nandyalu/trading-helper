@@ -70,6 +70,8 @@ Both models now cite AAPL's exact close. `lfm2.5:8b` went from **0 of 6 and 0 of
 
 **Read this as fixing the format, not the truth.** `lfm2.5:8b` still fabricated prices in its first constrained run; what stopped that was step 2.
 
+**And it constrains structure, not ranges.** A constrained run produced a well-formed answer carrying `overall_score: 52` for a field declared `le=10`, which Pydantic then rejected. The grammar guarantees the right fields with the right types; it does not guarantee a number inside its bounds. Two things follow. Bounds still have to be validated in Python, and a field whose meaning a model can misread — a 0-10 score answered as a percentage — is worth naming so the misreading is impossible. `stop_atr_multiple` is named that way for exactly this reason.
+
 ### 2. Take the numbers away from the model
 
 **Done, 2026-08-27.** The model should decide direction and conviction. It should not be the thing that types a price.
@@ -108,6 +110,22 @@ Python refuses what cannot be defended, on the same rule as everywhere else in t
 - **No verified close or ATR means no levels**, rather than guessed ones.
 - **Direction follows the action.** A long stops below and targets above; a short reverses. Backwards would store a stop that triggers the moment it is placed.
 - **A stop wider than the price is refused**, since it puts the level at or below zero.
+- **An implausible multiple costs the levels, not the proposal.** Past about 6 ATRs a stop is not managing risk, and past 10R a target is not a plan. The schema bounds stay loose deliberately: a run answered 10.75, a tight schema cap rejected the whole proposal, and the reasoning and win probability went out with the one number that was unusable.
+
+#### Confirmed in live runs
+
+Both models returned a proposal with **no price field of any kind**. `lfm2.5:8b` gave 1.5 ATRs and 3R; `gemma4-e4b-qat-128k` correctly gave neither on a Hold, which takes no levels. The production model's structured-output failures stayed at 0 and its market report came back at 4,533 characters, citing AAPL's exact close.
+
+#### A pre-existing failure this surfaced
+
+Two step 2 runs produced a market report of 532 and 0 characters, against roughly 5,000 before. It looked like a regression and is not one. Reading the traces of every run that day shows the market analyst occasionally failing in two ways, **including once before any of these changes existed**:
+
+- It **prints the tool call as text** — a fenced `{"tool_calls": [...]}` block in the answer — and never calls it. This is the failure that disqualified four models, appearing intermittently in `gemma4-e4b-qat-128k`.
+- It **returns an empty answer**, which is what `lfm2.5:8b` did.
+
+It happened in 3 of 8 traced runs. Neither step causes it, and neither fixes it: these analysts bind real tools, so `json_schema` structured output does not apply to them. It is worth its own investigation, and the trace capture is what makes that investigation possible.
+
+**The lesson for anyone measuring here is the one this page keeps repeating.** A run-level metric moved, the obvious cause was the change just made, and the traces said otherwise. Check the record before attributing.
 
 It costs something real, and the cost should be stated: the model loses the ability to name a level for a reason nobody encoded, such as a support line it saw in the chart. Whether that ability was ever worth anything here is testable against the Scorecard.
 
