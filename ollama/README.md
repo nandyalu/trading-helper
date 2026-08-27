@@ -98,6 +98,7 @@ Every figure below was taken with the model alone on one card, reading ollama's 
 | `gemma4:12b-it-qat` | 12B | ~144 | 18.6 | 96% GPU, 47/49 | none — spills at every context |
 | `gemma4:12b` | 12B | ~104 | 14.8 | 90% GPU, 44/49 | none — spills at every context |
 | `gemma4:26b` (MoE, 4B active) | 26B | ~8 | 5.8 | 72% GPU | none |
+| `lfm2.5:8b` (MoE) — **rejected** | 8.5B | **2,138** | **107** | 100% GPU, 25/25 | 128k, 6.1 GiB |
 
 The four-figure prefill rows use a 6,794-token prompt with a unique prefix per run, three runs each, landing within 0.2% of one another — see the prompt-length and cache rules above, both of which this table got wrong on the first pass. The `~` rows are the discredited short-prompt figures, kept only because those models are ruled out on placement anyway.
 
@@ -109,6 +110,8 @@ Four things here are not obvious:
 
 - **12B is out on placement, not on size, and QAT does not rescue it.** At 7.6 GB it nearly fits, and "nearly" costs everything. The QAT build is smaller (7.2 GB) and gets closer — 47/49 layers against 44/49 — but two layers on the CPU still halve it against e4b, and dropping the context to 4k does not close the gap. Near-misses on an 8 GiB card are not worth chasing; the next model down that fits entirely beats the one that almost does.
 - **The 26B MoE is out by a wide margin, and its "4B active" does not help.** All 18 GB of experts still have to be somewhere, and on an 8 GiB card most of them are in host RAM. It also segfaults at init when other large models are loading on other cards, which is a runtime bug (`Gemma4Assistant requires ctx_other to be set`) and not a memory limit — it loads fine alone.
+- **The fastest model that fits is not usable, and speed did not warn us.** `lfm2.5:8b` beats everything here — 2,138 tok/s prefill against `gemma4-e4b-qat-128k`'s 1,126, 107 tok/s generation against 44, all 25 layers on the GPU at the full 128k, and every weight on the card with nothing mapped to host RAM. It then fabricated every price in two runs out of two and failed structured output at four stages. See "A fast model that fails" below before proposing it again.
+
 - **Context is nearly free on the E-series.** e4b costs 3.5 GiB at 64k and 3.8 GiB at 128k. Sliding-window attention is why, and it is why neither E build needs the `num_batch` tuning the Llama builds above depend on.
 
 ## Why `gemma4-e4b-qat-128k` is the recommended analyst model, and not the faster e2b
@@ -161,6 +164,35 @@ The ceiling is reached by the watchlist growing, not by any single morning. Comm
 Split the seven backends **4 (live) / 3 (analyst)** rather than 5/2, so the analyst needs fewer waves. Overshooting the sum is not dangerous — the proxy holds a backend for one call, not one analysis, so extra work queues for seconds rather than timing out (ten concurrent requests against seven backends all succeeded, slowest 38.4s) — but matching the sum to the backend count is what keeps every card busy.
 
 All three builds keep Gemma's published standard sampling — temperature 1, top_k 64, top_p 0.95, per <https://ollama.com/library/gemma4>. Changing the model and the sampling in one step would leave no way to tell which one moved the result, and the recommended values are not a starting point to tune away from.
+
+## A fast model that fails: `lfm2.5:8b`
+
+Run the whole harness before believing any of it. This model passes the first two steps better than anything else measured here and fails the last two.
+
+| Step | Result |
+|---|---|
+| 1. Fit | **Best measured.** 25 of 25 layers on the GPU at 128k, 6.1 GiB, nothing in host RAM |
+| 2. Prefill | **Best measured.** 2,138 tok/s, against e4b-qat's 1,126 |
+| 3. Candidate menu | **Fails.** 2 runs of 8 at its shipped sampling, against e4b-qat's 4 of 4 |
+| 4. Tool calling | **Fails.** 4 structured-output failures per run, and every price invented |
+
+Two AAPL runs, on a day AAPL closed at **$313.45**:
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Time | 9m06s | 7m31s |
+| Structured-output failures | 4 | 4 |
+| Figures near the real close | 0 of 6 | 0 of 3 |
+| What it cited instead | $188-196 | $144-150 |
+| Completion share | 34% | 35% |
+
+Three things here are worth carrying to the next model.
+
+**The prompt-token tell does not always fire.** The four models rejected before this one were caught by a collapse to 42-45k prompt tokens against gemma4's 103k. lfm2.5 spent 77-96k and still invented everything. The **completion share** caught it instead: 34-35% against the gemma4 family's 14-17%. It read enough and then talked over what it read.
+
+**Prices from two different years prove invention.** Run 1 cited roughly AAPL in 2024 and run 2 roughly AAPL in 2023. A stale cache would be wrong the same way twice.
+
+**A vendor's tool-calling claim is a reason to test, not evidence.** This model's card names tool calling as a strength and it declares the `tools` capability. Both are true. A tool-calling benchmark asks whether a model picks the right function from a list; this pipeline asks whether it carries the returned number into a structured field twenty calls later. Those are different questions.
 
 ## Sampling: use Gemma's published values
 

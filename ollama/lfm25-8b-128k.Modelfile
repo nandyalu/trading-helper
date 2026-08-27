@@ -1,0 +1,51 @@
+# lfm2.5:8b at its full 128,000-token context. **Rejected. Do not deploy.**
+#
+# Kept as a build file because the speed numbers are good enough that somebody
+# will propose this model again, and because the reason it fails is not
+# visible from any benchmark.
+#
+# It is the fastest model that has ever fit this hardware. Measured 2026-08-27
+# on an RX 6600 (8 GiB), alone on one card:
+#
+# | | `lfm2.5:8b` | `gemma4-e4b-qat-128k` |
+# |---|---|---|
+# | Prefill | **2,138 tok/s** | 1,126 tok/s |
+# | Generation | **107 tok/s** | 44 tok/s |
+# | Layers on GPU | 25 of 25 | 43 of 43 |
+# | VRAM at full context | 6.1 GiB | 3.7 GiB |
+#
+# It also puts every weight on the card and maps nothing to host RAM, unlike
+# gemma4's E-series, which keeps 4.8 GiB of e2b's 7.2 in host memory. That
+# should make concurrent analyses scale better. None of it matters.
+#
+# **It fabricates prices, and it fails structured output at four stages.** Two
+# AAPL runs, on a day AAPL closed at $313.45:
+#
+# | | Run 1 | Run 2 |
+# |---|---|---|
+# | Structured-output failures | 4 | 4 |
+# | Figures in the market report near the real close | 0 of 6 | 0 of 3 |
+# | What it cited instead | $188-196 | $144-150 |
+# | Prompt share | 66% | 65% |
+#
+# The two runs invented prices from different years — roughly AAPL in 2024, then
+# AAPL in 2023. That rules out a stale cache and leaves only recall from
+# training. The four failing stages are the Sentiment Analyst, Research Manager,
+# Trader and Portfolio Manager, which is the identical signature that
+# disqualified `llama3.2:3b` and `phi4-mini`.
+#
+# **Its model card claims tool calling as a strength, and it declares the
+# `tools` capability.** Both are true and neither predicts this. A tool-calling
+# benchmark measures whether a model picks the right function from a list. It
+# does not measure whether the model carries the returned data into a numeric
+# field twenty calls later, which is what this pipeline needs.
+#
+# It is also not the analyst's model on the separate menu test: 2 runs of 8 at
+# its shipped sampling, against `gemma4:e4b-it-qat`'s 4 of 4. At temperature 1
+# it reached 4 of 4, but one of those researched 11 of the 15 names, which is
+# not a choice, and another named SPX, which was not on the menu.
+#
+# Sampling is what Liquid AI ships: temperature 0.2, top_k 80,
+# repeat_penalty 1.05.
+FROM lfm2.5:8b
+PARAMETER num_ctx 128000

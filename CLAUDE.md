@@ -271,24 +271,43 @@ roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured
 2026-08-11). An earlier "2-3 minutes" figure here was wrong: 7 matches both
 that run and days of observed sweeps.
 
-**Four small models have now been tested against this pipeline and all four
-failed the same way** (kotakneo and alma-trader 2026-08-11; `llama3.2:3b` and
-`phi4-mini` 2026-08-12). They cannot drive TradingAgents' tool-calling loop:
-either they print the tool call as text and invent its output, or they never
-retrieve the data and answer anyway. Measured on one AAPL run each, against
-gemma4-e2b-96k's 7m15s / 21 calls / 123k tokens / **0** structured-output
-failures:
+**Five models have now been tested against this pipeline and all five failed
+the same way** (kotakneo and alma-trader 2026-08-11; `llama3.2:3b` and
+`phi4-mini` 2026-08-12; `lfm2.5:8b` 2026-08-27). They cannot drive
+TradingAgents' tool-calling loop: either they print the tool call as text and
+invent its output, or they never retrieve the data and answer anyway. Measured
+against gemma4-e2b-96k's 7m15s / 21 calls / 123k tokens / **0**
+structured-output failures:
 
 | Model | Time | Tokens | Structured-output failures | What the market report contained |
 |---|---|---|---|---|
 | `llama3.2:3b` @128k | 3m23s | 52k | 4 | "no available market data for AAPL" — then issued a Buy anyway |
 | `phi4-mini` @96k | 4m10s | 49k | 4 | the raw tool call as text, plus fabricated 2023 OHLCV around $130 for a stock at $308 |
+| `lfm2.5:8b` @128k | 9m06s, 7m31s | 146k, 119k | 4, 4 | prices around $188-196 and then $144-150, for a stock at $313.45 |
 
-They are faster because they do **half the work** — 42-45k prompt tokens against
-gemma4's 103k — having never fetched the data there was to reason over. Treat a
-sharp drop in prompt tokens as a symptom, not a win. Raising context to 128k
-does not help, because it was never a context problem; don't retest these
-without a fix for tool calling.
+**`lfm2.5:8b` is the one to read carefully, because it breaks the rule the
+other four taught.** Those four were caught by a collapse in prompt tokens —
+42-45k against gemma4's 103k, because a model that never fetched the data has
+far less to read. lfm2.5 spent 77-96k and still invented every price. The
+better tell here is the **completion share**: 34-35% against gemma4's 14-17%.
+It read enough and then talked over it.
+
+Its two runs cited prices from different years — roughly AAPL in 2024, then
+AAPL in 2023. That rules out a stale cache and leaves recall from training.
+
+**Its model card claims tool calling as a strength and it declares the `tools`
+capability. Both are true and neither predicts anything here.** A tool-calling
+benchmark measures whether a model picks the right function from a list. This
+pipeline needs it to carry the returned number into a structured field twenty
+calls later. Treat a vendor's tool-calling claim as a reason to test, never as
+evidence.
+
+Also note what it cost to find out: `lfm2.5:8b` is the **fastest model that has
+ever fit this hardware** — 2,138 tok/s prefill and 107 tok/s generation, all 25
+layers on the GPU at 128k in 6.1 GiB, with nothing mapped to host RAM. Speed
+buys nothing on its own. Raising context does not help either, because none of
+these was a context problem; don't retest any of the five without a fix for
+tool calling.
 
 This supersedes an earlier "known-bad model" note about `gemma4:e2b`. Stock
 `gemma4:e2b` did hit a `GraphRecursionError` on ZBH — its reasoning loop never
