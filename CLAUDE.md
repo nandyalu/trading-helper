@@ -67,16 +67,22 @@ sequential — analysts run one after another, then the debate, then the trader 
 so a single `propagate()` never has more than one LLM request in flight. Extra
 GPUs are only used by running *several analyses at once*.
 
-That is about concurrency, not stickiness. The proxy balances **per request**,
-so one analysis's ~20 calls scatter across whichever backends are idle, and the
-model ends up loaded on several cards. Harmless in production — the 4-minute
-keep-alive means it loads once per backend, not once per call — but it makes
-benchmarking meaningless, because a model can land on a card that still holds
-another and run mostly on CPU. To measure a model, bypass the proxy: the pool
-containers' docker-bridge IPs are reachable from the host
+That is about concurrency, not stickiness. **An earlier note here said the
+proxy scatters one analysis's ~20 calls across whichever backends are idle.
+That is no longer true**: the proxy polls each backend's `/api/ps` and prefers
+a free backend that already holds the requested model warm, so a *sequential*
+run stays on one card. Concurrent runs still spread, which is the intent.
+
+Benchmarking still has to bypass the proxy, for a different reason: you cannot
+tell which card served a run. The pool containers' docker-bridge IPs are
+reachable from the host
 (`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 ollama-pool-a`), so pointing `OLLAMA_BASE_URL` at `http://<ip>:11434/v1` pins a
-run to one card.
+run to one card. **And measure one model at a time.** Seven cards are not seven
+independent measurements — gemma4's E-series keeps its per-layer embeddings in
+host RAM, so every card competes for the same CPU and memory bandwidth. The
+same model at the same context measured 43.5, 28.0 and **69.6** tok/s depending
+only on how busy the rest of the pool was (2026-08-26).
 
 That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` the knob that decides GPU
 utilization. With one deployment it should equal the backend count; anything
@@ -148,7 +154,74 @@ save. Every `Signal` records `model`, and the scorecard's `by_model`
 breakdown is the point of the whole mechanism — switching models teaches you
 nothing if the win rates blend.
 
-**Current model (2026-08-11):** `gemma4-e2b-96k`, a custom Modelfile build of
+**A larger gemma4 now fits, and the analyst should use it (measured
+2026-08-26/27; recommended, not yet switched — the analyst still runs
+`gemma4-e2b-96k`).** `gemma4:e4b-it-qat` (8.0B raw, 4B effective) runs **100%
+on the GPU at the full 131,072-token context**, using 3.7 GiB of the 8 GiB
+card. Built here as `gemma4-e4b-qat-128k`. `gemma4:12b` does not fit at any context
+— two to five layers always land on the CPU, and the QAT build does not rescue
+it — and `gemma4:26b` (MoE, 4B active) is far worse. Full numbers in
+[ollama/README.md](ollama/README.md).
+
+**Take the QAT tag, not the default one.** `gemma4:e4b-it-qat` beats plain
+`gemma4:e4b` where it has been measured repeatably: 1,122 tok/s prefill against
+861 (30% faster, and prefill is what sets run time), 6.1 GB on disk against
+9.6, slightly less VRAM, same 43/43 placement, same menu behaviour (4 of 4
+each). Quantization-aware training puts the 4-bit rounding inside the training
+loop rather than applying it to a finished model, so it should also be the more
+accurate of the two. `gemma4:e4b-it-q4_K_M` is not a third option — same
+manifest id as `gemma4:e4b`.
+
+**Measure prefill on a long, cache-busted prompt.** A 30-token prompt measures
+per-request overhead, not prefill, and ranked QAT *below* plain e4b — the exact
+opposite of the truth. Repeating an identical prompt is as bad: Ollama's prompt
+cache returns the second one in 0.03s, which reads as 219,000 tok/s. Use
+several thousand tokens with a unique prefix per run.
+
+The reason to switch off e2b is not speed; e4b is about **twice as slow**
+(13m12s alone, 17m26s when two run together, against e2b's 7m15s). It is that
+e4b uses the candidate menu and e2b does not. On the identical deployed prompt,
+both e4b builds chose research in 4 runs of 4, picking 4-5 names of 15 with a
+stated reason each; e2b managed 2 of 4, and had answered "no research" three
+real mornings running. It also passes the tool-calling test that disqualified
+four earlier models: 18-26 calls and **99-174k prompt tokens against the
+baseline's 103k**, which is the right direction — every model that failed here
+was faster because it never fetched the data. The prices are real too: AAPL's
+actual $313.45 close appears verbatim in three of four runs.
+
+**One structured-output failure per run is normal for the e4b family** — both
+builds logged one, at the Sentiment Analyst or Trader stage, and both recovered
+by retrying as free text. Do not read that as a QAT defect; plain `gemma4:e4b`
+does it too. It is a different thing from the four-per-run failures that
+disqualified `llama3.2:3b` and `phi4-mini`. Treat a count above one, or a
+failure that does not recover, as a regression.
+
+**The same ticker on the same day gave Underweight, then Overweight.** Plain
+e4b gave Underweight, then Hold. That is temperature 1 — Gemma's recommended
+setting, which `gemma4-e2b-96k` has been running at in production all along —
+so it is not new with e4b and not a reason to tune sampling down. It does mean
+a single analysis is one sample, and the Scorecard's `by_model` breakdown is
+the only honest way to compare two models.
+
+**Timing is the real cost, and it needs acting on before the first sweep, not
+after one overruns.** At `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=2` the analyst
+needs three waves for six tickers, which at the paired 17.4 minutes is **52
+minutes against the hour before the open** — and the live sweep contends for
+the same cards at 11:00 UTC, with `WAIT_TIMEOUT=600` being ten minutes against
+a seventeen-minute analysis. Split the seven backends 4/3 rather than 5/2
+before switching. After that, lower the research cap or move the sweep earlier;
+reverting to e2b gives up the feature e4b was chosen for.
+
+**Sampling stays at Gemma's published values** — temperature 1 / top_k 64 /
+top_p 0.95 (<https://ollama.com/library/gemma4>). `gemma4-e2b-96k` briefly ran
+at 0.15/20/0.9 on 2026-08-26 to make the agent's research choice consistent;
+that treated a symptom of the 2B model's capability as a sampling problem and
+is reverted. Separately and still true: the app talks to Ollama over
+`/v1/chat/completions`, which **silently ignores `temperature` in the request
+body**, so `TRADINGAGENTS_TEMPERATURE` does nothing and a Modelfile is the only
+channel that reaches the model.
+
+**Current model for the live bot (2026-08-11):** `gemma4-e2b-96k`, a custom Modelfile build of
 `gemma4:e2b` with the context raised to 96k. A full analysis takes about 7
 minutes, against roughly 15 for `qwen3:latest`. That is 23 LLM calls spending
 roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured

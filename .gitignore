@@ -37,3 +37,10 @@ frontend/.angular/
 
 # Deployed-stack compose files — local only, not tracked.
 dockge/
+
+# The Ollama pool's own stack, plus the model benchmark harness under
+# ollama-stack/bench/. Both are specific to this machine — seven named
+# containers, their docker-bridge IPs, and 8 GiB cards — so neither would run
+# anywhere else. What the benchmarks *found*, and the method traps that apply
+# to any rig, are in ollama/README.md, which is tracked.
+ollama-stack/

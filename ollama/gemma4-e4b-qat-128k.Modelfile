@@ -1,0 +1,31 @@
+# gemma4:e4b-it-qat at its full 131,072-token context — the analyst's model.
+#
+# QAT means quantization-aware training: Google trained the model with the
+# 4-bit rounding in the loop rather than compressing a finished model, so it
+# recovers accuracy that plain post-training Q4 loses. Here it is also simply
+# a better artifact than the default `gemma4:e4b` tag on every axis measured
+# (2026-08-26, alone on one RX 6600):
+#
+# | | `gemma4:e4b` | `gemma4:e4b-it-qat` |
+# |---|---|---|
+# | Prefill, 6.8k-token prompt | 861 tok/s | **1,122 tok/s** |
+# | Generation | 43.0 tok/s | 43.7 tok/s |
+# | On disk | 9.6 GB | **6.1 GB** |
+# | VRAM at 128k | 3.8 GiB | 3.7 GiB |
+# | Layers on GPU | 43/43 | 43/43 |
+# | Chose from the candidate menu | 4 of 4 | 4 of 4 |
+#
+# Prefill is the column that decides it, because an analysis is about 86%
+# prompt tokens. 30% faster there is roughly two minutes off every run.
+#
+# Note that `gemma4:e4b-it-q4_K_M` is not a third option — it resolves to the
+# same manifest id as `gemma4:e4b` (`c6eb396dbd59`), so it is the default tag
+# under an explicit name.
+#
+# Sampling is Gemma's published standard configuration, unchanged:
+# temperature 1 / top_k 64 / top_p 0.95 (https://ollama.com/library/gemma4).
+# No `num_batch` override is needed — sliding-window attention keeps both the
+# compute graph and the KV cache small, which is why the full 128k costs only
+# 0.2 GiB more than 64k.
+FROM gemma4:e4b-it-qat
+PARAMETER num_ctx 131072

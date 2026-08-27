@@ -6,7 +6,7 @@ Custom context builds for the models the analysis runs on, plus `build.sh` to in
 ./build.sh kotakneo-128k.Modelfile
 ```
 
-A build has to exist on all four backends. The proxy spreads analyses across them, so a model present on only one turns three of every four runs into a failure.
+One build reaches every backend. All seven pool containers bind-mount the same host directory at `/root/.ollama/models`, so a model built through any one of them is immediately visible to all. `build.sh` builds on the first backend and then checks the rest can see it — cheap, and it catches the day somebody gives a container its own volume.
 
 Once built, the model appears in the settings page's model dropdown and in `/model` on its own — both read the endpoint's live list.
 
@@ -16,7 +16,7 @@ A stock model loads at whatever context its Modelfile asks for, and the pool's b
 
 ## What actually limits the context (measured 2026-08-11)
 
-The cards are 8 GiB (RX 6600, gfx1030), of which ollama will use about 7.5 GiB.
+The cards are 8 GiB (RX 6600, **gfx1032** — they report as gfx1030 only because every pool container sets `HSA_OVERRIDE_GFX_VERSION=10.3.0`), of which ollama will use about 7.5 GiB.
 
 The KV cache is not the constraint. It is already quantized (`OLLAMA_KV_CACHE_TYPE=q4_0` with flash attention on) and costs only 2.6 GiB at 96k. **The compute graph is the constraint, and it scales with `num_batch`:**
 
@@ -63,7 +63,11 @@ docker exec ollama-pool-a sh -c "ollama run kotakneo-128k hi >/dev/null 2>&1; ol
 
 ## Benchmarking a build
 
-Do not measure through the proxy. It balances per request, so one analysis's calls scatter across backends and a model can land on a card that still holds another and run mostly on CPU — which is exactly what happened on the first attempt to time these, and made gemma4 look like it ran 69% on the CPU.
+The scripts that produced every number in this file live in `ollama-stack/bench/`, which is **local to this machine and not tracked** — they hardcode seven container names, their docker-bridge IPs, and 8 GiB cards, so they would not run anywhere else. Four steps, cheapest first: `fit.py` (placement), `prefill.py` (read speed), `menu_choice.py` (does it use the candidate menu), `full_analysis.py` (tool-calling and real prices). That directory's README has the commands.
+
+The rules below are not machine-specific, which is why they are here rather than there. **Each one produced a wrong answer on this project before it was written down.**
+
+**Do not measure through the proxy.** It routes each request on its own, preferring a backend that already holds the model warm. That is right for production and useless for measurement: you cannot tell which card served a run, and a model can land beside another and run mostly on the CPU.
 
 Pin the run to one card instead. The pool containers are reachable from the host by their docker-bridge IPs:
 
@@ -72,8 +76,94 @@ ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}
 OLLAMA_BASE_URL="http://$ip:11434/v1" ...
 ```
 
-Three models can then be measured at once, one per card, leaving the fourth free for the running bot.
+**Do not measure several models at once, one per card.** Seven cards look like seven independent measurements. They are not, for gemma4: the E-series keeps its per-layer embeddings mapped in host RAM — 4.8 GiB of e2b's 7.2 GiB lives there — so every card's generation reads across the PCIe bus and competes for the same CPU and memory bandwidth. Measured 2026-08-26, `gemma4-e2b-96k` at 96k gave 43.5 tok/s with the pool full, 28.0 tok/s in a different full wave, and **69.6 tok/s alone**. The first two are not errors and the spread between them is not noise; they simply answer a different question.
 
-## Not covered here
+So: use the full pool to find out whether a model loads at all, and at what context. Then re-measure each finalist alone for the numbers you will decide on. A serial pass over five configurations takes a few minutes and is the only kind that compares.
 
-`gemma4-e2b-96k`, the current default, was built by hand before this directory existed and is only described in `CLAUDE.md`. It runs at 96k with the default batch because Gemma's sliding-window attention makes its compute graph far smaller than a Llama of the same size. Rebuilding it from a file here would need its exact base blob, which is why it is left alone.
+The parallel pass is still worth keeping, because it is what a nine-ticker sweep actually looks like. Just label it as such.
+
+**Do not measure prefill on a short prompt, and never repeat one.** These two go together and both inflate a figure that looks fine. On a 30-token prompt, `prompt_eval_rate` is almost entirely fixed per-request overhead: measured that way `gemma4:e4b-it-qat` came out at 167 tok/s against plain `gemma4:e4b`'s 372, the exact reverse of the truth, which is 1,122 against 861. And Ollama serves a repeated prompt from cache in about 0.03 seconds, which reads as 219,000 tok/s. Use several thousand tokens, with a unique prefix on every run, and take a median of three — real measurements land within 1% of each other.
+
+**Run every behavioural test more than once.** Gemma's recommended temperature is 1, so a single run is one sample. Two runs is what corrected the conclusion about QAT's structured-output failure described below; one run had pointed the wrong way.
+
+## How big a gemma4 fits on an 8 GiB card (measured 2026-08-26)
+
+Every figure below was taken with the model alone on one card, reading ollama's own `eval_count` and `prompt_eval_count` rather than timing a wall clock. Generation rates were taken at temperature 0; prefill rates at each model's own sampling, which does not affect prefill.
+
+| Model | Raw params | Prefill tok/s | Gen tok/s | Placement | Largest context that fits fully |
+|---|---|---|---|---|---|
+| `gemma4-e2b-96k` | 5.1B | **1,585** | **69.6** | 100% GPU, 36/36 | 128k (1.9 GiB at 96k) |
+| `gemma4:e4b-it-qat` | 8.0B | 1,122 | 43.7 | 100% GPU, 43/43 | **128k, 3.7 GiB** |
+| `gemma4:e4b` | 8.0B | 861 | 43.0 | 100% GPU, 43/43 | 128k, 3.8 GiB |
+| `gemma4:12b-it-qat` | 12B | ~144 | 18.6 | 96% GPU, 47/49 | none — spills at every context |
+| `gemma4:12b` | 12B | ~104 | 14.8 | 90% GPU, 44/49 | none — spills at every context |
+| `gemma4:26b` (MoE, 4B active) | 26B | ~8 | 5.8 | 72% GPU | none |
+
+The four-figure prefill rows use a 6,794-token prompt with a unique prefix per run, three runs each, landing within 0.2% of one another — see the prompt-length and cache rules above, both of which this table got wrong on the first pass. The `~` rows are the discredited short-prompt figures, kept only because those models are ruled out on placement anyway.
+
+**Read the prefill column, not the generation column.** An analysis is about 86% prompt tokens, so prefill is what sets the run time.
+
+Four things here are not obvious:
+
+- **Prefer the QAT tag over the default one.** `gemma4:e4b-it-qat` is 30% faster at prefill than `gemma4:e4b`, uses slightly less VRAM, downloads 6.1 GB instead of 9.6 GB, and matches it on the menu decision (4 of 4 each). Quantization-aware training puts the 4-bit rounding inside the training loop instead of applying it to a finished model, so it should also be the *more* accurate of the two. Those are the settled parts; see the caveat under "It drives the tool-calling loop" below for the one place the two runs differed. (And `gemma4:e4b-it-q4_K_M` is not a third option — it resolves to the same manifest id as `gemma4:e4b`.)
+
+- **12B is out on placement, not on size, and QAT does not rescue it.** At 7.6 GB it nearly fits, and "nearly" costs everything. The QAT build is smaller (7.2 GB) and gets closer — 47/49 layers against 44/49 — but two layers on the CPU still halve it against e4b, and dropping the context to 4k does not close the gap. Near-misses on an 8 GiB card are not worth chasing; the next model down that fits entirely beats the one that almost does.
+- **The 26B MoE is out by a wide margin, and its "4B active" does not help.** All 18 GB of experts still have to be somewhere, and on an 8 GiB card most of them are in host RAM. It also segfaults at init when other large models are loading on other cards, which is a runtime bug (`Gemma4Assistant requires ctx_other to be set`) and not a memory limit — it loads fine alone.
+- **Context is nearly free on the E-series.** e4b costs 3.5 GiB at 64k and 3.8 GiB at 128k. Sliding-window attention is why, and it is why neither E build needs the `num_batch` tuning the Llama builds above depend on.
+
+## Why `gemma4-e4b-qat-128k` is the recommended analyst model, and not the faster e2b
+
+**Not yet switched.** The build exists on the pool and the measurements below support it, but the analyst still runs `gemma4-e2b-96k`. Read the timing section at the end before changing it.
+
+
+Speed was never the question that mattered here. e4b is slower, and it makes a decision e2b does not make.
+
+The analyst is given a menu of screened candidates and may pay to have one analysed. For three real mornings running, e2b answered with no research at all — the whole feature sat unused. Run against the identical deployed prompt, four times each:
+
+| Model | Chose from the menu | What it picked |
+|---|---|---|
+| `gemma4-e2b-96k` | 2 of 4 | 3 of 15, twice; nothing, twice |
+| `gemma4:e4b` | **4 of 4** | 4-5 of 15, with a stated reason each |
+| `gemma4:e4b-it-qat` | **4 of 4** | 4-5 of 15, with a stated reason each |
+
+Both failure modes matter and they pull opposite ways: ignoring the menu wastes the feature, and taking everything on it is not a choice and defeats the price. e4b did neither.
+
+### It drives the tool-calling loop
+
+This is the test four earlier models failed, so a menu result alone would not have been enough. One full AAPL analysis, 2026-08-26:
+
+Two AAPL runs of each build. Runs marked *paired* were dispatched together on separate cards, which is why both are slower — a busy pool costs both models about the same.
+
+| | `gemma4-e2b-96k` (baseline) | `gemma4-e4b-128k` | `gemma4-e4b-qat-128k` |
+|---|---|---|---|
+| Time, alone | 7m15s | 14m14s | **13m12s** |
+| Time, paired | — | 18m24s | **17m26s** |
+| LLM calls | 21 | 21, 26 | 18, 19 |
+| Prompt tokens | 103k | 131.8k, 173.8k | 99.2k, 125.4k |
+| Prompt share | 86% | 83%, 83% | 78%, 81% |
+| Structured-output failures | 0 | 0, 1 | 1, 1 |
+| Decision | — | Underweight, Hold | Underweight, Overweight |
+
+**The tokens went up, and that is the point.** Every model that failed this pipeline was *faster*, because it did half the work: `llama3.2:3b` and `phi4-mini` each spent 42-45k prompt tokens against gemma4's 103k, having never fetched the data there was to reason over. Both e4b builds sit in the same band as the baseline or well above it. Treat a sharp drop in prompt tokens as the symptom; a rise means the loop ran.
+
+**The prices are real**, which is the other half of the test, because a failing model invents them confidently. AAPL closed at $313.45. Across the runs, 7 of 9, 12 of 14 and 8 of 9 of the figures in the market report sit within 10% of it, and **$313.45 appears verbatim in three of the four runs**. The recurring outlier, 51.54, is an indicator value my regex swept up rather than a price.
+
+**One structured-output failure per run is normal for this family, and is not the QAT build's fault.** That was the worry after the first pair: QAT logged one and plain e4b logged none. The second pair settled it — plain e4b logged one too, at the same Sentiment Analyst stage. Both recover by retrying as free text. This is a different thing from what disqualified `llama3.2:3b` and `phi4-mini`, which failed at **four** stages per run and answered with data they never fetched. Watch the count across real sweeps; treat a rise above one, or a failure that does not recover, as a regression.
+
+**What genuinely does not settle is the decision itself.** The same ticker on the same day gave Underweight then Overweight (QAT), and Underweight then Hold (plain e4b). That is Gemma's recommended temperature of 1 doing exactly what it is meant to do, and `gemma4-e2b-96k` has been running at it in production all along — so this is not new with e4b, and it is not an argument for tuning the temperature down (see "Sampling" below for why that reasoning failed once already). It is an argument for reading any single analysis as one sample, and for the Scorecard's `by_model` breakdown being the only honest way to compare two models.
+
+### The cost, stated plainly
+
+**13-17 minutes per analysis against 7.** That is the whole price of the decision, and it is not small. The analyst runs at `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=2`, so six tickers is three waves. At the paired figure of 17.4 minutes — which is the honest one, because two analyses do run together — that is **52 minutes**, against an hour between the sweep starting and the market opening. There is very little slack, and none at all on a morning when the live bot is sweeping the same cards.
+
+Raise the analyst's concurrency **before** the first sweep, not after one overruns. The pool has seven backends and the live sweep uses five, so the sum is already at the limit; the two deployments contend at 11:00 UTC and `WAIT_TIMEOUT=600` is ten minutes against a seventeen-minute analysis. Splitting 4/3 instead of 5/2 halves the analyst's waves. After that the knobs are: lower the daily research cap, then move the sweep earlier. Going back to e2b costs the feature this model was chosen for.
+
+All three builds keep Gemma's published standard sampling — temperature 1, top_k 64, top_p 0.95, per <https://ollama.com/library/gemma4>. Changing the model and the sampling in one step would leave no way to tell which one moved the result, and the recommended values are not a starting point to tune away from.
+
+## Sampling: use Gemma's published values
+
+`temperature 1 / top_k 64 / top_p 0.95`, for every build here. Google publishes those as the standard configuration for all use cases (<https://ollama.com/library/gemma4>), so they are not a default left alone out of caution — they are the documented setting.
+
+**On 2026-08-26 `gemma4-e2b-96k` briefly ran at `0.15 / 20 / 0.9`, and the reasoning behind that was wrong.** The observation was real: the agent chose research on only about half of identical passes, and turning the temperature down made it consistent. The inference did not follow. Running the same prompt against e4b at Gemma's stock sampling produced a research decision 4 times out of 4 — so the inconsistency was the 2B model's capability, not the sampling. Lowering the temperature suppressed the symptom while moving production off the documented configuration in the middle of an experiment. It is reverted.
+
+**One finding from that day is independent and still holds.** The app reaches Ollama through the OpenAI-compatible `/v1/chat/completions` endpoint, and that endpoint silently ignores `temperature` in the request body: via `/v1` the same prompt answered differently 2-3 times in 5 whatever temperature was asked for, while the native `/api/chat` with `options.temperature=0` was identical 4 times of 4. `TRADINGAGENTS_TEMPERATURE` therefore does nothing. If sampling ever does need to change, the Modelfile is the only channel that reaches the model.

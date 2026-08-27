@@ -1,0 +1,25 @@
+# gemma4:e4b at its full 131,072-token context.
+#
+# Unlike every other build in this directory, this one needs no `num_batch`
+# tuning and no reduced context. Measured 2026-08-26 on an RX 6600 (8 GiB):
+# all 43 layers sit on the GPU at the full 128k, using 3.8 GiB, and the
+# context costs almost nothing — 3.5 GiB at 64k against 3.8 GiB at 128k.
+# Sliding-window attention is why: only a few layers hold the whole context.
+#
+# The reason to prefer it over gemma4-e2b-96k is not speed. It is slower:
+# 43.0 tok/s generation and 371.7 tok/s prompt, against e2b's 69.6 and 551.9,
+# measured alone on one card. Our analyses are about 86% prompt tokens, so the
+# prompt rate is what sets the run time, and a 123k-token analysis projects to
+# about 11 minutes here against e2b's 7.
+#
+# It is preferred because it makes decisions e2b does not make. On the
+# analyst's own deployed prompt, e4b chose from the candidate menu in 4 runs
+# out of 4, picking 4-5 names out of 15 and stating a reason for each. e2b
+# managed 2 out of 4 on the identical prompt, and had answered "no research"
+# three real mornings running.
+#
+# Sampling is left exactly as Gemma ships it (temperature 1, top_k 64,
+# top_p 0.95) on purpose. Changing the model and the sampling together would
+# leave no way to tell which one moved the result.
+FROM gemma4:e4b
+PARAMETER num_ctx 131072

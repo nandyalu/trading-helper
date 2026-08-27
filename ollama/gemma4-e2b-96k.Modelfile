@@ -1,0 +1,40 @@
+# The production model. Everything the two deployments analyse and every
+# trading decision they make runs on this build.
+#
+# It was missing from this directory until 2026-08-26 — built once by hand and
+# never written down, so the one model that mattered was the one that could not
+# be rebuilt from source control. The four experimental Modelfiles beside it
+# were all committed.
+#
+# 96k of context, which stock gemma4:e2b does not have. At the default context
+# the tool-call history was truncated out from under the reasoning loop and a
+# ZBH analysis never terminated (GraphRecursionError). At 96k that does not
+# happen. No num_batch override is needed: gemma4's sliding-window attention
+# keeps the compute graph small, so this loads 36/36 layers on an 8 GiB card
+# using 1.9 GiB. Do not reason from that to a Llama of the same size — those
+# need PARAMETER num_batch 64 or they spill to the CPU.
+FROM gemma4:e2b
+PARAMETER num_ctx 98304
+
+# Sampling is Gemma's own recommendation, unchanged: temperature 1 / top_k 64
+# / top_p 0.95. Google publishes those as the standard configuration for all
+# use cases (https://ollama.com/library/gemma4), so they are not left alone out
+# of caution — they are the documented setting.
+#
+# **This file briefly carried temperature 0.15 / top_k 20 / top_p 0.9 on
+# 2026-08-26, and that was a mistake worth recording.** The reasoning was that
+# the agent researched on only about half of identical passes and low
+# temperature made it consistent. The inference was wrong. Running the same
+# prompt against gemma4:e4b at Gemma's stock sampling gave a research decision
+# 4 times out of 4 — so the inconsistency was the 2B model's capability, not
+# the temperature, and turning the temperature down treated the symptom while
+# moving production off the documented configuration mid-experiment.
+#
+# **Keep this finding, which is independent and still true.** The app reaches
+# Ollama through the OpenAI-compatible /v1/chat/completions endpoint, and that
+# endpoint silently ignores `temperature` in the request body. Measured
+# 2026-08-26 on one pinned card: via /v1 the same prompt answered differently
+# 2-3 times in 5 whatever temperature was asked for, while the native
+# /api/chat with options.temperature=0 was identical 4 times out of 4.
+# TRADINGAGENTS_TEMPERATURE therefore does nothing. If sampling ever does need
+# to change, this file is the only channel that reaches the model.
