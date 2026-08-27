@@ -423,6 +423,16 @@ def test_a_placed_order_is_settled_before_the_run_is_reported(monkeypatch):
         agent.agent_book, "build_book",
         lambda price_lookup=None: calls.append("book") or _book(cash=500.0),
     )
+    # Without this the order goes to the live sandbox. It did: this test placed
+    # real AAA brackets at a $10.05 limit — the $10.00 fixture price with the
+    # entry buffer — on every full-suite run, and Webull cancelled them at each
+    # market close. The conftest guard now refuses the call outright, but the
+    # patch belongs here too, because the guard states the rule and this states
+    # what the test actually needs.
+    monkeypatch.setattr(
+        agent.sandbox_broker, "place_bracket_order",
+        lambda *a, **kw: {"client_order_id": "test-bracket", "placed_at": None, "exits": []},
+    )
     monkeypatch.setattr(
         agent, "_decide",
         lambda *a, **kw: ("go", [{"ticker": "AAA", "side": "buy", "quantity": 1}], []),
@@ -560,6 +570,10 @@ def test_a_buy_arms_both_exits(monkeypatch):
 def test_a_buy_with_neither_level_gets_no_exits(monkeypatch):
     """Inventing one would be inventing the exit price of a real trade."""
     called = []
+    # _arm_exits reads a live quote before it decides anything, so without this
+    # the test asks Webull for a real AAA price. The neighbouring tests already
+    # patch it; this one did not.
+    monkeypatch.setattr(agent, "get_current_price", lambda t: 100.0)
     monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
 
     agent._arm_exits({"ticker": "AAA", "quantity": 10, "side": "buy"}, None, None)

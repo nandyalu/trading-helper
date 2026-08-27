@@ -80,3 +80,39 @@ def fake_bar_cache(monkeypatch):
     monkeypatch.setattr(bars, "_last_fetch", {})
     monkeypatch.setattr(bars, "_earliest_attempt", {})
     return store
+
+
+@pytest.fixture(autouse=True)
+def never_reach_the_live_broker(monkeypatch):
+    """Fail any test that would send an order to Webull.
+
+    On 2026-08-27 a test run placed real bracket orders on the sandbox account
+    for ``AAA`` — the fixture ticker — at a $10.05 limit, which is the $10.00
+    fixture price with ``ENTRY_LIMIT_BUFFER_PCT`` applied. They sat unfilled
+    until the market closed and Webull cancelled them, which arrived as a
+    pile of cancellation notices hours later. Nothing in the app recorded
+    them, because the app never placed them: the suite did.
+
+    The account is a sandbox, so the money was never real. What was real is
+    that a test reached the internet and put an order on a broker, and the
+    only reason anyone noticed was the notifications.
+
+    Patching at ``get_api_client`` covers every path at once — placing,
+    cancelling, quotes, positions, order history — so a new test cannot open a
+    route this fixture does not know about. A test that genuinely needs broker
+    behaviour must patch the specific function it needs, which is what every
+    existing one already does.
+    """
+    def refuse(*args, **kwargs):
+        raise AssertionError(
+            "This test tried to reach the live Webull API. Tests must never "
+            "place, cancel, or read real orders — patch the broker function "
+            "the test needs instead. See never_reach_the_live_broker."
+        )
+
+    for module in ("backend.services.quotes", "backend.services.broker",
+                   "backend.services.sandbox_broker"):
+        try:
+            monkeypatch.setattr(f"{module}.get_api_client", refuse, raising=False)
+        except Exception:
+            pass
