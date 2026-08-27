@@ -127,6 +127,24 @@ It happened in 3 of 8 traced runs. Neither step causes it, and neither fixes it:
 
 **The lesson for anyone measuring here is the one this page keeps repeating.** A run-level metric moved, the obvious cause was the change just made, and the traces said otherwise. Check the record before attributing.
 
+#### Fixed, 2026-08-27
+
+Three fixes were built and measured separately. Two survived.
+
+| | What it does | Result |
+|---|---|---|
+| **Detect** | Retry when the answer is ungrounded | **4 of 4**, from a 0-of-3 baseline. Kept |
+| **Prompt** | Tell the model to call, not describe | 13 of 17 either way. **Reverted** |
+| **Salvage** | Execute a written-out call | Recovers the one real case in every trace. Kept as a fallback |
+
+**Ollama ignores `tool_choice`.** Sending `required` behaves exactly like `auto` and like sending nothing, measured on the same model, so the standard lever for forcing a call is unavailable here. That is a real gap and worth knowing before designing around it.
+
+**The model is not incapable.** Given "Get me AAPL's price data from 2026-07-27 to 2026-08-27" it made a correct call every time; given "think aloud about your plan first, in detail, before doing anything" it narrated every time. The prompt decides it — which is why the prompt fix looked so promising and is exactly why measuring it mattered.
+
+**Detection needed two checks, and the obvious one was the weaker.** Reading the text catches a fenced JSON block naming a bound tool. It does not catch a model that writes "### Phase 1: Detailed Swing Trade Planning" — prose naming no tool, indistinguishable from a report by content. What gives that away is the conversation: **if nothing ever returned a tool result and the model is not asking for one, the answer was composed from no data.** With the text check alone the live test recovered 3 of 6 and the detector never fired, so those three were luck. With the structural check it is 4 of 4.
+
+**Salvage is deliberately the fallback, not the first move.** Retrying leaves the model's behaviour visible; executing a written-out call accepts a shape the API never sent, so a model that keeps narrating keeps working and nobody notices. The order is retry, then salvage, then a loud error.
+
 It costs something real, and the cost should be stated: the model loses the ability to name a level for a reason nobody encoded, such as a support line it saw in the chart. Whether that ability was ever worth anything here is testable against the Scorecard.
 
 ### 3. Improve the tools before improving the model
