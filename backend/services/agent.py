@@ -913,6 +913,13 @@ def _max_research_per_day() -> int:
 # Raise it only alongside the arithmetic: a faster model, more backends, or an
 # earlier sweep. Raising it because the agent keeps asking is how a sweep comes
 # to overrun the open.
+#
+# **Due for re-derivation when the pool splits 2/5 instead of 4/3**, which is
+# planned once the Gemini Flash-Lite comparison reports. Five concurrent
+# analyses is not 5/3 of three: gemma4's E-series keeps its per-layer
+# embeddings in host RAM, so the cards contend for memory bandwidth and the
+# per-analysis time rises with the count. Measure the paired figure again at
+# five before choosing the number rather than scaling this one.
 _MAX_WATCHLIST = 12
 
 

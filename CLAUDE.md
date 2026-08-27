@@ -90,7 +90,25 @@ above just queues in the proxy.
 
 **With two deployments sharing the pool, the sum across them is what should not
 exceed the backend count**, because both sweep at 11:00 UTC and contend. Seven
-backends split 4 (live) / 3 (analyst).
+backends split 4 (live) / 3 (analyst). **Check both, not one.** On 2026-08-27
+the live deployment moved to 4 and the analyst stayed at its template default
+of 2, so the pool ran 6 of 7 and a card sat idle all morning with nothing
+reporting it.
+
+**Planned: 2 (live) / 5 (analyst), once the Gemini Flash-Lite comparison
+reports.** The analyst is the long-running experiment and deserves the cards;
+the live book runs a model less than half as slow and can afford the extra
+waves. Two things follow from that and neither is optional. The switch waits
+for the comparison, because that experiment is only readable if the live
+deployment keeps analysing at the speed its graded signals were produced at.
+And **`_MAX_WATCHLIST` should be re-derived at the same time, not left at 12** —
+that number is 4 waves × 3 concurrent against a two-hour window, and five
+concurrent changes it. Expect roughly 20 rather than a simple 12 × 5/3, since
+five concurrent analyses contend for host RAM bandwidth more than three do, so
+measure the paired analysis time again before choosing the number.
+
+If the comparison sends the live deployment to Gemini, the split is 0/7 and
+none of this arithmetic applies — the analyst gets the whole pool.
 
 **Overshooting the sum costs latency, not failures, and an earlier note here
 was wrong about why.** It said `WAIT_TIMEOUT=600` is ten minutes against an
