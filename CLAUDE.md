@@ -504,6 +504,13 @@ The rules block:
   say.
 - You can also move the stop and take-profit on something you already hold,
   without buying or selling any of it. Use side `adjust` [...]
+- You may track at most `N` tickers, and every one of them is analysed and
+  charged every morning whether you act on it or not. To stop watching one, use
+  side `untrack` [...]
+- Untracking frees a slot the same way a sell frees cash, and in the same
+  order: to research something when the list is full, list the untrack first
+  and the research after it.
+- You cannot untrack something you hold. Sell it first [...]
 - Doing nothing is a valid answer, and often the right one.
 - Before answering, add up what your buys cost and check it against your cash.
 
@@ -527,8 +534,16 @@ record would be of a strategy nobody chose.
   rather than inherited from the account type.
 - **Exit levels that would execute on placement are refused**: a stop at or
   above the price, a target at or below it.
+- **A held ticker cannot be untracked.** A position nobody analyses is a
+  position with nothing looking for its exit, and the daily analysis of a
+  holding is what the research charge already pays for. Sell it first.
+- **The watchlist is screened against a running copy too**, for the same reason
+  as cash: an untrack listed before a research frees a slot for it, and two
+  researches cannot share one freed slot.
 - **A refused order is fed back once** and the model asked again, which is how
-  it learns it may sell to fund a buy.
+  it learns it may sell to fund a buy, and untrack to fund a research. The
+  advice in that retry is matched to the refusal — cash advice does not help a
+  full watchlist, and the first live probe produced exactly that mistake.
 
 ### How a position is opened and protected
 
@@ -547,6 +562,18 @@ order plus separately-armed exits.
 ### The changelog
 
 Newest first. Every entry says what changed and why.
+
+**2026-08-27 — the agent chooses what to stop watching, and the watchlist is capped.** A `side: "untrack"` action, a watchlist section in the prompt, and a ceiling of 12 tracked tickers.
+
+Before this the watchlist only ever grew. `_commission_research` called `db.add_to_watchlist` and nothing in the agent could remove one — `/untrack` was manual and was the only route. That was survivable at `gemma4-e2b-96k`'s 7 minutes an analysis and stops being survivable at `gemma4:e4b-it-qat`'s 17.4: the sweep runs 11:00 UTC and `earnings_check` puts its own analyses on the same pool at 13:00, so three concurrent analyses fit about 20 tickers in the window. At the 4-6 names a run commissions, the ceiling arrives in about four days. **`_MAX_RESEARCH_PER_DAY` does not help, because the limit is cumulative rather than per-day** — the same reason a daily spending limit does not stop a subscription.
+
+**The cap is 12, not 20.** Twenty is what the window fits with nothing going wrong. Twelve is four waves and leaves the second hour as margin for a slow run, a retry, or a morning when the live sweep is contending for the same cards.
+
+**A held ticker can never be untracked**, and that is enforced in Python rather than asked for in the prompt. An agent that could stop watching a position it still owns would lose the analysis that finds its exit, and the daily analysis of a holding is exactly what the "you own the cost of finding your own exit" charge pays for. The same reasoning as refusing a sell of shares that are not held: the model decides what it wants, Python refuses what must not happen.
+
+**Untrack is free and is ordered, like a sell that funds a buy.** Listing an untrack before a research frees a slot for it in the same pass, so a full watchlist is never a dead end — the agent trades one name's coverage for another's rather than waiting a day. The prompt says so explicitly, because the identical wording had to be added for sells before the model worked out it could do the same thing with cash.
+
+**The watchlist is now in the prompt**, with its size and its cap, split into what is held and what is only being watched. Required by the action, and for the same reason holdings had to start showing their resting exits on 2026-08-25: the agent cannot sensibly drop something it cannot see, and a cap it is not shown is a rule it can only discover by being refused.
 
 **2026-08-26 — the agent chooses what to research.** A `side: "research"` action, and a menu of screened candidates in the prompt with what an analysis costs. This is the point of the analyst experiment: the live agent is measured on decisions given a fixed watchlist, and this one decides what is worth looking at at all. Commissioning a ticker adds it to the watchlist — which *is* the commission, since the morning sweep reads the watchlist. **The charge lands when the analysis runs, not when it is commissioned.** Billing at both ends charged a commissioned ticker twice, once for asking and once for the work; `propagate_ticker` already bills every ticker the sweep touches, including the held ones nobody commissioned, so that is the single place. The cost of this is that the agent can commission slightly more than its cash on a day the sweep has not happened yet — bounded by the daily cap to cents against a four-figure budget, and a far smaller problem than double-billing.
 

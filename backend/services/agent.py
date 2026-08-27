@@ -200,6 +200,8 @@ def build_prompt(
     menu: list | None = None,
     price: float = 0.0,
     max_research: int = 0,
+    watchlist: list[str] | None = None,
+    max_watchlist: int = 0,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -244,10 +246,15 @@ def build_prompt(
         for h in book.holdings:
             value = f"${h.market_value:,.2f}" if h.market_value is not None else "unpriced"
             pnl = f"{h.unrealized_pnl:+,.2f}" if h.unrealized_pnl is not None else "unknown"
-            price = f"${h.price:,.2f}" if h.price is not None else "unavailable"
+            # Named apart from the `price` parameter deliberately. Reusing it
+            # here rebound the research price to a string, and the menu block
+            # below then formatted that string as a float. The crash needed a
+            # holding and a menu together, so it was invisible until the agent
+            # first bought something.
+            price_each = f"${h.price:,.2f}" if h.price is not None else "unavailable"
             line = (
                 f"- {h.ticker}: {h.quantity:g} shares, average cost ${h.avg_cost:,.2f}, "
-                f"now {price} each, worth {value}, unrealized {pnl}"
+                f"now {price_each} each, worth {value}, unrealized {pnl}"
             )
             weight = book.weight_pct(h)
             if weight is not None:
@@ -276,8 +283,9 @@ def build_prompt(
     if signals:
         lines.append("Recent analyst signals:")
         for s in signals:
-            price = prices.get(s.ticker)
-            price_text = f"${price:,.2f}" if price is not None else "price unavailable"
+            # Also kept off `price`, for the same reason as the holdings loop.
+            live = prices.get(s.ticker)
+            price_text = f"${live:,.2f}" if live is not None else "price unavailable"
             entry = f", suggested entry ${s.entry_price:,.2f}" if s.entry_price else ""
             stop = f", stop ${s.stop_loss:,.2f}" if s.stop_loss else ""
             target = f", target ${s.price_target:,.2f}" if s.price_target else ""
@@ -293,12 +301,12 @@ def build_prompt(
                 conviction += f", expected value {s.expected_value_r:+.2f}R"
             # Computed here, not left to the model: the affordable count is the
             # arithmetic it actually got wrong.
-            if price:
-                affordable = int(book.cash // price)
+            if live:
+                affordable = int(book.cash // live)
                 afford_text = (
                     f" With your ${book.cash:,.2f} cash you can afford {affordable} share(s)."
                     if affordable
-                    else f" You cannot afford any at ${price:,.2f} with ${book.cash:,.2f} cash."
+                    else f" You cannot afford any at ${live:,.2f} with ${book.cash:,.2f} cash."
                 )
             else:
                 afford_text = " No price, so it cannot be bought today."
@@ -320,6 +328,16 @@ def build_prompt(
             *(f"- {r.side.upper()} {r.quantity:g} {r.ticker}: {r.why}" for r in rejected),
             "Answer again, within the cash you actually have. If you want something you",
             "cannot afford, sell something first and list the sell before the buy.",
+            # The retry is the one chance to correct a refusal, and advice about
+            # cash does not help a watchlist refusal. Observed on the first live
+            # probe: the model asked to research two names without untracking
+            # anything, which is exactly the mistake this line answers.
+            *(
+                ["If a research was refused because the watchlist is full, untrack "
+                 "something first and list the untrack before the research."]
+                if any(r.side == "research" and "watchlist is full" in r.why for r in rejected)
+                else []
+            ),
         ]
 
     min_probability, min_risk_reward = get_conviction()
@@ -329,6 +347,33 @@ def build_prompt(
     if min_risk_reward:
         floors.append(f"risk/reward of at least {min_risk_reward:.2f}")
     conviction_line = " and ".join(floors)
+
+    if watchlist and max_watchlist:
+        # Shown before the menu, because what is already being paid for every
+        # morning is the context for whether to add another. Held names are
+        # separated from watched-only ones because only the second kind can be
+        # dropped, and a list that hides that invites orders Python refuses.
+        held_tickers = {h.ticker for h in book.holdings}
+        watched_only = sorted(t for t in watchlist if t not in held_tickers)
+        also_held = sorted(t for t in watchlist if t in held_tickers)
+        lines += [
+            "",
+            f"You are paying to have {len(watchlist)} tickers analysed every morning, "
+            f"and you may track at most {max_watchlist}.",
+        ]
+        if also_held:
+            lines.append(
+                f"- Held, so always analysed and cannot be dropped: {', '.join(also_held)}"
+            )
+        if watched_only:
+            lines.append(
+                f"- Watched but not held, so droppable: {', '.join(watched_only)}"
+            )
+        if len(watchlist) >= max_watchlist:
+            lines.append(
+                "That is the limit, so nothing new can be researched until you stop "
+                "watching something."
+            )
 
     if menu:
         lines += [
@@ -397,6 +442,23 @@ def build_prompt(
             if menu
             else []
         ),
+        *(
+            [
+                f"- You may track at most {max_watchlist} tickers, and every one of them is",
+                "  analysed and charged every morning whether you act on it or not. To stop",
+                "  watching one, use side \"untrack\" with its ticker and no quantity.",
+                "  Untracking costs nothing and refunds nothing — what it saves is the",
+                "  analyses you would have paid for tomorrow and after.",
+                "- Untracking frees a slot the same way a sell frees cash, and in the same",
+                "  order: to research something when the list is full, list the untrack",
+                "  first and the research after it.",
+                "- You cannot untrack something you hold. Sell it first if it is genuinely",
+                "  not worth analysing — a position nobody is analysing is one with nothing",
+                "  watching for its exit.",
+            ]
+            if max_watchlist
+            else []
+        ),
         "- Doing nothing is a valid answer, and often the right one.",
         *(
             [
@@ -412,7 +474,13 @@ def build_prompt(
         "Reply with JSON only, in this exact shape:",
         '{"reasoning": "one or two sentences", "orders": '
         '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"},',
-        ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"}]}',
+        # The untrack example appears only where untracking is possible. The
+        # live deployment has no cap and no such action, and an example of an
+        # order it can only have refused would cost it a retry to learn that.
+        (' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"},'
+         if max_watchlist
+         else ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"}]}'),
+        *([' {"ticker": "NOK", "side": "untrack", "reason": "why"}]}'] if max_watchlist else []),
         "Use an empty list for orders if you want to hold everything.",
     ]
     return "\n".join(lines)
@@ -475,8 +543,13 @@ def screen(
     # agent could commit the same dollar twice.
     research_price = research.get_price()
     max_research = _max_research_per_day()
+    max_watchlist = _max_watchlist()
     researched: list[str] = []
-    already_researched = set(db.get_watchlist())
+    untracked: list[str] = []
+    # A running watchlist, not the opening one, for the same reason cash is
+    # running: an untrack listed before a research frees a slot for it in the
+    # same pass, and two researches against one free slot must not both pass.
+    watchlist = set(db.get_watchlist())
     cash = book.cash
     held = {h.ticker: h.quantity for h in book.holdings}
     accepted: list[dict] = []
@@ -490,10 +563,19 @@ def screen(
             why = None
             if menu is not None and ticker not in menu:
                 why = "not on today's candidate list"
-            elif ticker in already_researched:
+            elif ticker in watchlist:
                 why = "already being researched today"
             elif len(researched) >= max_research:
                 why = f"the daily research limit of {max_research} is reached"
+            elif len(watchlist) >= max_watchlist:
+                # Named as a swap rather than a wall, because it is one: an
+                # untrack listed earlier in the same answer would have made
+                # room. The prompt says so too; this is what it reads like
+                # when the agent has not done it.
+                why = (
+                    f"the watchlist is full at {max_watchlist} — untrack something "
+                    "first, and list the untrack before this"
+                )
             elif cash < research_price:
                 why = f"costs ${research_price:,.2f} and only ${cash:,.2f} is left"
             if why:
@@ -503,7 +585,35 @@ def screen(
                 continue
             cash -= research_price
             researched.append(ticker)
+            watchlist.add(ticker)
             accepted.append({**order, "ticker": ticker, "side": "research", "quantity": 0})
+            continue
+
+        if str(order.get("side", "")).lower().strip() == "untrack":
+            # Moves no cash and no shares. What it changes is what tomorrow's
+            # sweep spends GPU time on, which is why it exists: research adds
+            # to the watchlist permanently and nothing else here removes.
+            why = None
+            if ticker not in watchlist:
+                why = "not being watched, so there is nothing to stop watching"
+            elif held.get(ticker, 0.0) > 0:
+                # Enforced here rather than asked for in the prompt, like every
+                # other limit that must hold. A position whose daily analysis
+                # stops is a position with nothing looking for its exit, and
+                # the analysis of a holding is what the charge already pays
+                # for. Sell it first if it is genuinely not worth watching.
+                why = (
+                    f"holds {held[ticker]:g} of it — sell it first, since a position "
+                    "you stop analysing is one with nothing watching for its exit"
+                )
+            if why:
+                rejected.append(
+                    agent_book.Rejection(ticker=ticker, side="untrack", quantity=0, why=why)
+                )
+                continue
+            watchlist.discard(ticker)
+            untracked.append(ticker)
+            accepted.append({**order, "ticker": ticker, "side": "untrack", "quantity": 0})
             continue
 
         if str(order.get("side", "")).lower().strip() == "adjust":
@@ -650,10 +760,14 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     """
     by_ticker = {s.ticker: s for s in signals}
     menu_tickers = {c.ticker for c in menu} if menu else None
+    # Read once and passed to both attempts, so the retry describes the same
+    # watchlist the first answer was screened against.
+    watchlist = sorted(db.get_watchlist())
     reasoning, proposed = parse_decision(_ask(build_prompt(
         book, signals, prices, closed=closed, regime_line=regime_line,
         horizon_days=horizon_days, menu=menu, price=research.get_price(),
         max_research=_max_research_per_day(),
+        watchlist=watchlist, max_watchlist=_max_watchlist(),
     )))
     accepted, rejected = screen(proposed, book, prices, by_ticker, menu_tickers)
     if not rejected:
@@ -663,7 +777,8 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     retry_reasoning, retry_proposed = parse_decision(
         _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed,
                      regime_line=regime_line, horizon_days=horizon_days, menu=menu,
-                     price=research.get_price(), max_research=_max_research_per_day()))
+                     price=research.get_price(), max_research=_max_research_per_day(),
+                     watchlist=watchlist, max_watchlist=_max_watchlist()))
     )
     if not retry_proposed:
         # A retry that proposes nothing is a decision to stand pat; keep the
@@ -689,12 +804,15 @@ class AgentRun:
     # may not take is tomorrow's decision — but money left the account, so a
     # pass that only researched is not an idle pass.
     researched: list[str] = field(default_factory=list)
+    # Tickers it stopped watching. No money moves either way, but tomorrow's
+    # sweep is smaller for it, so this is a decision and not housekeeping.
+    untracked: list[str] = field(default_factory=list)
     book: agent_book.Book | None = None
     skipped: str | None = None  # why the run did nothing at all
 
     @property
     def acted(self) -> bool:
-        return bool(self.placed or self.adjusted or self.researched)
+        return bool(self.placed or self.adjusted or self.researched or self.untracked)
 
 
 def format_run_embed(run: AgentRun) -> "discord.Embed":
@@ -776,6 +894,30 @@ _MAX_RESEARCH_PER_DAY = 15
 
 def _max_research_per_day() -> int:
     return _MAX_RESEARCH_PER_DAY
+
+
+# How many tickers may be tracked at once. This is the limit that actually
+# binds, and the daily cap above does not substitute for it: research adds to
+# the watchlist permanently, so a per-day limit bounds the rate of growth and
+# not the total, the same way a daily spending limit does not stop a
+# subscription.
+#
+# The number comes from the sweep window. morning_sweep runs at 11:00 UTC and
+# earnings_check puts its own analyses on the same pool at 13:00, so there are
+# two hours. At three concurrent analyses and gemma4:e4b-it-qat's 17.4 minutes
+# — the paired figure, because analyses really do run together — that window
+# fits about 20 tickers with nothing going wrong. Twelve is four waves and
+# leaves the second hour for a slow run, a retry, or a morning when the live
+# deployment is contending for the same cards.
+#
+# Raise it only alongside the arithmetic: a faster model, more backends, or an
+# earlier sweep. Raising it because the agent keeps asking is how a sweep comes
+# to overrun the open.
+_MAX_WATCHLIST = 12
+
+
+def _max_watchlist() -> int:
+    return _MAX_WATCHLIST
 
 
 # How many screened names to show. Enough to choose from, few enough that the
@@ -1206,6 +1348,9 @@ def run_once() -> AgentRun:
         if order["side"] == "research":
             _commission_research(order, run)
             continue
+        if order["side"] == "untrack":
+            _untrack(order, run)
+            continue
         if order["side"] == "adjust":
             outcome = adjust_exits(order["ticker"], order.get("stop"), order.get("target"))
             log.info("Adjust %s: %s", order["ticker"], outcome["message"])
@@ -1321,6 +1466,30 @@ def _commission_research(order: dict, run: "AgentRun") -> None:
         return
     run.researched.append(ticker)
     log.info("Agent commissioned research on %s", ticker)
+
+
+def _untrack(order: dict, run: "AgentRun") -> None:
+    """Stop analysing a ticker every morning.
+
+    The counterpart to ``_commission_research``, and the reason the watchlist
+    is no longer a ratchet. Commissioning adds a ticker permanently; without
+    this, the only way one ever left was somebody typing ``/untrack``.
+
+    Nothing is refunded. The analyses already run were paid for and produced
+    the opinions that led here, so there is nothing to give back — what stops
+    is tomorrow's charge, which is the whole point of the decision.
+
+    ``screen`` has already refused this for a ticker the agent still holds.
+    """
+    ticker = order["ticker"]
+    try:
+        db.remove_from_watchlist(ticker)
+    except Exception:
+        log.exception("Could not untrack %s", ticker)
+        run.failed.append((order, "could not be removed from the watchlist"))
+        return
+    run.untracked.append(ticker)
+    log.info("Agent stopped watching %s", ticker)
 
 
 def _record_run(run: "AgentRun") -> None:

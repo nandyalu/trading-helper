@@ -82,6 +82,8 @@ def run_now():
             for o, why in run.failed
         ],
         adjusted=run.adjusted,
+        researched=run.researched,
+        untracked=run.untracked,
     )
 
 

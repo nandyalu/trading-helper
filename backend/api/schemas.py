@@ -466,6 +466,11 @@ class AgentRunOut(BaseModel):
     # Exits moved to new levels. No position opened or closed, but the risk on
     # an open one changed, so a run that only did this is not an idle run.
     adjusted: list[str] = []
+    # Tickers it paid to have analysed, and tickers it stopped watching. Both
+    # change what tomorrow's sweep does and what it costs, so a run that only
+    # did these is not idle either — it was reported as one until 2026-08-27.
+    researched: list[str] = []
+    untracked: list[str] = []
 
 
 class StrategyOut(OrmModel):
