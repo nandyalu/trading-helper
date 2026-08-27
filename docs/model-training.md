@@ -1,0 +1,186 @@
+# Making a small model use today's prices
+
+Five small models have been tested against this app's analysis pipeline and all five failed the same way. Each one invented prices. This page is about what it would take to fix that, in the order the work is actually worth doing.
+
+## First, the premise is wrong, and that changes everything
+
+It is natural to read the failures as a knowledge-cutoff problem. The models quote prices from two or three years ago, so it looks as though they need newer training data, or a retrieval step that hands them the current number.
+
+**They already get the current number.** The app fetches live prices, puts them in the prompt, and the models still invent. Two pieces of evidence say so plainly:
+
+- **`lfm2.5:8b` read 77,000 to 96,000 prompt tokens per run and cited no price within 10% of the real close.** It received the data. It did not use it.
+- **On 2026-08-06, `gemma4-e2b`'s market report carried the right prices throughout while its trader stage wrote $2,000 for a stock at $356.62.** The correct figure was in the same run, a few steps earlier.
+
+So retraining on newer data fixes nothing. Prices change every day, and no training schedule keeps up with that. **The model does not need to know the price. It needs to copy the price it was given into the right field.**
+
+That reframes the whole problem. It is not about knowledge. It is about grounding and instruction-following, and those have much cheaper fixes than training.
+
+## What actually fails, in three separate ways
+
+The five rejected models do not fail identically, and the differences decide which fix applies.
+
+| Failure | What it looks like | Which models |
+|---|---|---|
+| **Never calls the tool** | Prints the tool call as text and writes plausible output beneath it | `llama3.2:3b`, `phi4-mini`, kotakneo, alma-trader |
+| **Calls it, ignores the answer** | Reads 77-96k prompt tokens, then quotes prices from training | `lfm2.5:8b` |
+| **Loses the number between steps** | The market report is correct; the trader stage invents | `gemma4-e2b` at the default context |
+
+The third is the one to understand first, because the good models still do it occasionally and it is not a model defect at all. **The trader stage was never given a price.** The app fixed it by computing a snapshot in Python and putting it in the trader's prompt. No model change was involved.
+
+There is a general lesson in that. Before training anything, check whether the model was given what you are blaming it for not knowing.
+
+## The fix ladder
+
+Work down this list. Each step costs more than the one above it, and the cheap steps may remove the need for the expensive ones.
+
+### 1. Constrain the decoding, so invalid output is impossible
+
+This is the highest-value change and it needs no training at all.
+
+Today the app asks for structured output through **function calling**: it binds a JSON schema as a tool and asks the model to call it. `capabilities.py` sets `preferred_structured_method="function_calling"` as the default, so every local model gets that path. It is the hardest one for a small model, because the model must produce a correctly-named tool call with correctly-typed arguments entirely on its own.
+
+**A different method already exists and is unused.** `StructuredMethod` allows `json_schema`, which sends `response_format={"type": "json_schema", ...}`. Ollama supports this and turns it into grammar-constrained decoding: the sampler is not allowed to emit a token that would break the schema. A malformed answer stops being possible rather than becoming less likely.
+
+The experiment is small:
+
+1. Set `preferred_structured_method="json_schema"` for the local-model pattern in `capabilities.py`.
+2. Re-run the tool-calling test from `ollama-stack/bench/` on a rejected model.
+3. Compare the structured-output failure count against the same model's previous run.
+
+`lfm2.5:8b` failed at four stages in each of two runs. If constrained decoding takes that to zero, the model is worth re-testing on everything else — and it is the fastest model that has ever fit this hardware.
+
+**What this cannot fix.** A grammar forces the shape of the answer, not its truth. A model can emit a perfectly-formed `{"entry_price": 188.46}` for a stock at $313.45. Step 2 is what addresses that.
+
+### 2. Take the numbers away from the model
+
+The model should decide direction and conviction. It should not be the thing that types a price.
+
+The app already does some of this and it works:
+
+- **`build_verified_market_snapshot`** computes the price in Python from the same OHLCV, and the trader prompt forbids recalled prices.
+- **`_trade_plan_levels`** discards a level too far from the traded price.
+- **`_levels_on_the_wrong_side`** discards a stop above the price or a target below it.
+- **`_resolve_stop_loss`** derives a stop from 2×ATR(14) when the model's stop is unusable.
+
+The next step is to stop asking for absolute numbers at all. Let the model answer in relative terms and compute the rest:
+
+| Instead of asking for | Ask for | Python computes |
+|---|---|---|
+| `stop_loss: 90.76` | `stop_atr_multiple: 2.0` | price − 2×ATR |
+| `price_target: 92.00` | `target_r_multiple: 2.5` | entry + 2.5×risk |
+| `entry_price: 91.00` | `entry: "market"` or `"pullback"` | the live quote, or a computed level |
+
+A model cannot fabricate a price it was never asked to produce. This is the change that would make a weak model usable, and it needs no training either — only a schema change and a prompt change.
+
+It costs something real, and the cost should be stated: the model loses the ability to name a level for a reason nobody encoded, such as a support line it saw in the chart. Whether that ability was ever worth anything here is testable against the Scorecard.
+
+### 3. Improve the tools before improving the model
+
+Small models fail on wide interfaces. Two changes usually help more than a fine-tune:
+
+- **Fewer fields per call.** A schema with twelve optional fields gives a small model twelve chances to go wrong. Split it into two calls with five each.
+- **Fewer tools per decision.** A model choosing among three tools is far more reliable than one choosing among twelve.
+
+This is also where **MCP** belongs, and it is worth being precise about what it does. MCP standardizes how a tool is described and called. It does not make a model better at calling tools. Adopting it is a portability decision, not an accuracy fix, and it will not move any number in the harness.
+
+### 4. Fine-tune, last
+
+Only reach here if steps 1 to 3 leave a model that is still worth rescuing.
+
+**What a fine-tune can teach:**
+
+- The exact tool-call format this pipeline expects.
+- The habit of copying a retrieved figure into a field rather than recalling one.
+- The house answer style, which shortens completions and cuts cost.
+
+**What it cannot teach:** today's prices. Training on prices would need retraining every day, and the model would still be wrong between runs. If you find yourself planning that, go back to the top of this page.
+
+## The training data, if you get to step 4
+
+The goal is not to teach finance. It is to teach the shape of a correct run. That makes this a **distillation** job: take a model that already drives the loop and teach a faster one to imitate it.
+
+`gemma4:e4b-it-qat` is the teacher. It scores 0 to 1 structured-output failures per run and cites real prices. `lfm2.5:8b` is the obvious student, because it is 2.5x faster and fails only on grounding.
+
+### What one training example is
+
+One example is a single LLM call from a real analysis:
+
+- the full prompt, including the system message and the tool definitions
+- the tool calls the model made, with arguments
+- the tool results it received
+- the final structured answer
+
+An analysis makes about 21 such calls. A nine-ticker sweep therefore produces roughly 190 examples a day.
+
+### How much you need
+
+| Goal | Rough sample count |
+|---|---|
+| Fix tool-call formatting | 500 to 1,000 |
+| Fix format and grounding together | 2,000 to 5,000 |
+| Change reasoning style | more than this approach is suited to |
+
+At 190 examples a day, a month of sweeps gives about 5,700. That is enough, and it costs nothing extra to collect because the analyses run anyway.
+
+### The gap that has to be closed first
+
+**The app does not store any of this today.** `llm_usage.py` counts calls and tokens. It does not keep prompts or completions, so there is currently no training set and no way to build one retroactively.
+
+Anyone starting this work should begin by adding trace capture:
+
+1. Extend `UsageTracker`, which already attaches to both LLM clients and therefore sees every call in a run.
+2. Write each call's prompt, tool calls, tool results and completion to a file per analysis.
+3. Keep the run's `signal_id`, so a trace can be joined to how the signal was eventually graded.
+
+Point 3 is what makes the dataset better than a generic one. **A graded outcome lets you train on the runs that turned out to be right**, rather than on every run the teacher happened to produce. That is a real advantage this app has and a public dataset does not.
+
+Storage is not a concern: about 150k tokens per analysis is roughly 600 KB of text, so a month is under 4 GB.
+
+### Filtering matters more than volume
+
+Train only on runs that pass the checks this app already has:
+
+- zero structured-output failures
+- every price in the market report within 10% of the real close
+- a decision the Scorecard later graded as correct
+
+The last filter is the strongest and the slowest to accumulate, because grading needs the trade horizon to pass. Start with the first two.
+
+## Tools, and one hardware problem
+
+**Unsloth** is the reasonable choice for the training itself. It does LoRA fine-tuning with much lower memory use than plain transformers, and an 8B model at 4-bit fits in about 12 to 16 GB of VRAM.
+
+**The cards in this machine will not do it.** The pool is seven RX 6600s at 8 GiB each, and they are AMD. Two separate problems follow:
+
+- **8 GiB is below what an 8B LoRA needs.** Seven cards do not help, because a single training job cannot be split across them without more setup than the job is worth.
+- **Unsloth targets CUDA.** ROCm support has been partial and changing, so check its current state before planning around it rather than trusting this page.
+
+So training means renting an NVIDIA GPU. A LoRA run on this dataset size is hours, not days, on a single 24 GB card. That is a modest cost, and it is worth stating that inference stays local afterwards: you train in the cloud once and serve the result on the pool.
+
+## How to know whether any of it worked
+
+The harness already exists, in `ollama-stack/bench/`, and it is four steps in increasing cost. Run them in order and stop at the first failure.
+
+| Step | Script | Question |
+|---|---|---|
+| 1 | `fit.py` | Does it fit on an 8 GiB card, and at what context? |
+| 2 | `prefill.py` | How fast does it read? |
+| 3 | `menu_choice.py` | Does it choose what to research? |
+| 4 | `full_analysis.py` | Does it drive the tool-calling loop with real prices? |
+
+Three rules learned from running it, all of which cost a wrong conclusion first:
+
+- **Speed proves nothing.** Every rejected model was faster than the one in production. `lfm2.5:8b` was the fastest ever measured here and still unusable.
+- **Run behavioral tests more than once.** `menu_choice.py` reported 0 of 4 for `lfm2.5:8b`; a second batch at identical settings gave 2 of 4.
+- **Check the completion share, not only the prompt tokens.** Four rejected models were caught by a collapse in prompt tokens. `lfm2.5:8b` read plenty and was caught instead by talking over it: 34-35% completion against the working family's 14-17%.
+
+## Where to start
+
+If you want to attempt this, do it in this order:
+
+1. **Switch local models to `json_schema` structured output** and re-run step 4 on `lfm2.5:8b`. Hours of work, and it may end the project on its own.
+2. **Move price fields out of the schema** and compute them in Python from multiples. Days of work, and it removes the failure rather than reducing it.
+3. **Add trace capture to `UsageTracker`.** Do this early even if you never train, because a month of traces cannot be collected retroactively.
+4. **Only then consider a LoRA**, with a rented NVIDIA card and a dataset filtered by graded outcome.
+
+The honest summary is that steps 1 and 2 are likely to be enough, and that they are cheap. The reason to write down the training path anyway is that somebody will propose it first, since it is the more interesting idea — and it is the one most likely to spend weeks solving a problem that a schema change would have removed.

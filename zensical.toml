@@ -13,6 +13,7 @@ nav = [
   { "Command reference" = "commands.md" },
   { "The daily workflow" = "trading-workflow.md" },
   { "Finding your edge" = "finding-your-edge.md" },
+  { "Making a small model work" = "model-training.md" },
 ]
 
 [project.theme]
