@@ -21,6 +21,7 @@ from backend.database import db
 from backend.database.models import Signal
 from backend.discord_bot.notify import notify
 from backend.services import bars, llm_usage, research, watchdog
+from backend.services import llm_traces
 from backend.services.paper import PAPER_EMOJI
 from backend.services.positions import Position, compute_position, describe_position, get_current_price
 from backend.services.signals import (
@@ -237,6 +238,11 @@ def _build_graph(
     model: str | None = None,
     tracker: llm_usage.UsageTracker | None = None,
     provider: str | None = None,
+    # Last, and keyword-only in practice, so the three positional arguments
+    # above keep the meaning every existing caller gives them. Adding it third
+    # silently turned _build_graph(model, None, "google") into a call that
+    # passed the provider as the recorder.
+    recorder: "llm_traces.TraceRecorder | None" = None,
 ) -> TradingAgentsGraph:
     """A fresh instance per analysis run. TradingAgentsGraph.propagate()
     mutates its own state in place (self.graph — recompiled every call,
@@ -265,6 +271,11 @@ def _build_graph(
     graph = TradingAgentsGraph(config=config)
     if tracker is not None:
         llm_usage.attach(tracker, graph.deep_thinking_llm, graph.quick_thinking_llm)
+    # The trace recorder rides the same path for the same reason: these two
+    # client objects are shared by every stage, and none of them accepts a
+    # callback from here.
+    if recorder is not None:
+        llm_usage.attach(recorder, graph.deep_thinking_llm, graph.quick_thinking_llm)
     return graph
 
 
@@ -306,13 +317,22 @@ async def propagate_ticker(
         # the vendor's model without changing what the app is configured to use.
         model = model or await asyncio.to_thread(get_model)
         tracker = llm_usage.UsageTracker()
-        graph = await asyncio.to_thread(_build_graph, model, tracker, provider)
+        # Started before the graph so the id names the file the first call
+        # writes into. None unless LLM_TRACE_DIR is set.
+        recorder = llm_traces.recorder_for(ticker, model)
+        graph = await asyncio.to_thread(
+            _build_graph, model, tracker, provider, recorder
+        )
         started = time.monotonic()
         final_state, decision = await asyncio.to_thread(
             graph.propagate, ticker, trade_date, horizon=horizon
         )
         final_state["llm_model"] = model
         final_state["llm_usage"] = tracker.finish(time.monotonic() - started)
+        # Carried out with the usage for the same reason: record_signal is the
+        # caller's job, and it needs the id to join this run's trace file to
+        # the grade the signal eventually receives.
+        final_state["trace_id"] = recorder.run_id if recorder else None
         # Billed here rather than after the signal is recorded, because the
         # work happened either way. An analysis that produced nothing — a
         # delisted ticker, an unparseable answer — still cost what it cost,
@@ -501,6 +521,10 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     # Absent for a signal recorded outside propagate_ticker (a replayed
     # final_state, a test), which stores NULL rather than a fabricated zero.
     usage = final_state.get("llm_usage") or llm_usage.Usage()
+    # Absent for the same reasons, and when LLM_TRACE_DIR is unset. Storing it
+    # is what lets a later filter keep only the traces of runs that graded
+    # correct — see docs/model-training.md.
+    trace_id = final_state.get("trace_id")
     params = horizon_params(horizon)
     evaluation_date = datetime.date.today() + datetime.timedelta(
         days=parse_time_horizon_days(
@@ -525,6 +549,7 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         prompt_tokens=usage.prompt_tokens or None,
         completion_tokens=usage.completion_tokens or None,
         llm_calls=usage.llm_calls or None,
+        trace_id=trace_id,
         entry_price=levels["entry_price"],
         stop_loss=_resolve_stop_loss(ticker, decision, levels["stop_loss"], price),
         win_probability=levels["win_probability"],

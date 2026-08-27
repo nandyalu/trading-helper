@@ -122,19 +122,35 @@ An analysis makes about 21 such calls. A nine-ticker sweep therefore produces ro
 
 At 190 examples a day, a month of sweeps gives about 5,700. That is enough, and it costs nothing extra to collect because the analyses run anyway.
 
-### The gap that has to be closed first
+### The app now records this, and it is off by default
 
-**The app does not store any of this today.** `llm_usage.py` counts calls and tokens. It does not keep prompts or completions, so there is currently no training set and no way to build one retroactively.
+`backend/services/llm_traces.py` writes one JSON line per LLM call. **Set `LLM_TRACE_DIR` to a writable path to turn it on.** Unset means nothing is recorded, so a deployment that does not want the disk cost pays nothing.
 
-Anyone starting this work should begin by adding trace capture:
+One trace file is one analysis, named `<ticker>-<run id>.jsonl` under a folder per day. Each line holds the messages that went in, the tool calls the model made, the tool results it received, and what it answered.
 
-1. Extend `UsageTracker`, which already attaches to both LLM clients and therefore sees every call in a run.
-2. Write each call's prompt, tool calls, tool results and completion to a file per analysis.
-3. Keep the run's `signal_id`, so a trace can be joined to how the signal was eventually graded.
+Measured on a real `gemma4-e4b-qat-128k` run of AAPL:
 
-Point 3 is what makes the dataset better than a generic one. **A graded outcome lets you train on the runs that turned out to be right**, rather than on every run the teacher happened to produce. That is a real advantage this app has and a public dataset does not.
+| | |
+|---|---|
+| Calls captured | 21 |
+| Calls where the model called a tool | 12 |
+| Tool results captured | 43 |
+| File size | **0.34 MB** |
 
-Storage is not a concern: about 150k tokens per analysis is roughly 600 KB of text, so a month is under 4 GB.
+At nine analyses a day that is about **3 MB a day and 92 MB a month**, which is small enough that retention is not worth designing yet.
+
+**`Signal.trace_id` is the part that matters.** It joins a trace to the signal it produced, and that signal gets graded weeks later against what the market did. **That lets you train on the runs that turned out to be right**, rather than on every run the teacher happened to produce. It is the advantage this app has and a public dataset does not.
+
+### Getting the data out
+
+`backend/scripts/export_training_set.py` turns traces into the `messages` format every fine-tuning tool accepts:
+
+```sh
+python -m backend.scripts.export_training_set --out train.jsonl
+python -m backend.scripts.export_training_set --graded-correct --model gemma4-e4b-qat-128k --out train.jsonl
+```
+
+The second command is the distillation set this page describes: the runs a working model produced, keeping only the ones the market later agreed with. Filters stack, and the script reports what it skipped and why, so an empty result explains itself rather than looking like a bug.
 
 ### Filtering matters more than volume
 

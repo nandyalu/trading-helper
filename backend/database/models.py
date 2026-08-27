@@ -87,6 +87,11 @@ class Signal(SQLModel, table=True):
     prompt_tokens: int | None = None  # summed over every LLM call in the run
     completion_tokens: int | None = None
     llm_calls: int | None = None  # tells "endpoint reported no usage" from "run died early"
+    # Names the trace file holding every LLM call of this run, when
+    # LLM_TRACE_DIR is set. It is what turns a directory of traces into a
+    # training set: joining here lets a filter keep only the runs the
+    # Scorecard eventually graded correct. See docs/model-training.md.
+    trace_id: str | None = Field(default=None, index=True)
     entry_price: float | None = None  # the level the trader proposed entering at
     stop_loss: float | None = None  # the level at which the thesis is wrong
     win_probability: float | None = None  # 0-100, the model's own estimate
