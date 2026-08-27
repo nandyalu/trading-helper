@@ -35,6 +35,8 @@ Work down this list. Each step costs more than the one above it, and the cheap s
 
 ### 1. Constrain the decoding, so invalid output is impossible
 
+**Done, 2026-08-27, and it worked.** The results are at the end of this section; the reasoning follows.
+
 This is the highest-value change and it needs no training at all.
 
 Today the app asks for structured output through **function calling**: it binds a JSON schema as a tool and asks the model to call it. `capabilities.py` sets `preferred_structured_method="function_calling"` as the default, so every local model gets that path. It is the hardest one for a small model, because the model must produce a correctly-named tool call with correctly-typed arguments entirely on its own.
@@ -51,9 +53,26 @@ The experiment is small:
 
 **What this cannot fix.** A grammar forces the shape of the answer, not its truth. A model can emit a perfectly-formed `{"entry_price": 188.46}` for a stock at $313.45. Step 2 is what addresses that.
 
+#### What it changed
+
+`LocalCompatibleChatOpenAI` now defaults structured output to `json_schema`, and the `ollama` provider uses that class. The capability table resolves by model ID and a local model's ID is whatever someone named the build, so no pattern can recognise one — but the client class already knows the endpoint is local.
+
+Ollama honours it. Asked to "answer at length in prose" with a schema attached, `lfm2.5:8b` returned strict schema-matching JSON.
+
+| Model | Before (`function_calling`) | After (`json_schema`) |
+|---|---|---|
+| `lfm2.5:8b` | 4 failures, 4 failures | **0, 0** |
+| `gemma4-e4b-qat-128k` (production) | 1 failure, 1 failure | **0** |
+
+Both models now cite AAPL's exact close. `lfm2.5:8b` went from **0 of 6 and 0 of 3** figures near the real price to **6 of 7**, and its run time dropped from 7.5-9.1 minutes to 5.9, because a structured-output failure costs a whole free-text retry.
+
+**A model whose capability entry says it cannot do `json_schema` keeps function calling**, and the `tool_choice` suppression that path needs is unchanged. Those entries were written from real API refusals.
+
+**Read this as fixing the format, not the truth.** `lfm2.5:8b` still fabricated prices in its first constrained run; what stopped that was step 2.
+
 ### 2. Take the numbers away from the model
 
-The model should decide direction and conviction. It should not be the thing that types a price.
+**Done, 2026-08-27.** The model should decide direction and conviction. It should not be the thing that types a price.
 
 The app already does some of this and it works:
 
@@ -71,6 +90,24 @@ The next step is to stop asking for absolute numbers at all. Let the model answe
 | `entry_price: 91.00` | `entry: "market"` or `"pullback"` | the live quote, or a computed level |
 
 A model cannot fabricate a price it was never asked to produce. This is the change that would make a weak model usable, and it needs no training either — only a schema change and a prompt change.
+
+#### What it changed
+
+`TraderProposal` no longer has `entry_price`, `stop_loss` or `target_price`. The schema the model is shown carries two distances instead:
+
+- `stop_atr_multiple` — how far the stop sits from the entry, in ATRs. Bounded 0.25 to 10.
+- `target_r_multiple` — how much the trade aims to make as a multiple of what it risks. Bounded 0.25 to 20.
+
+`verified_levels_basis` returns the close and ATR as numbers rather than markdown, and `resolve_levels` turns the multiples into prices. `build_verified_market_snapshot` still renders the same figures for the model to reason over; the difference is that Python now computes with them.
+
+**The rendered output is unchanged on purpose.** Downstream consumers parse `**Entry Price**`, `**Stop Loss**` and `**Target Price**` out of the markdown, so moving who computes a number must not move where it appears. Verified: with a close of $313.45 and an ATR of $7.18, a proposal of 2.0 ATRs and 2.5R renders entry 313.45, stop 299.09, target 349.35, and the app's parsers read all three exactly as before.
+
+Python refuses what cannot be defended, on the same rule as everywhere else in this app:
+
+- **Hold gets no levels.** There is no trade to place them around.
+- **No verified close or ATR means no levels**, rather than guessed ones.
+- **Direction follows the action.** A long stops below and targets above; a short reverses. Backwards would store a stop that triggers the moment it is placed.
+- **A stop wider than the price is refused**, since it puts the level at or below zero.
 
 It costs something real, and the cost should be stated: the model loses the ability to name a level for a reason nobody encoded, such as a support line it saw in the chart. Whether that ability was ever worth anything here is testable against the Scorecard.
 

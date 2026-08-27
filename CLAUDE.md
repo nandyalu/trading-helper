@@ -708,12 +708,25 @@ stock the same day produced entries 24× apart, so it is invention, not stale
 data and not another ticker bleeding in. The market analyst's own report had
 the right prices throughout; the *trader* stage was simply never given a price.
 
-Two defenses, both in place:
+**The root fix landed 2026-08-27: the model is no longer asked for a price.**
+`TraderProposal` has no `entry_price`, `stop_loss` or `target_price` field at
+all. It states two distances — `stop_atr_multiple` and `target_r_multiple` —
+and `resolve_levels` computes the prices from the verified close and ATR that
+`verified_levels_basis` returns as numbers. A field that does not exist cannot
+be filled from memory, which is stronger than any instruction not to.
 
-1. **The trader now receives the deterministic snapshot.**
+The rendered markdown is unchanged, because `analysis._trade_plan_levels`
+parses the level lines out of it. Only who computes the number moved.
+
+**The defenses below all stay.** They now catch a different class of error — a
+bad multiple, a missing basis, a level that survived one check and not another
+— rather than a remembered price, and they are what makes the new arithmetic
+safe to trust:
+
+1. **The trader still receives the deterministic snapshot.**
    `build_verified_market_snapshot` (computed in Python from the same OHLCV,
-   never by a model) goes into the trader prompt, which explicitly forbids
-   recalled prices and says to omit levels rather than guess.
+   never by a model) goes into the trader prompt, which is what the model
+   reasons over when choosing how much room the trade needs.
 2. **`analysis._trade_plan_levels` discards levels far from the traded price**,
    using `max_level_deviation_pct` per horizon (swing 35%, position 70%).
    `risk_reward` and `expected_value_r` go out with them, since TradingAgents
