@@ -1720,7 +1720,10 @@ def test_an_adjust_with_no_levels_is_refused():
 def test_an_adjust_moves_no_cash_and_no_shares():
     """It changes the risk on an open position, not the position itself — so a
     later buy in the same pass must see the same cash it would have anyway."""
-    book = _book(cash=1000.0, holdings=[("AAA", 5, 10.0)])
+    # Cash with room over the buy, because a buy is screened at its entry limit
+    # rather than the quote. At exactly $1,000 this asserted the boundary
+    # instead of the thing it means to test.
+    book = _book(cash=1100.0, holdings=[("AAA", 5, 10.0)])
     orders = [
         {"ticker": "AAA", "side": "adjust", "stop": 11.0},
         {"ticker": "BBB", "side": "buy", "quantity": 5},

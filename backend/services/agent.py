@@ -123,6 +123,24 @@ def fails_conviction(signal, min_probability: float, min_risk_reward: float) -> 
     return None
 
 
+def _newest_signal_per_ticker(signals) -> dict:
+    """The most recent signal for each ticker.
+
+    Sorts rather than trusting the caller's order. ``get_recent_signals``
+    returns newest-first today, but a plain "keep the first one seen" would
+    silently invert the moment that changed, and the failure it caused was
+    invisible: a stale stop and target are still real levels from a real
+    signal, so nothing looks wrong in the ledger or at the broker.
+
+    ``signal_date`` is a date, so two analyses of one ticker on the same day
+    tie. ``id`` breaks the tie, and a higher id is the later row.
+    """
+    newest: dict = {}
+    for signal in sorted(signals, key=lambda s: (s.signal_date, s.id or 0)):
+        newest[signal.ticker] = signal
+    return newest
+
+
 def _recent_signals() -> list:
     """The signals the agent decides on: recent, and from the model in use.
 
@@ -1343,14 +1361,25 @@ def run_once() -> AgentRun:
     )
 
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
-    signal_by_ticker = {s.ticker: s.id for s in signals}
+    # **The newest signal per ticker, chosen explicitly.** These three used to
+    # be dict comprehensions over the signal list, and a dict comprehension
+    # keeps the *last* value it sees. The list arrives newest-first, so the
+    # oldest signal won every time a ticker had been analysed twice.
+    #
+    # On 2026-08-28 the agent bought SMCI and rested the exits from the
+    # 27th — a stop of 34.16 and a target of 45.21 — when that morning's
+    # analysis had said 34.04 and 49.51. The target was $4.30 out on a
+    # 260-share position, and nothing reported it, because both numbers are
+    # real levels from real signals.
+    latest = _newest_signal_per_ticker(signals)
+    signal_by_ticker = {t: s.id for t, s in latest.items()}
     # The stop the analysis named, per ticker. Already checked for
     # plausibility when the signal was recorded (see analysis._trade_plan_levels),
     # with an ATR-derived fallback, so a level here is one worth resting on.
-    stops = {s.ticker: s.stop_loss for s in signals if s.stop_loss}
+    stops = {t: s.stop_loss for t, s in latest.items() if s.stop_loss}
     # The level the analysis expects it to reach. Same provenance as the stop:
     # stated by the trader, discarded if implausible against the traded price.
-    targets = {s.ticker: s.price_target for s in signals if s.price_target}
+    targets = {t: s.price_target for t, s in latest.items() if s.price_target}
     for order in accepted:
         if order["side"] == "research":
             _commission_research(order, run)

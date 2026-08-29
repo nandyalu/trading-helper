@@ -216,6 +216,25 @@ class Rejection:
     why: str
 
 
+def entry_limit_price(price: float) -> float:
+    """What a buy at ``price`` will actually be priced at when it is sent.
+
+    The broker refuses a MARKET master on a bracket, so a buy goes out as a
+    marketable limit a little through the offer. That limit, not the quote, is
+    what the account is asked to pay.
+
+    Imported lazily to keep ``agent_book`` free of a broker dependency at
+    module scope; the fallback keeps this usable if the broker is unavailable,
+    and erring on the high side is the safe direction for an affordability
+    check.
+    """
+    try:
+        from backend.services.sandbox_broker import ENTRY_LIMIT_BUFFER_PCT as buffer
+    except Exception:  # noqa: BLE001 — a missing broker must not block a check
+        buffer = 0.5
+    return round(price * (1 + buffer / 100), 2)
+
+
 def validate(order: dict, book: Book, price: float | None) -> Rejection | None:
     """Whether an order the model asked for is *possible*. Not whether it is
     wise — allocation is the model's call (see backend/services/agent.py); this
@@ -250,9 +269,20 @@ def validate(order: dict, book: Book, price: float | None) -> Rejection | None:
 
     if price is None:
         return no("no price available, so the cost can't be checked against cash")
-    cost = quantity * price
+    # **Screened at the price the order will actually go out at, not the quote.**
+    # A buy leaves as a marketable limit set ENTRY_LIMIT_BUFFER_PCT through the
+    # offer, so checking the raw quote approves an order the account cannot pay
+    # for. On 2026-08-28 the agent bought 260 SMCI: 260 x $38.46 is $9,999.60
+    # against $9,999.70 of cash and passed, then filled at $38.49 for $10,007.40
+    # and left the book at minus $7.70.
+    #
+    # This refuses the order rather than shrinking it, like every other check
+    # here. Resizing would quietly turn the model's decision into a different
+    # one, and the record would then describe a strategy nobody chose.
+    cost = quantity * entry_limit_price(price)
     if cost > book.cash + _CASH_EPSILON:
-        return no(f"costs ${cost:,.2f} but only ${book.cash:,.2f} is uninvested")
+        return no(f"costs ${cost:,.2f} at the entry limit but only "
+                  f"${book.cash:,.2f} is uninvested")
     return None
 
 
