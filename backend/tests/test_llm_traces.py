@@ -190,3 +190,17 @@ def test_a_call_with_no_assistant_turn_is_dropped():
     call["output"] = []
 
     assert to_example(call) is None
+
+
+def test_the_graded_filter_uses_the_value_the_column_actually_holds(monkeypatch):
+    """`outcome` holds "pass", "fail" or NULL — never "correct". The filter was
+    written against "correct", so it matched nothing and produced an empty
+    training set that looked exactly like "nothing has graded yet"."""
+    import inspect
+
+    from backend.scripts import export_training_set
+
+    source = inspect.getsource(export_training_set.signals_by_trace)
+
+    assert '"pass"' in source
+    assert '"correct"' not in source.replace("# ", "")

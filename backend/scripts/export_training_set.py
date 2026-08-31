@@ -6,7 +6,7 @@ weeks later against what the market actually did. Training on the runs that
 were *right* is a different and better thing than training on every run.
 
     python -m backend.scripts.export_training_set --out train.jsonl
-    python -m backend.scripts.export_training_set --graded-correct --out train.jsonl
+    python -m backend.scripts.export_training_set --graded-pass --out train.jsonl
     python -m backend.scripts.export_training_set --model gemma4-e4b-qat-128k --out train.jsonl
 
 Output is one JSON object per line, in the messages format every fine-tuning
@@ -15,7 +15,7 @@ tool accepts:
     {"messages": [{"role": "system", ...}, {"role": "user", ...},
                   {"role": "assistant", "content": ..., "tool_calls": [...]}]}
 
-Filters stack. The strictest useful set is ``--graded-correct --model <teacher>``,
+Filters stack. The strictest useful set is ``--graded-pass --model <teacher>``,
 which is the distillation set described in docs/model-training.md: the runs a
 model that works produced, keeping only those the market later agreed with.
 """
@@ -35,7 +35,7 @@ from backend.services import llm_traces
 ROLES = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
 
 
-def signals_by_trace(model: str | None, graded_correct: bool) -> dict[str, Signal]:
+def signals_by_trace(model: str | None, graded_pass: bool) -> dict[str, Signal]:
     """The signals worth keeping, keyed by their trace id."""
     with Session(engine) as session:
         rows = session.exec(select(Signal).where(Signal.trace_id.is_not(None))).all()
@@ -43,7 +43,10 @@ def signals_by_trace(model: str | None, graded_correct: bool) -> dict[str, Signa
     for signal in rows:
         if model and signal.model != model:
             continue
-        if graded_correct and signal.outcome != "correct":
+        # "pass", not "correct". The column has only ever held pass/fail/NULL,
+        # and the wrong string here matched nothing while looking exactly like
+        # a dataset that had not graded yet.
+        if graded_pass and signal.outcome != "pass":
             continue
         keep[signal.trace_id] = signal
     return keep
@@ -93,8 +96,8 @@ def main() -> int:
                         help="trace directory (default: $LLM_TRACE_DIR)")
     parser.add_argument("--out", required=True, help="output .jsonl path")
     parser.add_argument("--model", help="keep only runs from this model")
-    parser.add_argument("--graded-correct", action="store_true",
-                        help="keep only runs whose signal the Scorecard graded correct")
+    parser.add_argument("--graded-pass", action="store_true",
+                        help="keep only runs whose signal the Scorecard graded a pass")
     args = parser.parse_args()
 
     if not args.traces:
@@ -104,7 +107,7 @@ def main() -> int:
         print(f"No such directory: {args.traces}", file=sys.stderr)
         return 2
 
-    keep = signals_by_trace(args.model, args.graded_correct)
+    keep = signals_by_trace(args.model, args.graded_pass)
     counts = collections.Counter()
     written = 0
 
@@ -134,7 +137,7 @@ def main() -> int:
         print()
         print("Nothing was written. Either no traces have been recorded yet "
               "(LLM_TRACE_DIR unset when the analyses ran), or no signal has "
-              "been graded correct yet — grading needs the trade horizon to pass.")
+              "been graded a pass yet — grading needs the trade horizon to pass.")
     return 0
 
 

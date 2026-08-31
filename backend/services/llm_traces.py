@@ -20,7 +20,7 @@ for a run must never lose the run.
 until the analysis finishes, so the id is generated first, written into the
 file name, and stored on the ``Signal`` afterwards. ``Signal.trace_id`` is what
 turns a pile of traces into a training set: it lets a later filter keep only
-the runs the Scorecard eventually graded correct, which is the advantage this
+the runs the Scorecard eventually graded a pass, which is the advantage this
 app has over any public dataset.
 
 **Off unless a directory is set.** ``LLM_TRACE_DIR`` enables it. A deployment

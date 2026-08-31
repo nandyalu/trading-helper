@@ -220,7 +220,7 @@ Call it **0.4 MB an analysis**, which at nine a day is roughly **3.6 MB a day an
 
 ```sh
 python -m backend.scripts.export_training_set --out train.jsonl
-python -m backend.scripts.export_training_set --graded-correct --model gemma4-e4b-qat-128k --out train.jsonl
+python -m backend.scripts.export_training_set --graded-pass --model gemma4-e4b-qat-128k --out train.jsonl
 ```
 
 The second command is the distillation set this page describes: the runs a working model produced, keeping only the ones the market later agreed with. Filters stack, and the script reports what it skipped and why, so an empty result explains itself rather than looking like a bug.
