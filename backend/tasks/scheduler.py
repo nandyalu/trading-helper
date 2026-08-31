@@ -278,10 +278,21 @@ async def _morning_sweep_job() -> None:
         # Posted once for the sweep, not once per ticker: this is an experiment
         # running in the background, and it should not crowd the day's signals.
         if recorded:
+            # Says *when* they grade, not only where to look. The message used
+            # to point at the scorecard's by-model table, which shows resolved
+            # signals only — so a reader who followed it on the day of a sweep
+            # found the new model missing and no explanation of why. Every
+            # signal carries its own evaluation date, so the answer is here.
+            due = sorted(s.evaluation_date for s in recorded if s.evaluation_date)
+            when = (
+                f" The first grades {due[0]:%b %-d} and the last {due[-1]:%b %-d}; "
+                "until then they are pending and the scorecard's by-model table, "
+                "which counts resolved signals only, will not list this model."
+                if due else ""
+            )
             await notify(
                 f"🔬 Comparison: {len(recorded)} of {len(tickers)} tickers analysed on "
-                f"`{model}`. They grade like any other signal — see the scorecard's "
-                f"by-model table."
+                f"`{model}`. They grade like any other signal.{when}"
             )
 
 
