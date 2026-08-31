@@ -192,15 +192,34 @@ def test_a_call_with_no_assistant_turn_is_dropped():
     assert to_example(call) is None
 
 
-def test_the_graded_filter_uses_the_value_the_column_actually_holds(monkeypatch):
+def test_the_graded_filter_keeps_a_pass_and_drops_a_fail(monkeypatch):
     """`outcome` holds "pass", "fail" or NULL — never "correct". The filter was
-    written against "correct", so it matched nothing and produced an empty
-    training set that looked exactly like "nothing has graded yet"."""
-    import inspect
+    written against "correct", so it matched nothing and returned an empty
+    training set, which is indistinguishable from the honest "nothing has
+    graded yet" that this script prints when it writes no rows.
 
+    This calls signals_by_trace rather than reading it. Two earlier attempts at
+    this test did not: one grepped the function body and passed on the comment
+    explaining the bug, and one reimplemented the filter and asserted on the
+    copy.
+    """
     from backend.scripts import export_training_set
 
-    source = inspect.getsource(export_training_set.signals_by_trace)
+    class Row:
+        def __init__(self, trace_id, outcome):
+            self.trace_id, self.outcome, self.model = trace_id, outcome, "m"
 
-    assert '"pass"' in source
-    assert '"correct"' not in source.replace("# ", "")
+    rows = [Row("t-pass", "pass"), Row("t-fail", "fail"), Row("t-ungraded", None)]
+
+    class FakeSession:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def exec(self, _query): return self
+        def all(self): return rows
+
+    monkeypatch.setattr(export_training_set, "Session", lambda _engine: FakeSession())
+
+    assert set(export_training_set.signals_by_trace(None, True)) == {"t-pass"}
+    assert set(export_training_set.signals_by_trace(None, False)) == {
+        "t-pass", "t-fail", "t-ungraded"
+    }
