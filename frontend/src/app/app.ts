@@ -58,8 +58,18 @@ export class App {
     { path: '/journey', label: 'Journey', icon: 'book' },
   ];
 
+  /** The pages that survive AGENT_ONLY, because they are about the agent.
+   *
+   * Matched against this list rather than the single path '/agent', which is
+   * what the filter used to test. That was right while the agent had one page
+   * and silently hid Events and Journey the day it got two more — on the very
+   * deployment they exist for. */
+  private static readonly AGENT_PATHS = ['/agent', '/events', '/journey'];
+
   protected readonly bookNav = computed(() =>
-    this.agentOnly() ? this.allBookNav.filter((item) => item.path === '/agent') : this.allBookNav,
+    this.agentOnly()
+      ? this.allBookNav.filter((item) => App.AGENT_PATHS.includes(item.path))
+      : this.allBookNav,
   );
 
   protected readonly recordNav: NavItem[] = [

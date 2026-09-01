@@ -28,6 +28,11 @@ Two copies of the compose config exist and are **not synced automatically**:
   Dockge UI's compose editor — never wholesale-replace its `environment:`
   block or you'll clobber the hardcoded secrets.
 
+The dashboards run on **8123 (trading-bot)** and **8122 (analyst-bot)**, not
+the 8080/8081 the templates default to — the deployed copies set their own, and
+this is the same drift the `environment:` block has. Verified 2026-09-01;
+`docker ps` is the authority.
+
 To inspect the live container: `docker logs trading-bot`, `docker exec
 trading-bot env`. Don't sudo-edit `/opt/stacks/...` directly — hand the user
 the exact diff/snippet to paste into the Dockge UI instead (their stated

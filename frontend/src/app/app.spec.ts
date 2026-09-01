@@ -61,6 +61,9 @@ describe('App', () => {
       '/alerts',
       '/portfolio',
       '/paper',
+      '/agent',
+      '/events',
+      '/journey',
       '/scorecard',
       '/digest',
       '/regime',
@@ -68,6 +71,26 @@ describe('App', () => {
     ]) {
       expect(links).toContain(path);
     }
+  });
+
+  it('keeps the agent pages on the analyst deployment', async () => {
+    // AGENT_ONLY hides the real portfolio and the paper book, which that
+    // deployment does not have. It used to hide Events and Journey too,
+    // because the filter matched the single path '/agent' — on the very
+    // deployment those two pages exist for.
+    settings.agentOnly = true;
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    const links = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.sidebar a[href]'),
+    ).map((a) => a.getAttribute('href'));
+
+    expect(links).toContain('/agent');
+    expect(links).toContain('/events');
+    expect(links).toContain('/journey');
+    expect(links).not.toContain('/portfolio');
+    expect(links).not.toContain('/paper');
   });
 
   it('opens and closes the drawer', async () => {
