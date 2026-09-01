@@ -24,7 +24,7 @@ def _row(symbol="AAA", price=50.0, volume=5_000_000, change=0.03, name="A Corp")
 
 @pytest.fixture
 def screened(monkeypatch):
-    def build(active=(), gainers=(), tracked=(), held=(), inactive=()):
+    def build(active=(), gainers=(), tracked=(), inactive=()):
         class FakeScreener:
             def __init__(self, _client):
                 pass
@@ -42,7 +42,6 @@ def screened(monkeypatch):
         monkeypatch.setitem(sys.modules, "webull.data.quotes.screener", module)
         monkeypatch.setattr(candidates.quotes, "get_api_client", lambda: object())
         monkeypatch.setattr(candidates.db, "get_watchlist", lambda: list(tracked))
-        monkeypatch.setattr(candidates.db, "get_all_transaction_tickers", lambda: list(held))
         monkeypatch.setattr(candidates.listings, "inactive_tickers", lambda: list(inactive))
         return candidates.fetch_candidates()
 
@@ -73,8 +72,10 @@ def test_already_tracked_names_are_not_proposed(screened):
     assert screened(active=[_row("ZBH", price=97.0)], tracked=["ZBH"]) == []
 
 
-def test_names_already_held_are_not_proposed(screened):
-    assert screened(active=[_row("GOOG", price=350.0)], held=["GOOG"]) == []
+def test_names_already_tracked_are_not_proposed(screened):
+    """One set covers held names too: the agent may not untrack a position it
+    still owns, so everything it holds is on the watchlist."""
+    assert screened(active=[_row("GOOG", price=350.0)], tracked=["GOOG"]) == []
 
 
 def test_delisted_names_are_not_proposed(screened):
@@ -125,7 +126,6 @@ def test_a_failing_screen_does_not_lose_the_other(screened, monkeypatch):
     monkeypatch.setitem(sys.modules, "webull.data.quotes.screener", module)
     monkeypatch.setattr(candidates.quotes, "get_api_client", lambda: object())
     monkeypatch.setattr(candidates.db, "get_watchlist", lambda: [])
-    monkeypatch.setattr(candidates.db, "get_all_transaction_tickers", lambda: [])
     monkeypatch.setattr(candidates.listings, "inactive_tickers", lambda: [])
 
     assert [c.ticker for c in candidates.fetch_candidates()] == ["OK"]

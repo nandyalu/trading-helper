@@ -18,16 +18,6 @@ class BotSetting(SQLModel, table=True):
     value: str
 
 
-class Transaction(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    ticker: str = Field(index=True)
-    side: str  # "buy" | "sell"
-    date: datetime.date
-    price: float
-    quantity: float
-    note: str | None = None  # provenance, e.g. "webull sync" — manual entries stay NULL
-
-
 class Signal(SQLModel, table=True):
     """One row per completed TradingAgents analysis. ``outcome`` stays NULL
     until ``evaluation_date`` has passed and a follow-up price is fetched.
@@ -265,19 +255,6 @@ class ResearchCharge(SQLModel, table=True):
     note: str | None = None
 
 
-class PaperSnapshot(SQLModel, table=True):
-    """End-of-day valuation of the paper book, recorded by the daily task —
-    the series behind the equity curve in /paper. One row per day (re-runs
-    the same day overwrite)."""
-
-    id: int | None = Field(default=None, primary_key=True)
-    snapshot_date: datetime.date = Field(unique=True, index=True)
-    open_value: float  # market value of open positions (priced tickers only)
-    open_cost: float  # cost basis of the same positions
-    realized_pnl: float  # cumulative, across all paper tickers
-    spy_close: float | None = None  # for the buy-and-hold comparison
-
-
 class Alert(SQLModel, table=True):
     """Sent-alert log for the intraday watchdog. ``dedupe_key`` is what stops
     a 15-minute loop from repeating itself: per ticker per day for
@@ -357,18 +334,3 @@ class TickerPrice(SQLModel, table=True):
     source: str | None = None  # "webull" | "yfinance", for debugging
 
 
-class PaperTransaction(SQLModel, table=True):
-    """Virtual buy/sell log for signals the user chose to follow (via ✅
-    reaction or /paperclose). Same shape as ``Transaction`` so the FIFO math
-    in backend/services/positions.py works on both; ``signal_id`` links an entry back to
-    the signal that produced it (and dedupes repeat reactions).
-    """
-
-    id: int | None = Field(default=None, primary_key=True)
-    ticker: str = Field(index=True)
-    side: str  # "buy" | "sell"
-    date: datetime.date
-    price: float
-    quantity: float
-    signal_id: int | None = Field(default=None, foreign_key="signal.id")
-    note: str | None = None

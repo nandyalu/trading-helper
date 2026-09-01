@@ -11,13 +11,10 @@ from backend.database.models import (
     Alert,
     BotSetting,
     DailyBar,
-    PaperSnapshot,
-    PaperTransaction,
     Signal,
     SignalReport,
     TickerPrice,
     TickerStatus,
-    Transaction,
     WatchlistTicker,
     ExitArmRequest,
     AgentRun,
@@ -47,12 +44,6 @@ def remove_from_watchlist(ticker: str, *, _session: Session = None) -> None:
         _session.commit()
 
 
-@read_session
-def get_all_transaction_tickers(*, _session: Session = None) -> list[str]:
-    """Every ticker with at least one recorded buy/sell, not just watchlisted ones."""
-    return list(_session.exec(select(Transaction.ticker).distinct()).all())
-
-
 # --- Settings -----------------------------------------------------------------
 
 
@@ -74,48 +65,6 @@ def set_setting(key: str, value: str, *, _session: Session = None) -> None:
 
 
 # --- Transactions (feed backend/services/positions.py's compute_position) -----------------
-
-
-@read_session
-def get_transactions(ticker: str, *, _session: Session = None) -> list[dict]:
-    rows = _session.exec(
-        select(Transaction).where(Transaction.ticker == ticker).order_by(Transaction.date)
-    ).all()
-    return [
-        {
-            "side": r.side,
-            "date": r.date.isoformat(),
-            "price": r.price,
-            "quantity": r.quantity,
-            "note": r.note,
-        }
-        for r in rows
-    ]
-
-
-@write_session
-def add_transaction(
-    ticker: str,
-    side: str,
-    price: float,
-    quantity: float,
-    date: datetime.date | None = None,
-    note: str | None = None,
-    *,
-    _session: Session = None,
-) -> None:
-    """``date`` defaults to today; pass an explicit date to backdate a transaction."""
-    _session.add(
-        Transaction(
-            ticker=ticker,
-            side=side,
-            date=date or datetime.date.today(),
-            price=price,
-            quantity=quantity,
-            note=note,
-        )
-    )
-    _session.commit()
 
 
 # --- Signals ------------------------------------------------------------------
@@ -249,59 +198,6 @@ def count_pending_signals(ticker: str | None = None, *, _session: Session = None
 # --- Paper transactions (virtual portfolio, same FIFO math as real ones) ------
 
 
-@write_session
-def add_paper_transaction(
-    ticker: str,
-    side: str,
-    price: float,
-    quantity: float,
-    signal_id: int | None = None,
-    note: str | None = None,
-    *,
-    _session: Session = None,
-) -> None:
-    _session.add(
-        PaperTransaction(
-            ticker=ticker,
-            side=side,
-            date=datetime.date.today(),
-            price=price,
-            quantity=quantity,
-            signal_id=signal_id,
-            note=note,
-        )
-    )
-    _session.commit()
-
-
-@read_session
-def get_paper_transactions(ticker: str, *, _session: Session = None) -> list[dict]:
-    rows = _session.exec(
-        select(PaperTransaction)
-        .where(PaperTransaction.ticker == ticker)
-        .order_by(PaperTransaction.date, PaperTransaction.id)
-    ).all()
-    return [
-        {"side": r.side, "date": r.date.isoformat(), "price": r.price, "quantity": r.quantity}
-        for r in rows
-    ]
-
-
-@read_session
-def get_all_paper_tickers(*, _session: Session = None) -> list[str]:
-    return list(_session.exec(select(PaperTransaction.ticker).distinct()).all())
-
-
-@read_session
-def has_paper_transaction_for_signal(signal_id: int, *, _session: Session = None) -> bool:
-    return (
-        _session.exec(
-            select(PaperTransaction).where(PaperTransaction.signal_id == signal_id)
-        ).first()
-        is not None
-    )
-
-
 # --- Signal reports (full analyst text, feeds /ask) ---------------------------
 
 
@@ -321,46 +217,6 @@ def get_signal_reports(signal_id: int, *, _session: Session = None) -> dict[str,
 
 
 # --- Paper snapshots (equity curve) --------------------------------------------
-
-
-@write_session
-def record_paper_snapshot(
-    snapshot_date: datetime.date,
-    open_value: float,
-    open_cost: float,
-    realized_pnl: float,
-    spy_close: float | None,
-    *,
-    _session: Session = None,
-) -> None:
-    """Upsert on date — a same-day re-run (bot restart) refreshes the row."""
-    row = _session.exec(
-        select(PaperSnapshot).where(PaperSnapshot.snapshot_date == snapshot_date)
-    ).first()
-    if row is None:
-        row = PaperSnapshot(
-            snapshot_date=snapshot_date,
-            open_value=open_value,
-            open_cost=open_cost,
-            realized_pnl=realized_pnl,
-            spy_close=spy_close,
-        )
-    else:
-        row.open_value = open_value
-        row.open_cost = open_cost
-        row.realized_pnl = realized_pnl
-        row.spy_close = spy_close
-    _session.add(row)
-    _session.commit()
-
-
-@read_session
-def get_paper_snapshots(limit: int = 90, *, _session: Session = None) -> list[PaperSnapshot]:
-    """Most recent ``limit`` snapshots, returned oldest-first for charting."""
-    rows = _session.exec(
-        select(PaperSnapshot).order_by(PaperSnapshot.snapshot_date.desc()).limit(limit)
-    ).all()
-    return list(reversed(rows))
 
 
 # --- Ticker status (delisted / halted symbols, see services/listings.py) -----

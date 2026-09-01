@@ -132,12 +132,14 @@ def fetch_candidates() -> list[Candidate]:
             if candidate and candidate.ticker not in found:
                 found[candidate.ticker] = candidate
 
+    # The watchlist covers every holding too: the agent may not untrack a
+    # position it still owns, and Python refuses the attempt. So one set is
+    # enough here — a held name is a tracked name.
     tracked = {t.upper() for t in db.get_watchlist()}
-    held = {t.upper() for t in db.get_all_transaction_tickers()}
     inactive = {t.upper() for t in listings.inactive_tickers()}
     fresh = [
         c for c in found.values()
-        if c.ticker not in tracked and c.ticker not in held and c.ticker not in inactive
+        if c.ticker not in tracked and c.ticker not in inactive
     ]
     fresh.sort(key=lambda c: c.volume, reverse=True)
     return fresh[:MAX_PROPOSED]

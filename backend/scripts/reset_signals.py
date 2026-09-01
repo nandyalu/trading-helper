@@ -35,15 +35,16 @@ from sqlmodel import Session, delete, func, select
 from backend.database.engine import write_session
 from backend.database.models import (
     Alert,
-    PaperSnapshot,
-    PaperTransaction,
     Signal,
     SignalReport,
 )
 
 # Ordered: children before parents. Do not reorder — foreign keys are on.
-_WIPE_ORDER = (PaperTransaction, SignalReport, Signal, PaperSnapshot)
-_KEEP = ("transaction", "watchlistticker", "botsetting", "tickerprice")
+_WIPE_ORDER = (SignalReport, Signal)
+# The agent's own book is NOT wiped. This script exists to start the signal
+# record fresh after a change of horizon; deleting the trades made under the old
+# signals would leave the book claiming cash it never had.
+_KEEP = ("agenttrade", "agentrun", "researchcharge", "watchlistticker", "botsetting", "tickerprice")
 
 
 @write_session
