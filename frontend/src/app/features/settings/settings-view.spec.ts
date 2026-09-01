@@ -9,11 +9,6 @@ const SERVER_SETTINGS: Settings = {
   horizon: 'position',
   llm_model: 'gemma4-e2b-96k',
   llm_model_choices: ['gemma4-e2b-96k', 'adityakale/kotakneo:latest'],
-  paper_notional: 1000,
-  risk_equity: 2800,
-  risk_pct: 1,
-  max_position_pct: 20,
-  max_positions: 5,
   alert_move_pct: 5,
   alert_stop_pct: 10,
   alert_volume_mult: 2,
@@ -23,7 +18,6 @@ const SERVER_SETTINGS: Settings = {
   agent_budget: 1000,
   agent_min_win_probability: 0,
   agent_min_risk_reward: 0,
-  agent_only: false,
 };
 
 /** Stands in for the HTTP-backed service: records what was sent, and lets a
@@ -94,10 +88,6 @@ describe('SettingsView', () => {
 
     expect(service.patches).toHaveLength(1);
     const patch = service.patches[0];
-    // The caps are the point of the change — a save that silently dropped
-    // them would reset the account's protection to the server default.
-    expect(patch.max_position_pct).toBe(20);
-    expect(patch.max_positions).toBe(5);
     expect(patch.horizon).toBe('position');
   });
 
@@ -145,14 +135,6 @@ describe('SettingsView', () => {
       'input[type="text"]',
     ) as HTMLInputElement;
     expect(input.value).toBe('gemma4-e2b-96k');
-  });
-
-  it('renders inputs for both sizing caps', async () => {
-    const fixture = TestBed.createComponent(SettingsView);
-    await fixture.whenStable();
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('Most of equity in one position');
-    expect(text).toContain('Most positions open at once');
   });
 
   it('keeps the conviction floor off unless the server says otherwise', async () => {

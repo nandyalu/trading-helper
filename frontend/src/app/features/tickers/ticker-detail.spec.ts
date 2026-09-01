@@ -115,7 +115,7 @@ const EVENTS: TickerEvents = {
       created_at: '2026-08-03T14:00:00Z',
     },
   ],
-  trades: [{ book: 'real', side: 'buy', date: '2026-07-08', price: 155, quantity: 10 }],
+  trades: [{ side: 'buy', date: '2026-07-08', price: 155, quantity: 10 }],
   lots: [],
 };
 
@@ -123,8 +123,6 @@ const DETAIL: TickerDetail = {
   ticker: 'NVDA',
   current_price: 180,
   price_updated_at: '2026-08-06T10:00:00Z',
-  real_position: null,
-  paper_position: null,
   latest_signal: null,
   agent_position: null,
   inactive: false,
@@ -284,7 +282,6 @@ describe('TickerDetailPage', () => {
       ...EVENTS,
       lots: [
         {
-          book: 'agent',
           quantity: 3,
           entry: 98.41,
           entry_at: '2026-08-13',
@@ -296,7 +293,6 @@ describe('TickerDetailPage', () => {
           signal_id: 37,
         },
         {
-          book: 'real',
           quantity: 10,
           entry: 155,
           entry_at: '2026-07-08',
@@ -313,8 +309,7 @@ describe('TickerDetailPage', () => {
 
     const text = element.textContent ?? '';
     expect(text).toContain('Positions taken');
-    expect(text).toContain('Auto trader');
-    expect(text).toContain('Your book');
+    expect(text).toContain('101.50');
     // An open lot must not show a profit — an unrealized figure in that column
     // would read as booked.
     expect(text).toContain('open');

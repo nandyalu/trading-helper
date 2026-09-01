@@ -1,11 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { Alert, PortfolioPosition, Signal, TickerSummary } from '../../core/models/api.models';
+import { Alert, AgentHolding, Signal, TickerSummary } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 import { AlertsService } from '../../core/services/alerts.service';
-import { PaperService } from '../../core/services/paper.service';
-import { PortfolioService } from '../../core/services/portfolio.service';
 import { RegimeService } from '../../core/services/regime.service';
 import { ScorecardService } from '../../core/services/scorecard.service';
 import { SignalsService } from '../../core/services/signals.service';
@@ -23,10 +21,10 @@ const ATTENTION_WINDOW_DAYS = 3;
 /**
  * The landing page: what is going on right now, and what needs a decision.
  *
- * Everything here already existed on some other page — positions on
- * /portfolio, alerts on /alerts, signals on /signals. What was missing was a
- * view that puts them together and sorts by urgency, so opening the app
- * answers "is there anything I should do?" rather than "here is a table".
+ * Everything here already existed on some other page — holdings on /agent,
+ * alerts on /alerts, signals on /signals. What was missing was a view that
+ * puts them together and sorts by urgency, so opening the app answers "what is
+ * the agent doing, and is anything wrong?" rather than "here is a table".
  */
 @Component({
   selector: 'app-overview',
@@ -36,16 +34,13 @@ const ATTENTION_WINDOW_DAYS = 3;
 export class Overview {
   private readonly agentService = inject(AgentService);
   private readonly alertsService = inject(AlertsService);
-  private readonly portfolioService = inject(PortfolioService);
-  private readonly paperService = inject(PaperService);
   private readonly regimeService = inject(RegimeService);
   private readonly scorecardService = inject(ScorecardService);
   private readonly signalsService = inject(SignalsService);
   private readonly tickersService = inject(TickersService);
 
   protected readonly regime = this.regimeService.regime;
-  protected readonly portfolio = this.portfolioService.portfolio;
-  protected readonly paper = this.paperService.portfolio;
+  protected readonly book = this.agentService.book;
   protected readonly scorecard = this.scorecardService.scorecard;
   protected readonly alerts = this.alertsService.alerts;
 
@@ -71,22 +66,19 @@ export class Overview {
     );
   });
 
-  /** Held positions, worst performer first — a losing position is the one
-   * that needs a decision, so it goes at the top. */
-  protected readonly positions = computed<PortfolioPosition[]>(() =>
-    [...(this.portfolio()?.positions ?? [])].sort(
-      (a, b) => (a.unrealized_pct ?? 0) - (b.unrealized_pct ?? 0),
+  /** What the agent holds, worst performer first — a losing position is the
+   * one worth looking at, so it goes at the top. */
+  protected readonly positions = computed<AgentHolding[]>(() =>
+    [...(this.book()?.holdings ?? [])].sort(
+      (a, b) => this.unrealizedPct(a) - this.unrealizedPct(b),
     ),
   );
 
-  /** Actionable signals from the last week that you are not already in: the
-   * bot said buy, and you have no position. */
+  /** Buy-ish signals from the last week the agent has not acted on. Not a
+   * to-do list — nobody here places a trade. It says what the analyses found
+   * and the agent left alone, which is half of reading how it behaves. */
   protected readonly newOpportunities = computed(() => {
-    const held = new Set(
-      (this.portfolio()?.positions ?? [])
-        .map((p) => p.ticker)
-        .concat((this.paper()?.positions ?? []).map((p) => p.ticker)),
-    );
+    const held = new Set((this.book()?.holdings ?? []).map((h) => h.ticker));
     const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
     return this.signals().filter(
       (s) => BUYISH.has(s.decision) && !held.has(s.ticker) && s.signal_date >= cutoff,
@@ -95,7 +87,7 @@ export class Overview {
 
   /** Held tickers whose newest signal says get out. */
   protected readonly exitSignals = computed(() => {
-    const held = new Set((this.portfolio()?.positions ?? []).map((p) => p.ticker));
+    const held = new Set((this.book()?.holdings ?? []).map((h) => h.ticker));
     const seen = new Set<string>();
     return this.signals().filter((s) => {
       if (!held.has(s.ticker) || seen.has(s.ticker)) return false;
@@ -124,11 +116,9 @@ export class Overview {
     try {
       await Promise.all([
         this.regimeService.load(),
-        this.portfolioService.load(),
-        this.paperService.load(),
+        this.agentService.load(),
         this.scorecardService.load(),
         this.alertsService.load(),
-        this.agentService.loadUnprotected(),
         this.tickersService.load(),
         this.signalsService
           .load({ limit: 40 })
@@ -144,6 +134,14 @@ export class Overview {
     if (days === 0) return 'today';
     if (days === 1) return 'yesterday';
     return `${days}d ago`;
+  }
+
+  /** Percent gain or loss on a holding. AgentHolding carries the dollar
+   * figure and the cost basis but not the ratio, and a zero basis would divide
+   * by nothing. */
+  protected unrealizedPct(holding: AgentHolding): number {
+    if (!holding.cost_basis || holding.unrealized_pnl === null) return 0;
+    return (holding.unrealized_pnl / holding.cost_basis) * 100;
   }
 
   protected signed(value: number, digits = 1): string {

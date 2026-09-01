@@ -230,7 +230,7 @@
       }
 
       <div class="nav-group-label">Books</div>
-      @for (item of bookNav(); track item.path) {
+      @for (item of bookNav; track item.path) {
         <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
           <svg class="nav-icon" aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
           {{ item.label }}

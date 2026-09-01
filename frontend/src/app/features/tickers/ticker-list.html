@@ -2,39 +2,13 @@
   <header class="page-head">
     <div>
       <h1>Tickers</h1>
-      <p class="subtitle">The watchlist. The bot analyzes every ticker here on the daily sweep.</p>
-    </div>
-    <div class="row">
-      <form class="inline-form" (submit)="$event.preventDefault(); addTicker()">
-        <input
-          type="text"
-          aria-label="Ticker to track"
-          placeholder="Add ticker, e.g. NVDA"
-          autocapitalize="characters"
-          autocomplete="off"
-          spellcheck="false"
-          [value]="newTicker()"
-          (input)="onTickerInput($event)"
-        />
-        <button class="btn btn-primary" type="submit">Track</button>
-      </form>
-      <button
-        class="btn"
-        type="button"
-        (click)="analyzeAll()"
-        [disabled]="analyzingAll() || tickers().length === 0"
-      >
-        {{ analyzingAll() ? 'Queuing…' : 'Analyze all' }}
-      </button>
+      <p class="subtitle">
+        What the agent watches. Every name here is analysed and charged every morning, and the agent
+        chose all of them — it commissions research to add one and untracks to drop one. Nothing on
+        this page adds or removes a ticker.
+      </p>
     </div>
   </header>
-
-  @if (message()) {
-    <p class="notice notice-info">{{ message() }}</p>
-  }
-  @if (error()) {
-    <p class="notice notice-error">{{ error() }}</p>
-  }
 
   <section class="card">
     @if (loading()) {
@@ -47,7 +21,7 @@
       <div class="empty">
         <span class="empty-icon" aria-hidden="true">📈</span>
         <strong>The watchlist is empty</strong>
-        <span>Add a ticker above to have the bot follow it.</span>
+        <span>A ticker appears here the morning the agent pays to research one.</span>
       </div>
     } @else {
       <div class="table-wrap">
@@ -57,7 +31,6 @@
               <th>Ticker</th>
               <th class="num">Price</th>
               <th>Latest signal</th>
-              <th class="actions-cell"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -83,15 +56,6 @@
                     <span class="muted">no signals</span>
                   }
                 </td>
-                <td class="actions-cell" data-label="">
-                  <button
-                    class="btn btn-sm btn-danger"
-                    type="button"
-                    (click)="removeTicker(t.ticker)"
-                  >
-                    Remove
-                  </button>
-                </td>
               </tr>
             }
           </tbody>
@@ -103,12 +67,12 @@
   @if (candidates().length) {
     <section class="card">
       <div class="card-head">
-        <h2>Worth considering</h2>
+        <h2>What the agent may commission</h2>
         <p class="hint">
-          Liquid names from the broker's screener that you don't already follow — over $5, over 1M
-          shares traded, and not up or down more than 30% today, which keeps the day's pumps out.
-          These are candidates for analysis, not recommendations: following one adds about seven
-          minutes to every sweep from then on, so add them one at a time.
+          The same menu the agent is shown in its prompt: liquid names from the screener it does not
+          already track — over $5, over 1M shares traded, and not up or down more than 30% today,
+          which keeps the day's pumps out. It pays for every one it picks, and picking is its
+          decision alone.
         </p>
       </div>
       <div class="table-wrap">
@@ -120,7 +84,6 @@
               <th class="num">Volume</th>
               <th class="num">Today</th>
               <th>Why it showed up</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -147,16 +110,6 @@
                   }
                 </td>
                 <td data-label="Why it showed up">{{ c.source }}</td>
-                <td class="actions-cell" data-label="">
-                  <button
-                    class="btn btn-sm"
-                    type="button"
-                    (click)="follow(c.ticker)"
-                    [disabled]="following() === c.ticker"
-                  >
-                    {{ following() === c.ticker ? 'Following…' : 'Follow' }}
-                  </button>
-                </td>
               </tr>
             }
           </tbody>

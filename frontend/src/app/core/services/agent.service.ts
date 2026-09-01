@@ -6,7 +6,6 @@ import {
   AgentBook,
   AgentComparison,
   AgentEquityPoint,
-  AgentRun,
   AgentTrade,
   AgentTradeRow,
   ActionResult,
@@ -83,11 +82,5 @@ export class AgentService {
     this._history.set(history);
     this._curve.set(curve);
     this._unprotected.set(unprotected);
-  }
-
-  async runNow(): Promise<AgentRun> {
-    const run = await firstValueFrom(this.http.post<AgentRun>('/api/agent/run', {}));
-    await this.load();
-    return run;
   }
 }

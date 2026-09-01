@@ -25,9 +25,6 @@ export class AgentView {
     this.agentService.curve().map((p) => ({ time: p.date, value: p.equity })),
   );
 
-  protected readonly running = signal(false);
-  protected readonly message = signal<string | null>(null);
-
   /** Orders still waiting on the open. Shown apart from the rest because they
    * have moved no money yet — a pending buy has not spent its cash. */
   protected readonly pending = computed(() =>
@@ -73,35 +70,6 @@ export class AgentView {
 
   constructor() {
     void this.agentService.load();
-  }
-
-  protected async runNow(): Promise<void> {
-    this.running.set(true);
-    this.message.set(null);
-    try {
-      const run = await this.agentService.runNow();
-      const parts: string[] = [];
-      if (run.placed.length) parts.push(`${run.placed.length} order(s) placed`);
-      // A run that only moved exits is not an idle run: the risk on an open
-      // position changed, which is the thing the exits are for.
-      if (run.adjusted?.length) parts.push(run.adjusted.join('; '));
-      if (run.rejected.length) parts.push(`${run.rejected.length} rejected`);
-      // Failures were previously left out entirely, so an order the broker
-      // refused rendered as "No trades" — the agent looked idle when it had in
-      // fact decided and been turned down.
-      if (run.failed.length) {
-        const why = run.failed[0].why ?? 'the broker refused it';
-        parts.push(`${run.failed.length} failed at the broker (${why})`);
-      }
-      this.message.set(
-        parts.length ? `${parts.join(', ')}. ${run.reasoning}` : `No trades. ${run.reasoning}`,
-      );
-    } catch (err) {
-      const detail = (err as { error?: { detail?: string } })?.error?.detail;
-      this.message.set(detail ?? "Couldn't run the agent.");
-    } finally {
-      this.running.set(false);
-    }
   }
 
   /** Signed percentage against the budget, so the row reads the same way as

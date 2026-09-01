@@ -60,61 +60,6 @@ export interface SignalDetail extends Signal {
   agent_trades: AgentTradeRow[];
 }
 
-export interface PaperPosition {
-  ticker: string;
-  quantity: number;
-  avg_cost: number;
-  cost_basis: number;
-  price: number | null;
-  value: number | null;
-  unrealized: number | null;
-  unrealized_pct: number | null;
-}
-
-export interface PaperPortfolio {
-  positions: PaperPosition[];
-  total_value: number;
-  total_cost: number;
-  total_unrealized: number;
-  total_realized: number;
-  missing_prices: string[];
-}
-
-export interface PaperSnapshot {
-  snapshot_date: string;
-  open_value: number;
-  open_cost: number;
-  realized_pnl: number;
-  spy_close: number | null;
-}
-
-export interface PortfolioPosition {
-  ticker: string;
-  quantity: number;
-  avg_cost: number;
-  weight_pct: number | null;
-  price: number | null;
-  value: number | null;
-  unrealized: number | null;
-  unrealized_pct: number | null;
-}
-
-export interface BenchmarkComparison {
-  book_return_pct: number;
-  benchmark_return_pct: number;
-  alpha_pct: number;
-}
-
-export interface Portfolio {
-  positions: PortfolioPosition[];
-  total_value: number;
-  total_cost: number;
-  total_realized: number;
-  missing_prices: string[];
-  comparison: BenchmarkComparison | null;
-  concentration: string[];
-}
-
 export interface DecisionStats {
   total: number;
   passes: number;
@@ -194,10 +139,9 @@ export interface AgentPosition {
   arm_queued: boolean;
 }
 
-/** One lot's life in one book, matched FIFO. `pnl` is null while it is open —
- * its result is not decided yet. */
+/** One lot's life in the agent's book, matched FIFO. `pnl` is null while it is
+ * open — its result is not decided yet. */
 export interface Lot {
-  book: string; // "real" | "paper" | "agent"
   quantity: number;
   entry: number;
   entry_at: string;
@@ -213,22 +157,10 @@ export interface TickerDetail {
   ticker: string;
   current_price: number | null;
   price_updated_at: string | null;
-  real_position: PortfolioPosition | null;
-  paper_position: PaperPosition | null;
   latest_signal: Signal | null;
   agent_position: AgentPosition | null;
   inactive: boolean;
   inactive_reason: string | null;
-}
-
-export interface AnalyzeQueued {
-  status: string;
-  ticker: string;
-}
-
-export interface AnalyzeAllQueued {
-  status: string;
-  count: number;
 }
 
 export interface ActionResult {
@@ -243,8 +175,8 @@ export interface Alert {
   created_at: string;
 }
 
+/** One filled buy or sell by the agent, for the ticker timeline. */
 export interface Trade {
-  book: 'real' | 'paper';
   side: 'buy' | 'sell';
   date: string;
   price: number;
@@ -269,8 +201,7 @@ export interface Digest {
   alerts: Alert[];
   win_rate_30d: [number, number];
   win_rate_all: [number, number];
-  real_book_line: string | null;
-  paper_lines: string[];
+  book_lines: string[];
 }
 
 export interface Regime {
@@ -291,11 +222,6 @@ export interface Settings {
    * the settings page then falls back to a text field. Read-only: it isn't
    * part of SettingsPatch. */
   llm_model_choices: string[];
-  paper_notional: number;
-  risk_equity: number | null;
-  risk_pct: number;
-  max_position_pct: number;
-  max_positions: number;
   alert_move_pct: number;
   alert_stop_pct: number;
   alert_volume_mult: number;
@@ -306,23 +232,9 @@ export interface Settings {
   /** The conviction floor. Zero means off, which is the default. */
   agent_min_win_probability: number;
   agent_min_risk_reward: number;
-  /** True when this deployment runs the autonomous-analyst experiment and has
-   * no real book or local paper book. Presentation only — it decides nothing
-   * about whether orders are simulated. */
-  agent_only: boolean;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;
-
-export interface TransactionRequest {
-  ticker: string;
-  price: number;
-  quantity: number;
-}
-
-export interface AskRequest {
-  question: string;
-}
 
 export interface AgentHolding {
   ticker: string;
@@ -393,16 +305,6 @@ export interface AgentOrder {
   quantity: number;
   reason: string | null;
   why: string | null;
-}
-
-export interface AgentRun {
-  /** Exits moved to new levels — no position opened or closed, but the risk on
-   * an open one changed. */
-  adjusted?: string[];
-  reasoning: string;
-  placed: AgentOrder[];
-  rejected: AgentOrder[];
-  failed: AgentOrder[];
 }
 
 export interface Strategy {

@@ -73,27 +73,12 @@
     }
 
     <div class="stat-grid">
-      @if (portfolio(); as p) {
+      @if (book(); as b) {
         <div class="stat">
-          <span class="stat-label">Real book</span>
-          <span class="stat-value">${{ p.total_value.toFixed(0) }}</span>
-          @if (p.comparison; as c) {
-            <span class="stat-note" [class.pass]="c.alpha_pct >= 0" [class.fail]="c.alpha_pct < 0">
-              {{ signed(c.alpha_pct) }}% vs SPY
-            </span>
-          }
-        </div>
-      }
-      @if (paper(); as p) {
-        <div class="stat">
-          <span class="stat-label">Paper book</span>
-          <span class="stat-value">${{ p.total_value.toFixed(0) }}</span>
-          <span
-            class="stat-note"
-            [class.pass]="p.total_unrealized >= 0"
-            [class.fail]="p.total_unrealized < 0"
-          >
-            {{ signed(p.total_unrealized, 0) }} unrealized
+          <span class="stat-label">The agent's account</span>
+          <span class="stat-value">${{ b.equity.toFixed(0) }}</span>
+          <span class="stat-note" [class.pass]="b.return_pct >= 0" [class.fail]="b.return_pct < 0">
+            {{ signed(b.return_pct) }}% on ${{ b.budget.toFixed(0) }}
           </span>
         </div>
       }
@@ -128,14 +113,14 @@
       <div class="stack">
         <section class="card">
           <div class="card-head">
-            <h2>Your positions</h2>
-            <a class="btn btn-ghost btn-sm" routerLink="/portfolio">Open book</a>
+            <h2>What the agent holds</h2>
+            <a class="btn btn-ghost btn-sm" routerLink="/agent">Open book</a>
           </div>
           @if (positions().length === 0) {
             <div class="empty">
               <span class="empty-icon" aria-hidden="true">📁</span>
               <strong>Nothing held</strong>
-              <span>Positions appear here once you record a buy or sync Webull.</span>
+              <span>A position appears here the morning the agent buys one.</span>
             </div>
           } @else {
             <div class="table-wrap">
@@ -145,7 +130,7 @@
                     <th>Ticker</th>
                     <th class="num">Value</th>
                     <th class="num">P&amp;L</th>
-                    <th class="num">Weight</th>
+                    <th class="num">Shares</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -155,19 +140,17 @@
                         <a [routerLink]="['/tickers', p.ticker]">{{ p.ticker }}</a>
                       </td>
                       <td class="num" data-label="Value">
-                        {{ p.value !== null ? '$' + p.value.toFixed(0) : '—' }}
+                        {{ p.market_value !== null ? '$' + p.market_value.toFixed(0) : '—' }}
                       </td>
                       <td
                         class="num"
                         data-label="P&L"
-                        [class.pass]="(p.unrealized_pct ?? 0) >= 0"
-                        [class.fail]="(p.unrealized_pct ?? 0) < 0"
+                        [class.pass]="unrealizedPct(p) >= 0"
+                        [class.fail]="unrealizedPct(p) < 0"
                       >
-                        {{ p.unrealized_pct !== null ? signed(p.unrealized_pct) + '%' : '—' }}
+                        {{ p.unrealized_pnl !== null ? signed(unrealizedPct(p)) + '%' : '—' }}
                       </td>
-                      <td class="num" data-label="Weight">
-                        {{ p.weight_pct !== null ? p.weight_pct.toFixed(0) + '%' : '—' }}
-                      </td>
+                      <td class="num" data-label="Shares">{{ p.quantity }}</td>
                     </tr>
                   }
                 </tbody>
@@ -175,25 +158,22 @@
             </div>
           }
         </section>
-
-        @if (portfolio()?.concentration?.length) {
-          @for (warning of portfolio()!.concentration; track warning) {
-            <p class="notice notice-warn"><span aria-hidden="true">⚠️</span> {{ warning }}</p>
-          }
-        }
       </div>
 
       <div class="stack">
         <section class="card">
           <div class="card-head">
             <h2>New opportunities</h2>
-            <p class="hint">Buy signals from the last week on tickers you do not already hold.</p>
+            <p class="hint">
+              Buy signals from the last week the agent has not acted on. Nobody here places a trade
+              — this is what the analyses found and the agent left alone.
+            </p>
           </div>
           @if (newOpportunities().length === 0) {
             <div class="empty">
               <span class="empty-icon" aria-hidden="true">🔍</span>
               <strong>None right now</strong>
-              <span>A new buy signal on an unheld ticker shows up here.</span>
+              <span>A buy signal on a ticker the agent does not hold shows up here.</span>
             </div>
           } @else {
             @for (s of newOpportunities(); track s.id) {

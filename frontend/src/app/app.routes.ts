@@ -27,10 +27,6 @@ export const routes: Routes = [
     loadComponent: () => import('./features/alerts/alerts-view').then((m) => m.AlertsView),
   },
   {
-    path: 'paper',
-    loadComponent: () => import('./features/paper/paper-dashboard').then((m) => m.PaperDashboard),
-  },
-  {
     path: 'agent',
     loadComponent: () => import('./features/agent/agent-view').then((m) => m.AgentView),
   },
@@ -41,11 +37,6 @@ export const routes: Routes = [
   {
     path: 'journey',
     loadComponent: () => import('./features/journey/journey-view').then((m) => m.JourneyView),
-  },
-  {
-    path: 'portfolio',
-    loadComponent: () =>
-      import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),
   },
   {
     path: 'scorecard',

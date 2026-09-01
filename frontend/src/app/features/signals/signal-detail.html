@@ -8,14 +8,7 @@
         <app-decision-badge [decision]="s.decision" />
         <a class="chip" [routerLink]="['/tickers', s.ticker]">Ticker page</a>
       </div>
-      <button class="btn btn-primary" type="button" (click)="follow()" [disabled]="following()">
-        {{ following() ? 'Following…' : 'Follow as paper trade' }}
-      </button>
     </header>
-
-    @if (message()) {
-      <p class="notice notice-info">{{ message() }}</p>
-    }
 
     <section class="card">
       <div class="card-head">

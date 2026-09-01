@@ -29,8 +29,4 @@ export class SignalsService {
   getDetail(id: number): Promise<SignalDetail> {
     return firstValueFrom(this.http.get<SignalDetail>(`/api/signals/${id}`));
   }
-
-  follow(id: number): Promise<ActionResult> {
-    return firstValueFrom(this.http.post<ActionResult>(`/api/signals/${id}/follow`, {}));
-  }
 }

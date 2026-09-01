@@ -30,17 +30,14 @@
       </div>
     </div>
 
-    @if (d.real_book_line || d.paper_lines.length > 0) {
+    @if (d.book_lines.length > 0) {
       <section class="card">
         <div class="card-head">
-          <h2>Books</h2>
+          <h2>What the agent holds</h2>
         </div>
         <div class="card-body stack">
-          @if (d.real_book_line) {
-            <p>{{ d.real_book_line }}</p>
-          }
-          @for (line of d.paper_lines; track line) {
-            <p class="muted">{{ line }}</p>
+          @for (line of d.book_lines; track line) {
+            <p>{{ line }}</p>
           }
         </div>
       </section>

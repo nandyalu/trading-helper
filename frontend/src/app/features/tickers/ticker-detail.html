@@ -14,34 +14,17 @@
         <span class="price-now">
           {{ d.current_price !== null ? '$' + d.current_price.toFixed(2) : '—' }}
         </span>
-        <button
-          class="link-btn"
-          type="button"
-          (click)="refreshPrice()"
-          [disabled]="refreshingPrice()"
-        >
-          {{ refreshingPrice() ? 'fetching…' : priceAge(d.price_updated_at) + ' · refresh' }}
-        </button>
-      </div>
-      <div class="actions">
-        <button class="btn btn-primary" type="button" (click)="analyze()" [disabled]="analyzing()">
-          {{ analyzing() ? 'Queuing…' : 'Run analysis' }}
-        </button>
-        <button class="btn btn-danger" type="button" (click)="untrack()">Untrack</button>
+        <span class="muted">{{ priceAge(d.price_updated_at) }}</span>
       </div>
     </header>
 
     @if (d.inactive) {
       <p class="notice notice-warn">
         <span aria-hidden="true">⚠️</span> No market data for {{ ticker() }} —
-        {{ d.inactive_reason }}. Price fetches, alerts, and scheduled analysis are all skipped. Your
-        position still counts toward the book, but it is left out of the SPY comparison. The bot
-        rechecks once a day in case trading resumes.
+        {{ d.inactive_reason }}. Price fetches, alerts, and the morning analysis are all skipped. A
+        position the agent holds still counts toward its book, but it is left out of the SPY
+        comparison. The app rechecks once a day in case trading resumes.
       </p>
-    }
-
-    @if (message()) {
-      <p class="notice notice-info">{{ message() }}</p>
     }
 
     @if (agentPosition()?.unprotected) {
@@ -65,39 +48,9 @@
     <!-- The exit plan, above the chart: these are the numbers that decide what
          to do next, and burying them under the price history hides them. -->
     <div class="stat-grid">
-      @if (d.real_position; as p) {
-        <div class="stat">
-          <span class="stat-label">Your position</span>
-          <span class="stat-value">{{ p.quantity }} @ ${{ p.avg_cost.toFixed(2) }}</span>
-          @if (p.unrealized_pct !== null) {
-            <span
-              class="stat-note"
-              [class.pass]="p.unrealized_pct >= 0"
-              [class.fail]="p.unrealized_pct < 0"
-            >
-              {{ signed(p.unrealized_pct) }}%
-            </span>
-          }
-        </div>
-      }
-      @if (d.paper_position; as p) {
-        <div class="stat">
-          <span class="stat-label">Paper position</span>
-          <span class="stat-value">{{ p.quantity }} @ ${{ p.avg_cost.toFixed(2) }}</span>
-          @if (p.unrealized_pct !== null) {
-            <span
-              class="stat-note"
-              [class.pass]="p.unrealized_pct >= 0"
-              [class.fail]="p.unrealized_pct < 0"
-            >
-              {{ signed(p.unrealized_pct) }}%
-            </span>
-          }
-        </div>
-      }
       @if (agentPosition(); as a) {
         <div class="stat">
-          <span class="stat-label">Auto trader</span>
+          <span class="stat-label">Position</span>
           <span class="stat-value">{{ a.quantity }} @ ${{ a.avg_cost.toFixed(2) }}</span>
           @if (a.unrealized_pct !== null) {
             <span
@@ -201,7 +154,6 @@
           <table class="data-table data-table--stack">
             <thead>
               <tr>
-                <th>Book</th>
                 <th class="num">Shares</th>
                 <th class="num">Entry</th>
                 <th>Bought</th>
@@ -214,7 +166,6 @@
             <tbody>
               @for (lot of lots(); track trackLot($index, lot)) {
                 <tr>
-                  <td data-label="">{{ bookLabel(lot.book) }}</td>
                   <td class="num" data-label="Shares">{{ lot.quantity }}</td>
                   <td class="num" data-label="Entry">${{ lot.entry.toFixed(2) }}</td>
                   <td data-label="Bought">{{ lot.entry_at }}</td>
@@ -285,87 +236,6 @@
           </ol>
         }
       </section>
-
-      <div class="stack">
-        <section class="card">
-          <div class="card-head">
-            <h2>Ask about the analysis</h2>
-          </div>
-          <div class="card-body stack">
-            <form class="inline-form" (submit)="$event.preventDefault(); ask()">
-              <input
-                type="text"
-                aria-label="Question about this analysis"
-                placeholder="e.g. What did the bear case say?"
-                [value]="question()"
-                (input)="onQuestionInput($event)"
-              />
-              <button class="btn btn-primary" type="submit" [disabled]="asking()">
-                {{ asking() ? 'Asking…' : 'Ask' }}
-              </button>
-            </form>
-            @if (answer()) {
-              <p class="notice prose">{{ answer() }}</p>
-            }
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Record a trade</h2>
-            <p class="hint">
-              The bot never places orders. Log what you did in your broker here so the position, the
-              stop alerts, and the scorecard reflect reality.
-            </p>
-          </div>
-          <div class="card-body stack">
-            @if (tradeMessage()) {
-              <p class="notice notice-info">{{ tradeMessage() }}</p>
-            }
-            <form class="stack" (submit)="$event.preventDefault()">
-              <div class="field-grid">
-                <label class="field">
-                  Price
-                  <input
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    [value]="tradePrice() || ''"
-                    (input)="onTradePriceInput($event)"
-                  />
-                </label>
-                <label class="field">
-                  Quantity
-                  <input
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="0.0001"
-                    placeholder="0"
-                    [value]="tradeQuantity() || ''"
-                    (input)="onTradeQuantityInput($event)"
-                  />
-                </label>
-              </div>
-              <div class="row">
-                <button
-                  class="btn btn-primary"
-                  type="button"
-                  (click)="trade('buy')"
-                  [disabled]="trading()"
-                >
-                  {{ trading() ? 'Working…' : 'Record buy' }}
-                </button>
-                <button class="btn" type="button" (click)="trade('sell')" [disabled]="trading()">
-                  {{ trading() ? 'Working…' : 'Record sell' }}
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
-      </div>
     </div>
   } @else {
     <div class="stat-grid" aria-hidden="true">

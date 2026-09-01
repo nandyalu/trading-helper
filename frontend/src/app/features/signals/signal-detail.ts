@@ -15,8 +15,6 @@ export class SignalDetailPage {
   private readonly signalsService = inject(SignalsService);
 
   protected readonly signalDetail = signal<SignalDetail | null>(null);
-  protected readonly following = signal(false);
-  protected readonly message = signal<string | null>(null);
 
   constructor() {
     void this.load();
@@ -25,18 +23,6 @@ export class SignalDetailPage {
   private async load(): Promise<void> {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.signalDetail.set(await this.signalsService.getDetail(id));
-  }
-
-  protected async follow(): Promise<void> {
-    const current = this.signalDetail();
-    if (!current) return;
-    this.following.set(true);
-    try {
-      const result = await this.signalsService.follow(current.id);
-      this.message.set(result.message);
-    } finally {
-      this.following.set(false);
-    }
   }
 
   protected reportKeys(reports: Record<string, string>): string[] {

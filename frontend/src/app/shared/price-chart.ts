@@ -207,7 +207,7 @@ export class PriceChart {
         position: isBuy ? 'belowBar' : 'aboveBar',
         color: COLORS.trade,
         shape: 'square',
-        text: `${trade.book === 'paper' ? '📄' : ''}${isBuy ? 'Bought' : 'Sold'} ${trade.quantity}`,
+        text: `${isBuy ? 'Bought' : 'Sold'} ${trade.quantity}`,
       });
     }
 

@@ -4,17 +4,11 @@
       <h1>Auto trader</h1>
       <p class="subtitle">
         A simulated account the model trades on its own, inside a fixed budget. No real money is
-        involved and no order can reach a real account.
+        involved and no order can reach a real account. It decides once a morning, at 13:35 UTC, and
+        nobody can make it decide sooner.
       </p>
     </div>
-    <button class="btn btn-primary" type="button" (click)="runNow()" [disabled]="running()">
-      {{ running() ? 'Deciding…' : 'Decide now' }}
-    </button>
   </header>
-
-  @if (message()) {
-    <p class="notice notice-info">{{ message() }}</p>
-  }
 
   @if (book(); as b) {
     @if (!b.sandbox) {

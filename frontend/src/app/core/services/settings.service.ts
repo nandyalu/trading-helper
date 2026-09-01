@@ -20,8 +20,4 @@ export class SettingsService {
     const data = await firstValueFrom(this.http.patch<Settings>('/api/settings', patch));
     this._settings.set(data);
   }
-
-  webullSync(): Promise<ActionResult> {
-    return firstValueFrom(this.http.post<ActionResult>('/api/settings/webull-sync', {}));
-  }
 }

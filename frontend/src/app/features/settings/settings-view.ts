@@ -15,11 +15,6 @@ export class SettingsView {
   protected readonly horizon = signal('swing');
   protected readonly llmModel = signal('');
   protected readonly llmModelChoices = signal<string[]>([]);
-  protected readonly paperNotional = signal(1000);
-  protected readonly riskEquity = signal<number | null>(null);
-  protected readonly riskPct = signal(1);
-  protected readonly maxPositionPct = signal(20);
-  protected readonly maxPositions = signal(5);
   protected readonly alertMovePct = signal(5);
   protected readonly alertStopPct = signal(10);
   protected readonly alertVolumeMult = signal(2);
@@ -33,7 +28,6 @@ export class SettingsView {
 
   protected readonly saving = signal(false);
   protected readonly message = signal<string | null>(null);
-  protected readonly syncing = signal(false);
 
   constructor() {
     effect(() => {
@@ -42,11 +36,6 @@ export class SettingsView {
       this.horizon.set(s.horizon);
       this.llmModel.set(s.llm_model);
       this.llmModelChoices.set(s.llm_model_choices);
-      this.paperNotional.set(s.paper_notional);
-      this.riskEquity.set(s.risk_equity);
-      this.riskPct.set(s.risk_pct);
-      this.maxPositionPct.set(s.max_position_pct);
-      this.maxPositions.set(s.max_positions);
       this.alertMovePct.set(s.alert_move_pct);
       this.alertStopPct.set(s.alert_stop_pct);
       this.alertVolumeMult.set(s.alert_volume_mult);
@@ -66,27 +55,6 @@ export class SettingsView {
 
   protected onLlmModelChange(e: Event): void {
     this.llmModel.set((e.target as HTMLSelectElement | HTMLInputElement).value);
-  }
-
-  protected onPaperNotionalInput(e: Event): void {
-    this.paperNotional.set(Number((e.target as HTMLInputElement).value));
-  }
-
-  protected onMaxPositionPctInput(e: Event): void {
-    this.maxPositionPct.set(Number((e.target as HTMLInputElement).value));
-  }
-
-  protected onMaxPositionsInput(e: Event): void {
-    this.maxPositions.set(Number((e.target as HTMLInputElement).value));
-  }
-
-  protected onRiskEquityInput(e: Event): void {
-    const value = (e.target as HTMLInputElement).value;
-    this.riskEquity.set(value === '' ? null : Number(value));
-  }
-
-  protected onRiskPctInput(e: Event): void {
-    this.riskPct.set(Number((e.target as HTMLInputElement).value));
   }
 
   protected onAlertMovePctInput(e: Event): void {
@@ -134,11 +102,6 @@ export class SettingsView {
         // Omitted rather than sent empty: the signal is blank until the first
         // load lands, and an empty model is a 400.
         llm_model: this.llmModel() || undefined,
-        paper_notional: this.paperNotional(),
-        risk_equity: this.riskEquity() ?? undefined,
-        risk_pct: this.riskPct(),
-        max_position_pct: this.maxPositionPct(),
-        max_positions: this.maxPositions(),
         alert_move_pct: this.alertMovePct(),
         alert_stop_pct: this.alertStopPct(),
         alert_volume_mult: this.alertVolumeMult(),
@@ -157,20 +120,6 @@ export class SettingsView {
       this.message.set(detail ?? "Couldn't save settings.");
     } finally {
       this.saving.set(false);
-    }
-  }
-
-  protected async syncWebull(): Promise<void> {
-    this.syncing.set(true);
-    this.message.set(null);
-    try {
-      const result = await this.settingsService.webullSync();
-      this.message.set(result.message);
-    } catch (err) {
-      const detail = (err as { error?: { detail?: string } })?.error?.detail;
-      this.message.set(detail ?? "Couldn't sync Webull.");
-    } finally {
-      this.syncing.set(false);
     }
   }
 }
