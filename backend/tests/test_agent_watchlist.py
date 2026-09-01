@@ -429,3 +429,47 @@ def test_the_threshold_is_what_python_actually_refuses_at(watching):
 
     assert "must cost $0.06 or less" in prompt
     assert "no money to spend" not in prompt
+
+
+# --- the affordable-share count ------------------------------------------------
+
+
+class _Sig:
+    ticker, signal_date, decision = "SMCI", "2026-09-01", "Buy"
+    entry_price = 37.28
+    stop_loss = 32.56
+    price_target = 46.73
+    win_probability = 65.0
+    risk_reward = 2.0
+    expected_value_r = 0.95
+
+
+def _signal_line(cash: float, price: float = 36.51) -> str:
+    prompt = agent.build_prompt(_book(cash=cash), [_Sig()], {"SMCI": price})
+    return next(l for l in prompt.splitlines() if l.startswith("- SMCI"))
+
+
+def test_a_negative_balance_does_not_offer_negative_shares():
+    """int(-8.00 // 36.51) is -1, not 0, and -1 is truthy — so a book at minus
+    $8.00 was told "you can afford -1 share(s)" on every signal line."""
+    line = _signal_line(cash=-8.0)
+
+    assert "-1 share(s)" not in line
+    assert "You cannot afford any at $36.51 with $-8.00 cash." in line
+
+
+def test_an_empty_balance_says_it_cannot_afford_any():
+    assert "cannot afford any" in _signal_line(cash=0.0)
+
+
+def test_a_balance_below_one_share_says_the_same():
+    """The boundary the old check got right and the negative case did not."""
+    assert "cannot afford any" in _signal_line(cash=20.0)
+
+
+def test_a_balance_that_buys_shares_still_states_the_count():
+    """The line exists because a model proposed $1,944 of buys against $1,000
+    of cash. Fixing the negative case must not lose the count."""
+    line = _signal_line(cash=100.0)
+
+    assert "you can afford 2 share(s)" in line

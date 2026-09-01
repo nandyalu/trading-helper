@@ -320,10 +320,15 @@ def build_prompt(
             # Computed here, not left to the model: the affordable count is the
             # arithmetic it actually got wrong.
             if live:
-                affordable = int(book.cash // live)
+                # Floor division on a negative balance returns -1, not 0, and
+                # -1 is truthy — so a book at minus $8.00 was told "you can
+                # afford -1 share(s)" on every signal line. Clamped, and the
+                # branch now tests for a positive count rather than a non-zero
+                # one, because those differ only when the answer is nonsense.
+                affordable = max(0, int(book.cash // live))
                 afford_text = (
                     f" With your ${book.cash:,.2f} cash you can afford {affordable} share(s)."
-                    if affordable
+                    if affordable > 0
                     else f" You cannot afford any at ${live:,.2f} with ${book.cash:,.2f} cash."
                 )
             else:

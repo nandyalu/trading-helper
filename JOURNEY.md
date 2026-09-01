@@ -37,6 +37,12 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-01 — a negative balance no longer offers negative shares.** Every signal line said "With your $-8.00 cash you can afford -1 share(s)."
+
+`int(-8.00 // 36.51)` is -1 rather than 0, because floor division rounds toward negative infinity, and -1 is truthy — so the "you can afford" branch was taken and rendered the nonsense. The count is clamped at zero now, and the branch tests for a positive number rather than a non-zero one, since those two differ only when the answer is meaningless.
+
+The line itself stays, because it exists for a reason: a model proposed $1,944 of buys against $1,000 of cash when it was left to do the arithmetic. Fixing the negative case must not lose the count in the normal one.
+
 **2026-09-01 — an empty or negative balance says so, instead of quoting itself as a spending limit.** The rules block opened with "The buys you place must cost $-8.00 or less in total", which is not an instruction anybody can follow.
 
 The agent reached minus $8.00 on 2026-08-28, from a fill three cents above the price its order was screened at. That arithmetic is fixed. The state is still reachable, because **the daily research charge lands whether or not there is money for it**: `propagate_ticker` bills every ticker the sweep touches, so a book at zero keeps drifting down $0.05 a ticker a day with nothing to stop it.
