@@ -489,18 +489,11 @@ until you also commit the updated gitlink here: `git add TradingAgents && git
 commit -m "..."` from the trading-helper root. `git status` at the root shows
 `TradingAgents` as dirty/ahead whenever the two are out of sync.
 
-## The auto trader: methodology, and a changelog
+## The auto trader: what it is now
 
-**This section is the record of what the agent is and how it got that way. Add
-to the changelog whenever its behaviour changes — a reworded rule, a new number
-in the prompt, a different limit. Behaviour is mostly prompt, so an experiment
-that runs for a month across three prompt revisions has three experiments in it
-and no way to tell them apart afterwards unless someone wrote down when the
-question changed.**
+**This section is the current contract — what the agent is shown, what it may ask for, and what Python refuses.** For how it got that way, and why any given rule exists, see the changelog in [JOURNEY.md](JOURNEY.md).
 
-Record the date, what changed, and **why**. The why is the part that stops the
-same idea being re-proposed in three weeks, and it is the part nobody can
-reconstruct later.
+**Record every behaviour change there before making it** — a reworded rule, a new number in the prompt, a different limit. Behaviour is mostly prompt, so an experiment that runs for a month across three prompt revisions has three experiments in it, and no way to tell them apart afterwards unless someone wrote down when the question changed.
 
 ### What the agent is shown
 
@@ -611,102 +604,20 @@ of purchase. When a combo is refused — which happens routinely, because a cash
 account will not accept one against unsettled funds — it falls back to a market
 order plus separately-armed exits.
 
-### The changelog
+### The changelog lives in JOURNEY.md
 
-Newest first. Every entry says what changed and why.
+**[JOURNEY.md](JOURNEY.md) holds every dated change to the agent's behaviour, and the reason for each.** It was built for exactly that, and this file used to duplicate it.
 
-**2026-09-01 — an empty or negative balance says so, instead of quoting itself as a spending limit.** The rules block opened with "The buys you place must cost $-8.00 or less in total", which is not an instruction anybody can follow.
+The split is by question, not by topic:
 
-The agent reached minus $8.00 on 2026-08-28, from a fill three cents above the price its order was screened at. That arithmetic is fixed. The state is still reachable, because **the daily research charge lands whether or not there is money for it**: `propagate_ticker` bills every ticker the sweep touches, so a book at zero keeps drifting down $0.05 a ticker a day with nothing to stop it.
+- **This file answers "what are the rules now".** The sections above are the current contract: what the agent is shown, what it may ask for, and what Python refuses. Read it before changing the code.
+- **JOURNEY.md answers "why is it like that".** Read it before changing a rule, and add to it before you do.
 
-The prompt now states the condition, what it prevents, and what changes it. Below the research price the agent can buy nothing and commission nothing — `screen` already refuses both — but the charge on what it already tracks continues. Selling is the only thing that raises cash. Untracking raises none, and stops part of the drain.
-
-**Two things this deliberately does not do.** It does not stop the charge at zero: billing only when affordable would make the cost vanish exactly when it starts to bite, and the experiment is about deciding under a budget. And it does not size or forbid anything new — Python's refusals are unchanged, and the agent may still answer with nothing.
-
-**2026-09-01 — the watchlist section states what it costs, in dollars.** One line, and the reason is five days of the agent never once mentioning the watchlist.
-
-It had the parts. The menu section says an analysis costs $0.05, the watchlist section said "You are paying to have 3 tickers analysed every morning", and the rules say untracking "saves the analyses you would have paid for tomorrow and after". What no line gave was the product: **$0.15 a day**, and $0.10 of that on two names it holds none of.
-
-Making the model multiply is the thing this app already decided not to do. The signal section computes how many whole shares the cash can buy in Python, because the model proposed $1,944 of buys against $1,000 of cash when left to do it. A recurring cost is the same kind of arithmetic and gets the same treatment.
-
-**What the agent's own reasoning shows.** Across five passes it never mentioned the watchlist, and on 2026-09-01 it wrote "Given the small cash amount available for new shares, I will maintain the current position." It understands it has no money. It has not connected that to a charge it can stop, while its cash drifts down $0.05 a day against a book with none.
-
-**This does not add a rule.** The agent may already untrack, and Python already refuses what it must. The prompt only stops making it work out its own running cost. Whether that changes anything is the measurement: if it still never untracks, the next question is about the model rather than the wording, and this entry is what makes that readable.
-
-**2026-08-29 — two defects the first real trade exposed.** Neither changes what the agent may decide. Both fix a number Python got wrong on its behalf, and both were invisible because both produced figures that look entirely reasonable.
-
-**Exits now come from the newest signal for a ticker, not the oldest.** `stops`, `targets` and `signal_by_ticker` were dict comprehensions over the signal list, and a dict comprehension keeps the *last* value it sees. `get_recent_signals` returns newest-first, so the oldest signal won every time a ticker had been analysed twice. On 2026-08-28 the agent bought 260 SMCI and rested the 27th's levels — a 34.16 stop and a 45.21 target — when that morning's analysis had said 34.04 and 49.51. The target was $4.30 out. Nothing reported it, because a stale level is still a real level from a real signal. `_newest_signal_per_ticker` now sorts by `(signal_date, id)` rather than trusting the caller's order, since a "keep the first one seen" fix would invert silently the day that ordering changed.
-
-**A buy is screened at its entry limit, not at the quote.** The order leaves as a marketable limit `ENTRY_LIMIT_BUFFER_PCT` through the offer, so checking the raw quote approves an order the account cannot pay for. The same SMCI buy passed at 260 x $38.46 = $9,999.60 against $9,999.70 of cash, filled at $38.49 for $10,007.40, and left the book at **minus $7.70**. `agent_book.entry_limit_price` is what the check now uses. It **refuses rather than resizes**, like every other check there: shrinking would quietly turn the model's decision into a different one, and the record would then describe a strategy nobody chose.
-
-**Neither addresses the concentration.** That buy was 100% of the book in one name, and the agent asked to do the same with NVDA the day before. There is no position-size cap, and adding one would be a change to what the agent may decide rather than a correction to arithmetic — so it belongs in its own entry, with its own reasoning, if it is ever added.
-
-**2026-08-27 — the agent chooses what to stop watching, and the watchlist is capped.** A `side: "untrack"` action, a watchlist section in the prompt, and a ceiling of 12 tracked tickers.
-
-Before this the watchlist only ever grew. `_commission_research` called `db.add_to_watchlist` and nothing in the agent could remove one — `/untrack` was manual and was the only route. That was survivable at `gemma4-e2b-96k`'s 7 minutes an analysis and stops being survivable at `gemma4:e4b-it-qat`'s 17.4: the sweep runs 11:00 UTC and `earnings_check` puts its own analyses on the same pool at 13:00, so three concurrent analyses fit about 20 tickers in the window. At the 4-6 names a run commissions, the ceiling arrives in about four days. **`_MAX_RESEARCH_PER_DAY` does not help, because the limit is cumulative rather than per-day** — the same reason a daily spending limit does not stop a subscription.
-
-**The cap is 12, not 20.** Twenty is what the window fits with nothing going wrong. Twelve is four waves and leaves the second hour as margin for a slow run, a retry, or a morning when the live sweep is contending for the same cards.
-
-**A held ticker can never be untracked**, and that is enforced in Python rather than asked for in the prompt. An agent that could stop watching a position it still owns would lose the analysis that finds its exit, and the daily analysis of a holding is exactly what the "you own the cost of finding your own exit" charge pays for. The same reasoning as refusing a sell of shares that are not held: the model decides what it wants, Python refuses what must not happen.
-
-**Untrack is free and is ordered, like a sell that funds a buy.** Listing an untrack before a research frees a slot for it in the same pass, so a full watchlist is never a dead end — the agent trades one name's coverage for another's rather than waiting a day. The prompt says so explicitly, because the identical wording had to be added for sells before the model worked out it could do the same thing with cash.
-
-**The watchlist is now in the prompt**, with its size and its cap, split into what is held and what is only being watched. Required by the action, and for the same reason holdings had to start showing their resting exits on 2026-08-25: the agent cannot sensibly drop something it cannot see, and a cap it is not shown is a rule it can only discover by being refused.
-
-**2026-08-26 — the agent chooses what to research.** A `side: "research"` action, and a menu of screened candidates in the prompt with what an analysis costs. This is the point of the analyst experiment: the live agent is measured on decisions given a fixed watchlist, and this one decides what is worth looking at at all. Commissioning a ticker adds it to the watchlist — which *is* the commission, since the morning sweep reads the watchlist. **The charge lands when the analysis runs, not when it is commissioned.** Billing at both ends charged a commissioned ticker twice, once for asking and once for the work; `propagate_ticker` already bills every ticker the sweep touches, including the held ones nobody commissioned, so that is the single place. The cost of this is that the agent can commission slightly more than its cash on a day the sweep has not happened yet — bounded by the daily cap to cents against a four-figure budget, and a far smaller problem than double-billing.
-
-The menu is never free-form. A model naming its own tickers invents symbols, reaches illiquid things with no price data, and picks the day's pump; `candidates.py` already screens for liquidity and excludes anything up more than 30%, which matters because a raw screen once returned a stock up 927% and a price floor does not catch that — the pump is what lifted the price over the floor.
-
-The answer arrives **tomorrow**, not in the same pass. That is the honest shape: an analyst does not hand over a report the instant you ask, and same-breath research would let the agent act with no cost to being wrong about what was worth studying. A daily cap of 15 applies regardless of cash, because money does not model time and the sweep has to finish before the open.
-
-The whole section only appears when research is actually charged for. A menu the agent can take from for free is just a longer watchlist somebody else chose.
-
-**2026-08-25 — the agent may move its own exits.** A `side: "adjust"` action,
-with a new stop, target or both, on something already held. Before this, exits
-were fixed when a position opened and untouched until it closed, so re-reading
-a holding every morning taught the agent nothing it could act on short of
-selling: GOOG spent a week with a $377.09 take-profit while each day's analysis
-put the end of the move at $345.00. Python still refuses a level that would
-execute on placement, and a level already where it was asked for is skipped
-rather than re-sent.
-
-**2026-08-25 — holdings now show what is resting under them.** The prompt lists
-each position's live stop and target, and says `NOTHING is resting to close it`
-when there is none. Added with the adjust action, and required by it: the agent
-cannot sensibly move an exit it cannot see.
-
-**2026-08-25 — signals are filtered to the configured model.** Running a second
-model for comparison puts two signals per ticker in the table, sometimes
-disagreeing. Without the filter the agent traded on the mixture, folding an
-experiment into the live book.
-
-**2026-08-25 — a conviction floor, switched off.** Minimum chance of working
-and minimum risk/reward, both defaulting to zero. Off deliberately: the chance
-of working is the model's own claim, and until the Scorecard's calibration says
-it is honest *and* that it sorts outcomes, a threshold on it is arbitrary
-discipline. A signal stating no number fails the floor rather than passing it,
-or the floor could be dodged by not answering.
-
-**2026-08-13 — buys go out as brackets.** Previously the exits were armed after
-the buy returned, which meant they were validated while the account still held
-nothing and read as a new short. Two positions were bought that day and neither
-got its exits.
-
-**2026-08-13 — an ATR stop is derived when the stated one is unusable.** Both
-of that day's unprotected positions were bought days after their signal, by
-which time the price had fallen through the stated stop and the level was
-correctly discarded — leaving nothing. `record_signal` already substituted an
-ATR stop, but only for Buy and Overweight, and the agent buys on Holds too.
-
-**2026-08-13 — an unguarded position is announced.** It used to be silent: no
-alert, no ledger row, and the only way to find out was to look at the broker.
+The reasons that constrain a future edit stay here, in the sections above, because they are live instructions rather than history. The total-not-each wording, the sell-to-fund ordering and the meaning of a Hold are the clearest cases: each was added after the model got that exact thing wrong, and each reads as padding to anyone who does not know that.
 
 ### Before changing the prompt
 
-Note the change here **first**, with the date and the reason. A month of runs
-across an undocumented prompt revision cannot be analysed, and the temptation
-to reconstruct the reasoning afterwards produces a story about what we would
-like to have been thinking.
+Add the entry to **[JOURNEY.md](JOURNEY.md)** first, with the date and the reason. A month of runs across an undocumented prompt revision cannot be analysed, and the temptation to reconstruct the reasoning afterwards produces a story about what we would like to have been thinking.
 
 ## Per-run cost telemetry
 
