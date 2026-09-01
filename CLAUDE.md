@@ -615,6 +615,16 @@ order plus separately-armed exits.
 
 Newest first. Every entry says what changed and why.
 
+**2026-09-01 — the watchlist section states what it costs, in dollars.** One line, and the reason is five days of the agent never once mentioning the watchlist.
+
+It had the parts. The menu section says an analysis costs $0.05, the watchlist section said "You are paying to have 3 tickers analysed every morning", and the rules say untracking "saves the analyses you would have paid for tomorrow and after". What no line gave was the product: **$0.15 a day**, and $0.10 of that on two names it holds none of.
+
+Making the model multiply is the thing this app already decided not to do. The signal section computes how many whole shares the cash can buy in Python, because the model proposed $1,944 of buys against $1,000 of cash when left to do it. A recurring cost is the same kind of arithmetic and gets the same treatment.
+
+**What the agent's own reasoning shows.** Across five passes it never mentioned the watchlist, and on 2026-09-01 it wrote "Given the small cash amount available for new shares, I will maintain the current position." It understands it has no money. It has not connected that to a charge it can stop, while its cash drifts down $0.05 a day against a book with none.
+
+**This does not add a rule.** The agent may already untrack, and Python already refuses what it must. The prompt only stops making it work out its own running cost. Whether that changes anything is the measurement: if it still never untracks, the next question is about the model rather than the wording, and this entry is what makes that readable.
+
 **2026-08-29 — two defects the first real trade exposed.** Neither changes what the agent may decide. Both fix a number Python got wrong on its behalf, and both were invisible because both produced figures that look entirely reasonable.
 
 **Exits now come from the newest signal for a ticker, not the oldest.** `stops`, `targets` and `signal_by_ticker` were dict comprehensions over the signal list, and a dict comprehension keeps the *last* value it sees. `get_recent_signals` returns newest-first, so the oldest signal won every time a ticker had been analysed twice. On 2026-08-28 the agent bought 260 SMCI and rested the 27th's levels — a 34.16 stop and a 45.21 target — when that morning's analysis had said 34.04 and 49.51. The target was $4.30 out. Nothing reported it, because a stale level is still a real level from a real signal. `_newest_signal_per_ticker` now sorts by `(signal_date, id)` rather than trusting the caller's order, since a "keep the first one seen" fix would invert silently the day that ordering changed.

@@ -319,3 +319,47 @@ def test_a_cash_refusal_does_not_mention_the_watchlist(watching):
     )
 
     assert "list the untrack before the research" not in prompt
+
+
+def test_the_watchlist_section_states_the_daily_cost(watching):
+    """The agent had every part and never used them: the menu section gives the
+    price, this section gave the count, and the rules say untracking saves
+    future analyses. Across five passes it never mentioned the watchlist while
+    writing that it had little cash. Multiplying is the app's job — the same
+    reason the signal section computes affordable shares in Python."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(), [], {}, watchlist=["AAA", "BBB", "CCC"], max_watchlist=12, price=0.05,
+    )
+
+    assert "paying $0.15 every morning" in prompt
+
+
+def test_it_says_what_dropping_the_droppable_ones_would_save(watching):
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(holdings=[("AAA", 3, 10.0)]), [], {},
+        watchlist=["AAA", "BBB", "CCC"], max_watchlist=12, price=0.05,
+    )
+
+    assert "droppable: BBB, CCC" in prompt
+    assert "save $0.10 a day" in prompt
+
+
+def test_a_free_deployment_states_no_figure(watching):
+    """The live bot does not charge for research. "$0.00 every morning" would
+    be true and would invite the agent to reason about a cost that is not one."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(), [], {}, watchlist=["AAA", "BBB"], max_watchlist=12, price=0.0,
+    )
+
+    cost_line = next(l for l in prompt.splitlines() if l.startswith("You are paying"))
+
+    # Scoped to the line under test: "$0.00" appears elsewhere in every prompt,
+    # for realized profit and an empty cash balance.
+    assert cost_line == "You are paying to have 2 tickers analysed every morning, and you may track at most 12."
+    assert "would save" not in prompt

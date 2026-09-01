@@ -374,18 +374,33 @@ def build_prompt(
         held_tickers = {h.ticker for h in book.holdings}
         watched_only = sorted(t for t in watchlist if t not in held_tickers)
         also_held = sorted(t for t in watchlist if t in held_tickers)
-        lines += [
-            "",
-            f"You are paying to have {len(watchlist)} tickers analysed every morning, "
-            f"and you may track at most {max_watchlist}.",
-        ]
+        # The daily cost as a figure, not as two facts to multiply. The price
+        # appears in the menu section and the count appears here, and across
+        # five passes the agent never once mentioned the watchlist — while
+        # writing that it had "small cash amount available for new shares".
+        # This app already computes the affordable-share count in Python for
+        # the same reason: a model left to do the arithmetic proposed $1,944 of
+        # buys against $1,000 of cash.
+        daily = len(watchlist) * price
+        droppable_cost = len(watched_only) * price
+        cost_line = (
+            f"You are paying ${daily:,.2f} every morning to have "
+            f"{len(watchlist)} tickers analysed, and you may track at most "
+            f"{max_watchlist}." if price else
+            f"You are paying to have {len(watchlist)} tickers analysed every "
+            f"morning, and you may track at most {max_watchlist}."
+        )
+        lines += ["", cost_line]
         if also_held:
             lines.append(
                 f"- Held, so always analysed and cannot be dropped: {', '.join(also_held)}"
             )
         if watched_only:
+            saving = (f", and dropping them all would save ${droppable_cost:,.2f} a day"
+                      if price else "")
             lines.append(
                 f"- Watched but not held, so droppable: {', '.join(watched_only)}"
+                f"{saving}"
             )
         if len(watchlist) >= max_watchlist:
             lines.append(
