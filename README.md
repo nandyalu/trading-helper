@@ -1,44 +1,64 @@
 # Trading Helper
 
-Trading Helper is a self-hosted Discord bot and web dashboard.
-It runs a multi-agent AI analysis ([TradingAgents](TradingAgents/README.md)) on the stocks you hold and watch.
-It tracks every call the analysis makes, and it grades each call against reality and against a simple SPY buy-and-hold.
-It also gives you tools to act on the calls with intent: paper trading, risk-based position sizing, intraday alerts, and a synced view of your real Webull account.
-And it can trade the calls itself, on a simulated brokerage account with a fixed budget, so you can watch what the signals would actually have done to a book before any real money is involved.
+**One question, asked in public: what does an autonomous AI agent do with $10,000?**
 
-**Core idea: an AI signal has no value until you know its track record.**
-Every part of this bot does one of three jobs: it generates signals, it measures signals, or it helps you act on signals that have earned your trust.
+Trading Helper is a self-hosted experiment. An agent gets a simulated brokerage account, a fixed budget, and a bill for every piece of research it orders. It decides what to study, what to buy, what to sell, and when to give up on a name. Nobody helps it. A web dashboard and a Discord channel report what it did.
 
-## What it does, in one paragraph
+The agent runs a multi-agent AI analysis ([TradingAgents](TradingAgents/README.md)) on the stocks it chooses to watch. The app records every call that analysis makes and grades each one against reality, against a SPY buy-and-hold, and against the analysis's own price target.
 
-Every weekday, the bot analyzes your watchlist and holdings with a local LLM pipeline: market, news, sentiment, and fundamentals analysts debate the bull case against the bear case, then a trader and a risk team pick one decision — Buy, Overweight, Hold, Underweight, or Sell.
-The bot records each decision with the price at signal time and a parsed time horizon, then grades the decision automatically once that time horizon arrives, in three ways: against reality, against SPY, and against its own price target.
-You can follow any signal with one ✅ reaction to start paper trading, ask a question about it with `/ask`, and watch your win rate build in `/scorecard`.
-Between analyses, a rule-based watchdog checks prices, volume, stops, and targets, and each morning the bot syncs your real Webull holdings in automatically.
+**No real money is involved and no order can reach a real account.** Webull access is the sandbox only.
 
-An optional auto trader takes it one step further: it decides what to buy and sell from those signals, inside a budget it cannot exceed, on a simulated account that no real order can reach.
-It rests a real stop and take-profit under every position it opens, and it is measured against two things that need no model at all — buying and holding SPY, and a mechanical rule that follows every Buy signal.
-If it cannot beat those, the dashboard says so.
+## Nobody can nudge it, and that is the point
+
+There is no button that adds a ticker, starts an analysis, or places a trade. There are no Discord commands. The app used to have twenty-three of them and they are all gone.
+
+A control that lets a person nudge the book puts a second decision-maker in the record. Afterwards, nothing can tell which one produced a result — and a record with two authors is not evidence about either.
+
+When something needs correcting, the route is deliberate: write down what changed and why in [JOURNEY.md](JOURNEY.md), then make the correction by hand. That costs a few minutes and leaves the record readable.
+
+## What happens each day
+
+| Time (UTC) | What runs |
+|---|---|
+| 11:00 | The morning sweep analyses every ticker on the watchlist and charges the agent for each one |
+| 12:45 | The market regime line — VIX, SPY against its 200-day average, the yield curve |
+| 13:00 | Earnings check, which analyses anything reporting soon |
+| 13:35 | **The decision pass.** The agent reads its book and answers with orders |
+| every 15 min | The watchdog: big moves, volume spikes, breached stops, reached targets |
+| 21:30 | Grading, then the journal is rewritten |
+
+The sweep decides overnight and the agent acts at the next open. That is not an accident of scheduling: Webull rejects a market order in the evening outright, so an agent wired to trade straight after the sweep would look healthy and never fill an order.
+
+## What the agent may do
+
+It answers with a list of actions, and Python refuses what cannot be executed as stated. **It never resizes.** Shrinking an order would quietly turn the agent's decision into a different one, and the record would then describe a strategy nobody chose.
+
+- **buy** and **sell** — whole shares, long only, never more cash than it holds. A buy goes out as a bracket: the entry with a stop and a take-profit attached, so the shares are never held with nothing under them.
+- **adjust** — move the stop or target on something it already holds.
+- **research** — pay $0.05 to have a candidate analysed. The answer arrives tomorrow, which is the honest shape: an analyst does not hand over a report the moment you ask.
+- **untrack** — stop watching a name, and stop paying for it. It cannot untrack something it holds.
 
 ## Documentation
 
 | Page | What's in it |
 |---|---|
-| [Setup](docs/setup.md) | How to get a Discord bot token, Webull API keys, and Reddit OAuth2 credentials |
+| [Setup](docs/setup.md) | How to get a Discord bot token, Webull sandbox keys, and the Ollama pool running |
 | [How it works](docs/overview.md) | Architecture, the signal lifecycle, the daily schedule, data sources |
-| [Command reference](docs/commands.md) | Every Discord command, the ✅ reaction, and the scheduled posts |
-| [The daily workflow](docs/trading-workflow.md) | A practical routine to work with the bot every day |
-| [Finding your edge](docs/finding-your-edge.md) | How to use the scorecard, paper book, and sizing to make better trades |
+| [The dashboard](docs/dashboard.md) | What each page shows |
+| [The journey](JOURNEY.md) | Every change to the agent, when, and why |
+| [Finding your edge](docs/finding-your-edge.md) | How to read the scorecard |
+| [Model training](docs/model-training.md) | What it would take to make a small model reliable here |
 
 ## Quick start
 
-1. Copy these values into `.env`: `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, your Ollama settings, and (optional) `WEBULL_APP_KEY` and `WEBULL_APP_SECRET`. Set `WEBULL_SANDBOX=1` to use test keys. If you do not have these values yet, see [Setup](docs/setup.md) — it explains how to get each one, including the Reddit OAuth2 credentials.
+1. Copy these values into `.env`: `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, your Ollama settings, and `WEBULL_APP_KEY` / `WEBULL_APP_SECRET`. **Set `WEBULL_SANDBOX=1`.** The agent refuses to trade without it. See [Setup](docs/setup.md) for how to get each one.
 2. Build the image. In VSCode, press **Ctrl+Shift+B**. Or run `docker build -t trading-bot:local .`
 3. Deploy the image with a Docker Compose file, for example through [Dockge](https://github.com/louislam/dockge). Point `image:` at `trading-bot:local`, pass in the `.env` values from step 1, and mount a persistent volume at `/app/data`. The container applies database migrations by itself when it starts.
-4. In Discord, run `/setchannel` in the channel where you want posts. Then run `/track` to add a ticker, or run `/webullsync` to pull in your real holdings.
+4. Open the dashboard and switch the agent on in Settings. It starts with an empty watchlist and buys its first research at the next decision pass.
 
 ## Honesty notes
 
-- The bot never places real orders. Webull access is read-only.
-- Signals come from a small local model (the default is qwen3 8B). Treat each signal as a structured second opinion, not as a fact — the scorecard exists to show you how much to trust it.
-- Nothing here is financial advice. It is your account, and the decision is yours.
+- **The app never places a real order.** Every order goes to Webull's sandbox, and the agent refuses to run at all when the app holds production credentials.
+- Signals come from a small local model. Treat each one as a structured second opinion, not as a fact — the scorecard exists to show how much to trust it.
+- **A single analysis is one sample.** The model runs at temperature 1, so the same ticker on the same day has returned opposite decisions. The scorecard's by-model breakdown is the only honest way to compare two models.
+- Nothing here is financial advice.

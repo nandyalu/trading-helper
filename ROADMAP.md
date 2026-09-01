@@ -1,8 +1,12 @@
 # Trading Helper — Feature Roadmap
 
-The bot already generates TradingAgents signals, tracks pass/fail outcomes, and logs real
-transactions. The theme of this roadmap: **close the feedback loop** — read that accumulated
-data back, measure whether the signals are worth following, and act on them with less friction.
+> **Phases 1 to 10 describe the app as it was before 2026-09-01, and parts of it no longer exist.**
+>
+> On that date the app became one thing: an autonomous agent trading a simulated account with $10,000. The real-portfolio book, the hand-followed paper book, every Discord slash command, and every manual button were removed. See the changelog in `JOURNEY.md` for what went and why.
+>
+> The phases below are kept as a record of what was built and what each piece was for. Where one describes a feature that is gone, the reasoning behind it usually still applies to what replaced it — that is why they are worth keeping rather than deleting.
+
+The original theme: **close the feedback loop** — read the accumulated data back, measure whether the signals are worth following, and act on them with less friction.
 
 ## Phase 1 — Measure & follow the signals *(implemented — deploys with the next image build)*
 
@@ -381,14 +385,28 @@ the bot itself at the container's web root (backend/app.py, port 8080, host port
 `DOCS_HOST_PORT`). Rebuild the image to republish; `python -m zensical serve` for local
 preview.
 
-## Next track — the autonomous analyst *(planned, not started)*
+## Phase 11 — One agent, one book *(implemented 2026-09-01)*
 
-A second, separate experiment: give an agent $10,000, charge it $0.10 per analysis, and let it choose what to research from a curated candidate menu rather than handing it a fixed watchlist. It runs as a second deployment of this codebase against the idle sandbox margin account, and is never told the account is simulated.
+The autonomous analyst stopped being a second experiment beside the main app and became the whole app.
 
-See [PLAN-autonomous-analyst.md](PLAN-autonomous-analyst.md) for the full design, what was rejected and why, and the prerequisites that must be answered first.
+- The real book, the hand-followed paper book, and the Webull sync that fed the first are removed.
+- All twenty-three Discord slash commands are removed, along with every manual button on the dashboard. Discord reports; it takes no orders.
+- The model-comparison sweep is removed. One model at a time. `Signal.model` stays, so the scorecard still splits by it when the configured model changes.
+- Defaults become a $10,000 budget and $0.05 an analysis.
 
-## Deliberate non-goals (for now)
-- **Real order execution** — the bot informs decisions; it doesn't place trades.
-- **Paper shorting** — Sell signals close longs only; revisit if the scorecard shows
-  Sell calls have edge.
+**The reason for all of it is one sentence:** a control that lets a person nudge the book puts a second decision-maker in the record, and afterwards nothing can tell which one produced a result.
+
+The full entry, with what it cost and what was deliberately kept, is in `JOURNEY.md`. `PLAN-autonomous-analyst.md` holds the original design of the agent, including what was rejected on the way.
+
+## Open
+
+- **Replay** — re-run a past decision pass against a changed prompt, to tell a prompt change from a market change.
+- **Backtester** — grade the agent's strategy over history rather than only forward.
+- **A position-size cap.** The agent has put 100% of the book into one name. There is no cap, deliberately: adding one changes what the agent may decide, so it needs its own journal entry and its own reasoning rather than arriving as a quiet fix.
+- **A watchlist ageing rule.** The cap of 12 stops the list growing without limit, but nothing yet drops a name the agent has stopped holding and stopped asking about.
+
+## Deliberate non-goals
+- **Real order execution.** Every order goes to Webull's sandbox and the agent refuses to run without `WEBULL_SANDBOX=1`. This is not a phase that has not arrived yet; it is a permanent boundary.
+- **Manual controls of any kind.** See Phase 11. Corrections go through the journal and then by hand.
+- **Shorting.** Sell closes a long. Enforced in `sandbox_broker` rather than inherited from the account type, because a margin account will happily short where a cash account refuses.
 - **Intraday LLM analysis** — the local model is the bottleneck; alerts stay rule-based.

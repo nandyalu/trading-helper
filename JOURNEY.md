@@ -31,11 +31,39 @@ Two rules, both learned the hard way elsewhere in this project:
 
 The entries below record what changed in the agent's behaviour and the reason for it. They moved here from `CLAUDE.md` on 2026-09-01, which had been keeping a second copy of the same thing.
 
-**These cover both deployments.** The live bot and the analyst run one agent and share every line of its code; only their settings differ. So an entry dated before the analyst existed is still about the same agent, and a change made for one applies to both.
+**Entries before 2026-09-01 cover two deployments.** A live bot and an analyst experiment ran side by side, sharing every line of the agent's code and differing only in their settings. Both ended on 2026-09-01 and one deployment runs now, but the entries still describe the same agent, so a change made for either applies to what runs today.
 
 `CLAUDE.md` now describes what the rules are. This describes how they got that way. Add an entry here **before** changing a rule, not after.
 
 Newest first.
+
+**2026-09-01 — the experiment restarts, and everything except the agent is removed.** This is the largest change in the file and the only one that ends an experiment rather than adjusting one. Both previous deployments stop today. Their data is kept as a record and nothing carries forward: a new container, a freshly reset Webull paper account, an empty database.
+
+The question the app now asks is one question. **What does an autonomous agent do with $10,000?**
+
+Everything that was not part of that question is gone.
+
+**The real book is removed.** No sync of a real brokerage account, no transaction log, no Portfolio page, no vs-SPY comparison over hand-entered lots. The app read a live Webull account to mirror holdings into a watchlist; it reads nothing but the sandbox now.
+
+**The hand-followed paper book is removed.** It was a book a person followed by hand, seeded by a ✅ reaction on a Discord embed. Two books measured two different things and only one of them was the experiment.
+
+**Every manual control is removed**, in Discord and on the dashboard. All twenty-three slash commands, the Track and Analyze buttons, Record a trade, Ask, Follow as paper trade, Sync now, and Decide now. **This is the change that matters most and it is worth being exact about why.** A control that lets a person nudge the book puts a second decision-maker in the record, and no reading of the book afterwards can tell which one produced a result. An experiment with an untracked second cause is not an experiment.
+
+The exceptions are two, and both decide nothing. `POST /api/agent/exits/{ticker}` rests the stop and target the agent already chose under shares it already owns, for the case where the broker refused the bracket at purchase. And the settings page still changes the model, the horizon and the alert thresholds — those are the experiment's parameters, and changing one is a documented act, not a trade.
+
+**When something needs correcting, the route is now deliberate: write down what changed and why here, then do it by hand.** That costs a few minutes and leaves the record readable. A button costs nothing and leaves it unreadable.
+
+**The comparison machinery is removed. One model from here.** It ran a second model over the same tickers so two models could be compared on the same day's prices. `Signal.model` stays, because which model produced a row is a fact about the row, and the scorecard still splits by it when the configured model changes.
+
+**Discord reports and no longer takes orders.** It carries what the agent did — its decision passes, a stop that filled, an exit that was armed, a watchdog alert. It no longer posts the analyses themselves: each runs to thousands of words, several arrive a morning, and they are read on the Signals and Events pages where they can be scrolled and compared.
+
+**New defaults: a $10,000 budget and $0.05 an analysis.** Research was free by default so the live deployment would not start charging when this code reached it. There is one deployment now, and free research is just a longer watchlist — an agent that pays nothing for being wrong about what was worth studying learns nothing from being wrong.
+
+**What was deliberately kept.** The watchlist page, showing what the agent chose and what it may commission. The Signals pages, with every analysis in full. The Scorecard, the digest, the regime line, the alerts. The Events page and the Journey page, which are the record. And `AGENT_BUDGET` / `RESEARCH_PRICE_USD` as environment overrides, so a container comes up on the right numbers rather than being corrected by hand on its first run.
+
+**What this costs.** Two things get harder and both were traded away knowingly. Nobody can now start an analysis to see what the model says about a ticker today — the answer arrives tomorrow, at the agent's expense, or not at all. And a mistake in the book has to be repaired by hand against the database rather than through a button. Both are the price of a record with one author.
+
+The repo is tagged `v1-two-book-experiment` at the commit before this. Nothing here is lost; it is only no longer in the way.
 
 **2026-09-01 — the agent's prompt and answer are recorded, and there is a page for them.** `AgentRun` gains `prompt`, `response` and `orders`, and the dashboard gains an Events page that shows them.
 

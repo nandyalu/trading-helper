@@ -6,16 +6,16 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │ FastAPI app (backend/app.py)                                    │
 │                                                                 │
-│  Slash commands · ✅ reactions · scheduled tasks                │
+│  Scheduled tasks · the JSON API · the dashboard                 │
 └──────┬──────────────┬───────────────┬───────────────────────────┘
        │              │               │
        ▼              ▼               ▼
  TradingAgents   Rule-based       SQLite (data/trading.db)
  (local LLM      market logic     signals · outcomes · reports
- via Ollama)     (no LLM):        transactions · paper trades
- analysis        watchdog,        alerts · snapshots · settings
- pipeline        regime, sizing,
-                 evaluation
+ via Ollama)     (no LLM):        the agent's book and its runs
+ analysis        watchdog,        alerts · bar cache · settings
+ pipeline        regime, grading,
+                 the agent
        │              │
        ▼              ▼
    Ollama pool    Market data: Webull real-time quotes when
@@ -25,7 +25,9 @@
 Two kinds of intelligence run here, and the bot keeps them separate on purpose.
 
 - **The LLM pipeline** (TradingAgents) runs the analysis. This work is expensive and slow. Four analysts — market/technical, news, sentiment, and fundamentals — feed a bull-vs-bear research debate. A trader drafts a plan, and a risk team picks one of five decisions: **Buy, Overweight, Hold, Underweight, Sell**. The rationale usually includes a price target and a time horizon.
-- **Rule-based logic** handles everything that must be fast, cheap, and reliable: it grades outcomes, watches prices intraday, classifies the market regime, computes position sizes, and reconciles your broker account. No model is involved, so none of this can hallucinate.
+- **Rule-based logic** handles everything that must be fast, cheap, and reliable: it grades outcomes, watches prices intraday, classifies the market regime, derives a stop from volatility, and screens the agent's orders against a running book. No model is involved, so none of this can hallucinate.
+
+**The division between them is the load-bearing part.** The model decides what and how much; Python refuses what cannot be executed as stated, and **never resizes**. Shrinking an order would quietly turn the agent's decision into a different one, and the record would then describe a strategy nobody chose.
 
 ## Where things are served
 
@@ -44,16 +46,18 @@ The API reference used to sit at `/docs` and hid this site completely, because F
 
 The two are for different jobs, and neither is a lesser version of the other.
 
-**Discord tells you when something happens.** A signal lands, a stop is reached, a target is touched — it arrives where you already are, and you can follow a signal into the paper book with one ✅.
+**Discord tells you when something happens.** The agent decided, a stop filled, a target was touched, a position is unguarded. It arrives where you already are, and it is short.
 
-**The dashboard tells you what is happening and what already happened.** It is where the price chart, the analysis, the signals, the alerts, and your own trades sit on one time axis, so you can see whether the bot's calls actually worked.
+**Discord takes no orders.** There are no slash commands — the app had twenty-three and all were removed on 2026-09-01. A control that lets a person nudge the book puts a second decision-maker in the record.
+
+**The dashboard tells you what is happening and what already happened.** It is where the price chart, the analysis, the signals, the alerts, and the agent's fills sit on one time axis — plus the Events page, which keeps the prompt the agent saw and the answer it gave, word for word.
 
 The dashboard needs no Discord account, and Discord needs no dashboard. Run either, or both.
 
 ## The signal lifecycle
 
-1. **Born** — An analysis runs, from a scheduled sweep, an event trigger, or `/analyze`. The bot stores the decision, the full rationale, all analyst reports, the price at that moment, the parsed time horizon, and the trade plan (see below). The Discord embed gets a ✅ seeded on it.
-2. **Actionable** — You can follow the signal as a paper trade with the ✅ reaction, ask questions about it with `/ask`, or act on it in your real account using the stop and size from the embed.
+1. **Born** — An analysis runs, from the morning sweep or an event trigger, and the agent is charged for it. The app stores the decision, the full rationale, all analyst reports, the price at that moment, the parsed time horizon, and the trade plan (see below).
+2. **Read** — The agent sees it at the next decision pass, at 13:35 UTC, alongside up to eleven others from the last three days. It may act on it or ignore it.
 3. **Watched** — While the signal matures, the intraday watchdog sends an alert if the price touches the signal's target or reaches a stop level on a held position.
 4. **Graded** — When the time horizon arrives, the bot fetches the full price window since the signal and grades it three ways:
    - **Absolute**: A Buy passes if the price rose at all. A Sell passes if the price fell. A Hold passes if the price stayed inside the horizon's band.
@@ -228,7 +232,7 @@ The split is deliberate. The sweep lands at 11:00 UTC, two and a half hours befo
 An intraday trigger is the opposite: it arrives while the market is open, and a move worth analyzing at midday is worth nothing by the next morning.
 
 **No order can reach a real account.** The app holds sandbox credentials only, and the order path refuses to run unless the sandbox flag is set, refuses any account that is not the simulated individual-cash one, and refuses an account whose number is not marked simulated.
-The real-portfolio sync is switched off in sandbox mode for the same reason: it reconciles the real transaction log, and pointing it at the simulated account would write paper positions into it.
+There is no sync of a real brokerage account at all. It was removed on 2026-09-01 along with the book it fed.
 
 ### How a position gets its exits
 
@@ -377,16 +381,16 @@ See them on the Tickers page, with `/candidates`, or in the weekly digest post.
 | 12:45 | **Regime snapshot** — VIX, SPY vs its 200-day average, and the 10Y–3M yield spread, shown as 🟢/🟡/🔴 |
 | 13:00 | **Earnings check** — runs a fresh analysis for any tracked ticker that reports within 2 days |
 | 13:30–20:00 (9:30–16:00 ET) | **Watchdog**, every 15 minutes — flags a move of 5% or more, volume at 2x the average or more, a stop breach, or a target touch. Big moves and volume spikes also trigger an immediate analysis, at most one per ticker per day |
-| 21:30 | **Daily grading** — grades and posts matured signals, and snapshots the paper book. Stays after the close because both read the day's closing price |
+| 21:30 | **Daily grading** — grades and posts matured signals, then rewrites the journal. Stays after the close because grading reads the day's closing price |
 | Fri 23:00 | **Weekly digest** — the week's outcomes, the win-rate trend, alerts, and both books |
 
 ## Data sources
 
-- **Webull OpenAPI** (when keys are configured): gives real-time snapshot quotes for every "price right now" check — paper fills, alert checks, portfolio values. This needs a stock-quotes market-data subscription on the account. Without that subscription, or after any failure, the bot falls back to yfinance automatically. Webull also provides the read-only Trade API for the account sync. The bot **never places orders**.
+- **Webull OpenAPI**: gives real-time snapshot quotes for every "price right now" check — the agent's fills, alert checks, book values. This needs a stock-quotes market-data subscription on the account. Without that subscription, or after any failure, the app falls back to yfinance automatically. Webull also takes the agent's orders, **on the sandbox only** — the agent refuses to run when the app holds production credentials.
 - **yfinance**: provides all historical bars (evaluation windows, ATR, the 200-day average, volume baselines), the earnings calendar, the VIX and treasury-yield indices, and the quote fallback.
 
 ## Storage
 
 Everything lives in one SQLite file, `data/trading.db` (a Docker volume in production).
 Schema changes ship as Alembic migrations, and these migrations apply themselves at container start.
-Notable tables: `signal` (one row per analysis, including its grades), `signalreport` (the full analyst text, feeding `/ask`), `transaction` and `papertransaction` (real and paper FIFO logs), `alert` (watchdog dedupe and history), and `papersnapshot` (the equity curve).
+Notable tables: `signal` (one row per analysis, including its grades and what the run cost), `signalreport` (the full analyst text), `agenttrade` (the agent's orders, its book of record), `agentrun` (every decision pass, with the prompt and the answer verbatim), `alert` (watchdog dedupe and history), and `dailybar` (the bar cache, pure cache — dropping it costs only a refetch).

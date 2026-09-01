@@ -1,6 +1,6 @@
 [project]
 site_name = "Trading Helper"
-site_description = "A self-hosted Discord bot that runs multi-agent AI analysis over your stocks, grades every call against SPY, and helps you act on the ones that earn trust."
+site_description = "An autonomous AI agent trading a simulated account with $10,000. It picks what to research, pays for it, and every decision it makes is on the record."
 copyright = """
 Self-hosted docs · not financial advice
 """
@@ -10,7 +10,7 @@ nav = [
   { "Setup" = "setup.md" },
   { "How it works" = "overview.md" },
   { "The dashboard" = "dashboard.md" },
-  { "Command reference" = "commands.md" },
+  { "What Discord posts" = "discord.md" },
   { "The daily workflow" = "trading-workflow.md" },
   { "Finding your edge" = "finding-your-edge.md" },
   { "Making a small model work" = "model-training.md" },

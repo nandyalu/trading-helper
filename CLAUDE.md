@@ -1,11 +1,29 @@
 # trading-helper — Claude Code context
 
-Discord bot + FastAPI/Angular dashboard (`backend/`) delegating analysis to a
-vendored multi-agent framework (`TradingAgents/`, registered as a git
-submodule of this repo — see "Vendored TradingAgents repo" below for the
-remote/branch details). See [README.md](README.md) and
-[docs/overview.md](docs/overview.md) for architecture/commands — this file
-only covers what those don't.
+**One autonomous agent trading one simulated book with $10,000.** FastAPI +
+Angular dashboard and a notification-only Discord bot (`backend/`), delegating
+analysis to a vendored multi-agent framework (`TradingAgents/`, a git submodule
+— see "Vendored TradingAgents repo" below). See [README.md](README.md) and
+[docs/overview.md](docs/overview.md) for architecture — this file only covers
+what those don't.
+
+**Since 2026-09-01 there are no manual controls anywhere.** No Discord slash
+commands, no button that adds a ticker, starts an analysis, or places a trade.
+The reason is the whole experiment: a control that lets a person nudge the book
+puts a second decision-maker in the record, and afterwards nothing can tell
+which one produced a result. **Do not add one back.** If something needs
+correcting, the route is an entry in `JOURNEY.md` saying what and why, then a
+change made by hand.
+
+The one write endpoint that survives is `POST /api/agent/exits/{ticker}`, and
+it decides nothing — it rests the stop and target the agent already chose, under
+shares it already owns, for the case where the broker refused the bracket at
+purchase.
+
+Everything else is gone with it: the real-portfolio book and its Webull sync,
+the hand-followed paper book, the model-comparison sweep, `AGENT_ONLY`, and the
+position-sizing settings. The tag `v1-two-book-experiment` marks the commit
+before the removal.
 
 ## Markdown conventions
 
@@ -20,6 +38,7 @@ Two copies of the compose config exist and are **not synced automatically**:
 
 - `dockge/trading-bot.compose.yaml` — local-only working template
   (`dockge/` is gitignored, not tracked in this repo). Edit this one.
+  `analyst-bot.compose.yaml` is deleted; that deployment ended 2026-09-01.
 - `/opt/stacks/trading-bot/compose.yaml` + `.env` — the actually-deployed
   copy, managed via the Dockge UI. **Root-owned**, outside this repo, and
   already drifted from the template (Discord/Webull secrets are pasted in
@@ -28,9 +47,13 @@ Two copies of the compose config exist and are **not synced automatically**:
   Dockge UI's compose editor — never wholesale-replace its `environment:`
   block or you'll clobber the hardcoded secrets.
 
-The dashboards run on **8123 (trading-bot)** and **8122 (analyst-bot)**, not
-the 8080/8081 the templates default to — the deployed copies set their own, and
-this is the same drift the `environment:` block has. Verified 2026-09-01;
+**One deployment runs from 2026-09-01.** The `trading-bot` and `analyst-bot`
+containers both stopped that day; their volumes are kept as a record of the two
+experiments that ended. The new container starts from an empty database and a
+freshly reset Webull paper account.
+
+The dashboard ran on **8123**, not the 8080 the template defaults to — the
+deployed copy sets its own, the same drift the `environment:` block has.
 `docker ps` is the authority.
 
 To inspect the live container: `docker logs trading-bot`, `docker exec
@@ -93,27 +116,18 @@ That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` the knob that decides GPU
 utilization. With one deployment it should equal the backend count; anything
 above just queues in the proxy.
 
-**With two deployments sharing the pool, the sum across them is what should not
-exceed the backend count**, because both sweep at 11:00 UTC and contend. Seven
-backends split 4 (live) / 3 (analyst). **Check both, not one.** On 2026-08-27
-the live deployment moved to 4 and the analyst stayed at its template default
-of 2, so the pool ran 6 of 7 and a card sat idle all morning with nothing
-reporting it.
+**One deployment runs from 2026-09-01, so it gets all seven.** Set
+`TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=7`. The two-deployment arithmetic that
+used to live here — a 4/3 split, then a planned 2/5 — is gone with the second
+deployment.
 
-**Planned: 2 (live) / 5 (analyst), once the Gemini Flash-Lite comparison
-reports.** The analyst is the long-running experiment and deserves the cards;
-the live book runs a model less than half as slow and can afford the extra
-waves. Two things follow from that and neither is optional. The switch waits
-for the comparison, because that experiment is only readable if the live
-deployment keeps analysing at the speed its graded signals were produced at.
-And **`_MAX_WATCHLIST` should be re-derived at the same time, not left at 12** —
-that number is 4 waves × 3 concurrent against a two-hour window, and five
-concurrent changes it. Expect roughly 20 rather than a simple 12 × 5/3, since
-five concurrent analyses contend for host RAM bandwidth more than three do, so
-measure the paired analysis time again before choosing the number.
-
-If the comparison sends the live deployment to Gemini, the split is 0/7 and
-none of this arithmetic applies — the analyst gets the whole pool.
+**`_MAX_WATCHLIST` has to be re-derived at seven concurrent, not left at 12.**
+Twelve was four waves of three against the two-hour window between the 11:00
+sweep and `earnings_check` at 13:00. Seven concurrent is a different number, and
+**it is not 12 × 7/3** — gemma4's E-series keeps its per-layer embeddings in host
+RAM, so seven analyses contend for CPU and memory bandwidth far more than three
+do. Measure the seven-way analysis time first, then choose. Until that
+measurement exists, 12 is the safe number and is what ships.
 
 **Overshooting the sum costs latency, not failures, and an earlier note here
 was wrong about why.** It said `WAIT_TIMEOUT=600` is ten minutes against an
@@ -183,8 +197,9 @@ three vars threaded through `dockge/trading-bot.compose.yaml`'s
 
 **The model is also a runtime setting.** `analysis.get_model()/set_model()`
 store it in `BotSetting` under `llm_model` and `_build_graph()` applies it to
-both think stages, so `/model` or the settings page switches models without a
-redeploy. The env var above is only the default for an unset setting.
+both think stages, so the settings page switches models without a redeploy.
+That matters for the record: flipping the env var and redeploying would change
+the model between one morning and the next. The env var above is only the default for an unset setting.
 `analysis.model_choices()` lists what the endpoint actually serves, via the
 OpenAI-compatible `/v1/models` route (ollama serves it too), and an
 unreachable endpoint degrades to a free-text field rather than blocking a
@@ -192,9 +207,10 @@ save. Every `Signal` records `model`, and the scorecard's `by_model`
 breakdown is the point of the whole mechanism — switching models teaches you
 nothing if the win rates blend.
 
-**A larger gemma4 now fits, and the analyst should use it (measured
-2026-08-26/27; recommended, not yet switched — the analyst still runs
-`gemma4-e2b-96k`).** `gemma4:e4b-it-qat` (8.0B raw, 4B effective) runs **100%
+**The model to run is `gemma4-e4b-qat-128k` (measured 2026-08-26/27).** It is
+what the fresh 2026-09-01 deployment should start on, because the agent chooses
+its own research now and the candidate-menu decision is what e4b does and e2b
+does not. `gemma4:e4b-it-qat` (8.0B raw, 4B effective) runs **100%
 on the GPU at the full 131,072-token context**, using 3.7 GiB of the 8 GiB
 card. Built here as `gemma4-e4b-qat-128k`. `gemma4:12b` does not fit at any context
 — two to five layers always land on the CPU, and the QAT build does not rescue
@@ -247,18 +263,16 @@ hour.** The sweep runs at 11:00 UTC and has until `earnings_check` at 13:00 —
 and the paired 17.4 minutes per analysis, that is about **20 tickers**, against
 roughly 51 on e2b's 7 minutes. Six tickers is two waves and comfortable.
 
-The problem is that **the analyst's watchlist only grows.** Commissioning a
-ticker calls `db.add_to_watchlist` (`agent.py:1317`) and nothing in the agent
-ever removes one — `/untrack` is the only route, and it is manual. At the 4-6
-names a run it picks, the sweep reaches the 20-ticker ceiling in about four
-days of commissioning and then starts running into `earnings_check`, which
-puts its own analyses on the same pool. `_MAX_RESEARCH_PER_DAY = 15` does not
-help, because the limit is cumulative rather than per-day.
+**The watchlist ratchet this describes is solved, and only half of it.**
+Commissioning a ticker calls `db.add_to_watchlist` and for a while nothing
+could ever remove one. The `untrack` action and `_MAX_WATCHLIST = 12` landed on
+2026-08-27 and cap the growth.
 
-So before the analyst has been commissioning for a week, it needs either a
-watchlist cap or a rule that ages out a ticker it has stopped holding and
-stopped asking about. That is a code change, not a setting. Reverting to e2b
-only postpones it, and gives up the feature e4b was chosen for.
+**What is still missing is an ageing rule** — nothing drops a name the agent has
+stopped holding and stopped asking about. At the cap the agent must trade one
+name's coverage for another's, which is a decision it can make but is never
+prompted to revisit. `_MAX_RESEARCH_PER_DAY = 15` does not help, because that
+limit is per-day and the watchlist is cumulative.
 
 **Sampling stays at Gemma's published values** — temperature 1 / top_k 64 /
 top_p 0.95 (<https://ollama.com/library/gemma4>). `gemma4-e2b-96k` briefly ran
@@ -269,9 +283,9 @@ is reverted. Separately and still true: the app talks to Ollama over
 body**, so `TRADINGAGENTS_TEMPERATURE` does nothing and a Modelfile is the only
 channel that reaches the model.
 
-**Current model for the live bot (2026-08-11):** `gemma4-e2b-96k`, a custom Modelfile build of
-`gemma4:e2b` with the context raised to 96k. A full analysis takes about 7
-minutes, against roughly 15 for `qwen3:latest`. That is 23 LLM calls spending
+**The previous model (2026-08-11 to 2026-09-01):** `gemma4-e2b-96k`, a custom
+Modelfile build of `gemma4:e2b` with the context raised to 96k. A full analysis
+takes about 7 minutes, against roughly 15 for `qwen3:latest`. That is 23 LLM calls spending
 roughly 142k tokens, about 86% of them prompt tokens (one AAPL run measured
 2026-08-11). An earlier "2-3 minutes" figure here was wrong: 7 matches both
 that run and days of observed sweeps.
@@ -281,9 +295,9 @@ Every failure behind it was a defect in this app, and three fixes landed the
 same day: `json_schema` structured output, no price fields on `TraderProposal`,
 and a rescaled sentiment score. It went from 4 structured-output failures a run
 to 0 in each of two, and from citing nothing near the real close to 7 of 9 and
-5 of 6 — including 315.18 against a 315.20 close. **It is viable for the live
-bot at 2.5x the speed, and still wrong for the analyst**, which needs the
-candidate-menu decision it makes in only 2 runs of 8. Full record in
+5 of 6 — including 315.18 against a 315.20 close. **It is 2.5x faster than e4b
+and still the wrong model here**, because this agent chooses its own research
+and lfm2.5 makes the candidate-menu decision in only 2 runs of 8. Full record in
 [ollama/README.md](ollama/README.md).
 
 **That should cast doubt on the four below, not confirm them.** They were
@@ -403,11 +417,11 @@ rest on caching behaviour nobody here has verified.
 Projections for the current 9-ticker watchlist, at the 25 Aug measurement:
 **$0.056/analysis, $0.50/sweep, $2.50/week, $10.58/month.**
 
-Note the month figure **exceeds the $10/month billing cap** on the account. The
-week-long comparison is only $2.50 and fits easily, but running this
-indefinitely would trip the cap, and adding tickers or ever pointing the *main*
-model at Gemini would trip it sooner. Intraday triggers cost nothing — only the
-morning sweep chains a comparison run.
+Note the month figure **exceeds the $10/month billing cap** on the account, and
+that ceiling is now the binding constraint rather than a footnote. There is no
+comparison sweep any more, so pointing the model at Gemini means every analysis
+goes there — the full sweep, every day. Adding tickers trips the cap sooner.
+Intraday triggers are the cheap part.
 
 **Against self-hosting.** Running the whole history to date on Flash-Lite —
 9,656,261 prompt + 1,837,356 completion — would have cost **$7.49** at list,
@@ -426,8 +440,12 @@ The 22 Aug GOOG run was 100k tokens; the nine-ticker sweep averaged 111k, with
 several tickers at 106-137k. Estimating a sweep from one small run was
 optimistic by about 10% before any pricing question.
 
-Re-derive both the rate and these projections at the end of the comparison
-week (started 2026-08-25, the first properly paired day).
+**The comparison that would have settled this never finished.** It ran from
+2026-08-25 and the experiment ended on 2026-09-01 with the reset, so the numbers
+above are what exists: two measurements a week apart that disagree by 25% on
+billing, and a clear answer on speed. Re-derive them before switching, and
+expect to have to run the switch itself as the measurement now that a paired
+comparison is no longer possible.
 
 ## Vendored TradingAgents repo
 

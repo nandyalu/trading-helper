@@ -6,27 +6,27 @@ Open it at the root of whatever host and port the container serves, for example 
 
 ## Overview
 
-The landing page answers one question: is there anything I should do?
+The landing page answers one question: is anything wrong?
 
-**Needs a decision** is the only block on the page that is a call to action, so it is the only one with a colored border. It lists two things:
+**Needs attention** is the only block on the page that is a call to action, so it is the only one with a colored border. It lists three things:
 
-- A ticker you hold whose newest analysis says get out.
-- A stop that was reached, a target that was touched, or a position that fell below your cost — within the last three days.
-- An auto-trader holding with nothing resting at the broker to close it. This one is an absence rather than an event, which is exactly why it needs saying: an unprotected position looks identical to a protected one until you go looking for the missing order.
+- A ticker the agent holds whose newest analysis says get out.
+- A stop that was reached, a target that was touched, or a position that fell below the agent's cost — within the last three days.
+- **A holding with nothing resting at the broker to close it.** This one is an absence rather than an event, which is exactly why it needs saying: an unprotected position looks identical to a protected one until you go looking for the missing order. It is also the only row on this page that asks a person to act.
 
 That last row is read live rather than taken from the alert log, and the difference matters. Every other alert records a moment — a price was reached — and stays true afterwards, so showing it for three days is right. An unguarded position is a state: once the exits are placed the alert is stale, and nothing retracts it. So the alert stays in the log as a record of what happened, and the block above is driven by the live check, which clears itself the moment the exits go on.
 
 A big move or a volume spike is information, not a prompt, so those stay off this list and on the Alerts page. When there is nothing to decide, the page says so plainly rather than showing an empty box.
 
-Below that: your real and paper book values, the signal win rate, and how many signals are still maturing. The win rate shows a raw count instead of a percentage until about 20 signals have resolved, because three wins in four reads as 75% and means nothing.
+Below that: the agent's account — its equity, and the percentage return against the $10,000 it started with — plus the signal win rate and how many signals are still maturing. The win rate shows a raw count instead of a percentage until about 20 signals have resolved, because three wins in four reads as 75% and means nothing.
 
-**New opportunities** lists Buy signals from the last week on tickers you do not already hold, with the model's confidence and the expected value of the bet. **Never analyzed** lists watchlisted tickers with no signal yet.
+**New opportunities** lists Buy signals from the last week the agent has **not** acted on, with the model's confidence and the expected value of the bet. It is not a to-do list — nobody here places a trade. It is what the analyses found and the agent left alone, which is half of reading how it behaves. **Never analyzed** lists watchlisted tickers with no signal yet.
 
 ## Ticker detail
 
 This is the page the rest of the app exists to fill in.
 
-At the top, the numbers that decide what to do next: your position, the stop, the target, and the model's confidence. The stop and target show how far away they are — and say "breached" or "reached" once price has crossed them, rather than reporting a distance that no longer means anything.
+At the top, the numbers that decide what happens next: the agent's position, the stop, the target, and the model's confidence. The stop and target show how far away they are — and say "breached" or "reached" once price has crossed them, rather than reporting a distance that no longer means anything.
 
 ### The chart
 
@@ -37,31 +37,28 @@ The price chart carries the analysis on it, because a price chart on its own ans
 | Green arrow below the bar | A Buy or Overweight signal |
 | Red arrow above the bar | A Sell or Underweight signal |
 | Yellow circle | A Hold signal |
-| Blue square | A trade you recorded. A 📄 prefix means the paper book |
+| Blue square | A fill by the agent |
 | Purple dot | A watchdog alert |
 | Red dashed line | The stop level from the signal in force |
 | Green dashed line | Its price target |
 
-Entries sit below the bar and exits above it, so a Buy and the trade that followed it do not overlap. The stop and target lines come from the **newest** signal only — an older signal's levels were superseded, not merely graded, and drawing them would put a stale line on the chart.
+Entries sit below the bar and exits above it, so a Buy signal and the fill that followed it do not overlap. The stop and target lines come from the **newest** signal only — an older signal's levels were superseded, not merely graded, and drawing them would put a stale line on the chart.
 
 The chart opens on 30 days, which is the window a swing signal is actually judged over. Use the range buttons for more context; the chart always fits the full range you asked for.
 
 ### What happened
 
-Signals, alerts, and your trades in one list, newest first. They live in three different tables and carry different fields; putting them in three lists would leave you to interleave them by eye.
+Signals, alerts, and fills in one list, newest first. They live in three different tables and carry different fields; putting them in three lists would leave you to interleave them by eye.
 
 Each signal row shows the entry price, the stop, the target, and the confidence, plus a pass or fail badge once it has been graded. Click through for the full rationale and every analyst report.
 
 ### Positions and lots
 
-Three books can hold the same stock: your real account, the paper book, and the auto trader.
-All three now appear at the top of the page, so a position is never invisible on the page about the stock it is in.
-
-The auto trader's tile is the one that carries **resting stop** and **resting target** beside it.
+The position tile carries **resting stop** and **resting target** beside it.
 Those are different numbers from the stop and target above them, and the distinction matters: the signal's levels are what the analysis proposed, while the resting ones are orders sitting at the broker that will execute whether or not this app is running.
 They disagree often — a level the app discarded, an ATR-derived fallback, or a bracket the broker refused.
 
-When the auto trader holds a stock with **nothing** resting under it, the page says so in a warning rather than leaving you to notice two empty cells — and offers a button to fix it.
+When the agent holds a stock with **nothing** resting under it, the page says so in a warning rather than leaving you to notice two empty cells — and offers a button to fix it.
 
 **Place the exits now** rests a stop and a take-profit under shares the agent already holds.
 It uses the same levels a fresh buy would get: the newest signal's, screened against the current price, with a volatility-derived stop when the stated one cannot be used.
@@ -75,15 +72,15 @@ Press it again and nothing changes: one pending request per position, because a 
 
 A queued position is **not** a protected one, and the warning stays up to say so. The exits go on at the open, and an overnight gap is exactly when they would have mattered.
 
-**Positions taken** lists every lot bought in this ticker, in any book: entry price and date, quantity, exit price and date, days held, and the profit or loss.
+**Positions taken** lists every lot the agent bought in this ticker: entry price and date, quantity, exit price and date, days held, and the profit or loss.
 An open lot shows no exit and no profit, because its result is not decided yet, but the days held keep counting.
 Selling part of a position splits it — the shares sold get their own result and the rest stays open — and the matching is the same FIFO walk the position tiles use, so the two can never disagree about the same shares.
 
-### Ask, and record a trade
+### What is not on this page
 
-**Ask** puts a question to the model about the stored analysis for this ticker. It answers only from the saved reports, and says so when they do not cover your question.
+There is no button to run an analysis, add the ticker, drop it, or record a trade. The agent chooses what it watches and pays for every name on its watchlist every morning, so a hand-added ticker would cost it nothing and read, later, as a name it chose.
 
-**Record a trade** logs what you did in your broker. The bot never places orders. Logging keeps your position, the stop alerts, and the scorecard tied to what actually happened. Webull holdings sync in on their own; this is for anything else.
+The one button is **Place the exits now**, described above. It decides nothing.
 
 ## Alerts
 
@@ -93,12 +90,12 @@ Every watchdog alert, filterable by type. **No exit resting** is the one that is
 
 | Page | What it is for |
 |---|---|
-| Tickers | Add and remove watchlist entries, run an analysis across all of them, and follow screened candidates |
+| Tickers | What the agent watches, and the candidate menu it may commission from. Read-only |
 | Signals | Every signal, filterable by pending or resolved |
-| Paper | The paper book, its equity curve against SPY, and per-position closes |
-| Auto trader | The simulated account the model trades on its own: budget, cash, its equity curve, exits it has moved, holdings with the stop and target actually resting at the broker, every position taken with its entry, exit and profit, and every order with the reason it gave |
-| Portfolio | The real book, weights, and concentration warnings |
+| Auto trader | The simulated account: budget, cash, its equity curve, exits it has moved, holdings with the stop and target actually resting at the broker, every position taken with its entry, exit and profit, and every order with the reason it gave |
+| Events | **Every decision pass, with the prompt the agent saw and the answer it gave, word for word.** Behaviour here is mostly prompt, so this is the page that makes a month of runs readable afterwards |
+| Journey | The last ten days of the generated journal — what it bought, what that cost, what got graded |
 | Scorecard | Win rates overall, by decision, by model, and by ticker, plus whether the model's stated confidence matches how often it is right |
 | Digest | The weekly wrap-up |
 | Regime | VIX, SPY against its 200-day average, and the yield curve |
-| Settings | Trade horizon, analysis model, sizing limits, alert thresholds, the daily sweep, and the auto trader with its budget and conviction floor |
+| Settings | Trade horizon, analysis model, alert thresholds, the daily sweep, and the agent with its budget and conviction floor |

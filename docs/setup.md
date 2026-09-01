@@ -7,12 +7,12 @@ Webull and Reddit both degrade gracefully when you leave them unset.
 
 ## Discord bot token + channel ID
 
-This is required for slash commands and scheduled posts.
+This is required for the scheduled posts. There are no slash commands.
 If you skip this step, the app still runs as a pure web dashboard — `backend/app.py` starts Discord only when `DISCORD_BOT_TOKEN` is set.
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it anything, for example "Trading Helper".
-2. Open the **Bot** tab, click **Reset Token**, and copy the value. This is `DISCORD_BOT_TOKEN`. You do not need to enable any privileged intents (message content, presence, members) — the bot only uses slash commands and default intents.
-3. Open **OAuth2 → URL Generator**. Under **Scopes**, check `bot` and `applications.commands`. Under **Bot Permissions**, check **Send Messages**, **Embed Links**, and **Add Reactions** — the ✅ paper-trading flow needs to react to its own messages.
+2. Open the **Bot** tab, click **Reset Token**, and copy the value. This is `DISCORD_BOT_TOKEN`. You do not need to enable any privileged intents (message content, presence, members) — the app only posts, using default intents.
+3. Open **OAuth2 → URL Generator**. Under **Scopes**, check `bot`. Under **Bot Permissions**, check **Send Messages** and **Embed Links**. Nothing else is needed: the app posts and never reads.
 4. Open the generated URL, pick your server, and authorize it.
 5. In Discord, turn on Developer Mode (User Settings → Advanced). Right-click the channel where you want the bot to post, and click **Copy Channel ID**. This is `DISCORD_CHANNEL_ID`. Or skip this step and run `/setchannel` in that channel after the bot comes online — this saves the same value to the database.
 
@@ -23,14 +23,14 @@ DISCORD_CHANNEL_ID=...
 
 ## Webull API keys (optional)
 
-This upgrades real-time quotes from yfinance's delayed feed to Webull's snapshot endpoint, and it enables `/webullsync` to pull in your real holdings.
+**These are required, not optional.** The agent places its orders through Webull's sandbox, and it refuses to run without them. They also upgrade quotes from yfinance's delayed feed to Webull's snapshot endpoint.
 Access is read-only — the bot never places orders through this.
 If you leave this unset, everything falls back to yfinance automatically (`backend/services/quotes.py`).
 
 1. Sign in at the [Webull OpenAPI developer portal](https://developer.webull.com/) with your regular Webull account.
 2. Create an app to get an **App Key** and an **App Secret**. These map to `WEBULL_APP_KEY` and `WEBULL_APP_SECRET`.
 3. The portal issues both sandbox and production credentials. Start with sandbox (`WEBULL_SANDBOX=1`) to confirm quotes are flowing. Then switch to production keys by unsetting `WEBULL_SANDBOX`. Sandbox and production use different endpoints, and you cannot use the two credential sets interchangeably.
-4. `/webullsync` (and the daily automatic sync) needs read access to your account and positions. If the portal offers a narrower grant for quotes-only use, that works too.
+4. The agent needs trading access on the **paper** account, plus read access to positions and order history. **Set `WEBULL_SANDBOX=1`.** The agent checks this itself and refuses every order without it.
 
 ```
 WEBULL_APP_KEY=...
