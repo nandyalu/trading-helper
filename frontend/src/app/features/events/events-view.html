@@ -1,88 +1,98 @@
-<header class="page-head">
-  <h1>Events</h1>
-  <p class="muted">
-    Every decision pass, with the prompt the agent was given and the answer it returned. The Auto
-    trader page shows what it holds; this shows how it decided.
-  </p>
-</header>
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Events</h1>
+      <p class="subtitle">
+        Every decision pass, with the prompt the agent was given and the answer it returned. The
+        Auto trader page shows what it holds; this shows how it decided.
+      </p>
+    </div>
+  </header>
 
-@if (loading()) {
-  <div class="skeleton" style="height: 8rem"></div>
-} @else if (!events().length) {
-  <div class="empty">
-    <p>No decision passes recorded yet.</p>
-    <p class="muted">The agent runs at 13:35 UTC on a weekday, and each pass appears here.</p>
-  </div>
-} @else {
-  @for (event of events(); track event.id) {
-    <article class="card event">
-      <header class="event-head">
-        <div>
-          <strong>{{ event.ran_at | date: 'EEE d MMM, HH:mm' }} UTC</strong>
-          <span class="muted"> — {{ did(event) }}</span>
-        </div>
-        @if (event.cash !== null) {
-          <span class="muted">
-            cash {{ event.cash | number: '1.2-2' }} · equity {{ event.equity | number: '1.2-2' }}
-          </span>
-        }
-      </header>
-
-      @if (event.reasoning) {
-        <p class="reasoning">{{ event.reasoning }}</p>
-      }
-
-      @if (event.orders.length) {
-        <ul class="orders">
-          @for (order of event.orders; track $index) {
-            <li>
-              <span class="side side--{{ order.side }}">{{ order.side }}</span>
-              <strong>{{ order.ticker }}</strong>
-              @if (order.quantity) {
-                <span>{{ order.quantity }}</span>
-              }
-              @if (order.reason) {
-                <span class="muted">— {{ order.reason }}</span>
-              }
-            </li>
+  @if (loading()) {
+    <div class="skeleton" style="height: 10rem"></div>
+    <div class="skeleton" style="height: 10rem"></div>
+  } @else if (!events().length) {
+    <div class="empty">
+      <p>No decision passes recorded yet.</p>
+      <p class="hint">The agent runs at 13:35 UTC on a weekday, and each pass appears here.</p>
+    </div>
+  } @else {
+    @for (event of events(); track event.id) {
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <strong>{{ event.ran_at | date: 'EEE d MMM, HH:mm' }} UTC</strong>
+            <span class="muted"> — {{ did(event) }}</span>
+          </div>
+          @if (event.cash !== null) {
+            <span class="muted">
+              cash {{ event.cash | number: '1.2-2' }} · equity {{ event.equity | number: '1.2-2' }}
+            </span>
           }
-        </ul>
-      }
-
-      @if (event.refused.length) {
-        <ul class="orders orders--refused">
-          @for (order of event.refused; track $index) {
-            <li>
-              <span class="side side--refused">refused</span>
-              <strong>{{ order.ticker }}</strong>
-              <span class="muted">— {{ order.why }}</span>
-            </li>
-          }
-        </ul>
-      }
-
-      @if (asked(event)) {
-        <div class="transcript">
-          <button type="button" (click)="toggle(event.id, 'prompt')">
-            {{ isOpen(event.id, 'prompt') ? 'Hide' : 'Show' }} the prompt
-          </button>
-          <button type="button" (click)="toggle(event.id, 'response')">
-            {{ isOpen(event.id, 'response') ? 'Hide' : 'Show' }} the answer
-          </button>
         </div>
-        @if (isOpen(event.id, 'prompt')) {
-          <pre class="verbatim">{{ event.prompt }}</pre>
-        }
-        @if (isOpen(event.id, 'response')) {
-          <pre class="verbatim">{{ event.response }}</pre>
-        }
-      } @else {
-        <p class="muted">
-          This pass kept no prompt. Passes before 2026-09-01 were not recorded, and they cannot be
-          reconstructed — the prompt is built from a book, a watchlist and a signal list that have
-          all moved since.
-        </p>
-      }
-    </article>
+
+        <div class="card-body">
+          @if (event.reasoning) {
+            <p class="reasoning">{{ event.reasoning }}</p>
+          }
+
+          @if (event.orders.length || event.refused.length) {
+            <ul class="orders">
+              @for (order of event.orders; track $index) {
+                <li>
+                  <span class="side side--{{ order.side }}">{{ order.side }}</span>
+                  <strong>{{ order.ticker }}</strong>
+                  @if (order.quantity) {
+                    <span>{{ order.quantity }}</span>
+                  }
+                  @if (order.reason) {
+                    <span class="muted">{{ order.reason }}</span>
+                  }
+                </li>
+              }
+              @for (order of event.refused; track $index) {
+                <li>
+                  <span class="side side--refused">refused</span>
+                  <strong>{{ order.ticker }}</strong>
+                  <span class="muted">{{ order.why }}</span>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (asked(event)) {
+            <div class="transcript">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                (click)="toggle(event.id, 'prompt')"
+              >
+                {{ isOpen(event.id, 'prompt') ? 'Hide' : 'Show' }} the prompt
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                (click)="toggle(event.id, 'response')"
+              >
+                {{ isOpen(event.id, 'response') ? 'Hide' : 'Show' }} the answer
+              </button>
+            </div>
+            @if (isOpen(event.id, 'prompt')) {
+              <pre class="verbatim">{{ event.prompt }}</pre>
+            }
+            @if (isOpen(event.id, 'response')) {
+              <pre class="verbatim">{{ event.response }}</pre>
+            }
+          } @else {
+            <p class="hint">
+              This pass kept no prompt. Passes before 2026-09-01 were not recorded, and they cannot
+              be reconstructed — the prompt is built from a book, a watchlist and a signal list that
+              have all moved since.
+            </p>
+          }
+        </div>
+      </article>
+    }
   }
-}
+</section>

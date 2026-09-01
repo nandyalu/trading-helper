@@ -1463,44 +1463,34 @@ table {
 
 /* Events and Journey
    ------------------
-   Both pages are feeds of long text rather than tables, so they need a
-   readable measure and a way to show a verbatim block without it dominating
-   the page. Colors come from the tokens above, never as literals. */
-
-.event + .event,
-.journey-day + .journey-day {
-  margin-top: 0.75rem;
-}
-
-.event-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: space-between;
-  align-items: baseline;
-}
+   Both pages are feeds of long text rather than tables. The `.page` wrapper
+   already supplies the max-width, padding and the gap between cards, so
+   nothing here sets an outer margin — every rule below is about the inside of
+   a card. Spacing uses the --sp scale so these read at the same rhythm as the
+   rest of the app. */
 
 .reasoning {
-  margin: 0.5rem 0 0;
-  /* The agent's own sentence, set apart from the orders below it: this is what
+  /* The agent's own sentence, set apart from the orders under it: this is what
      it said it was doing, and those are what it actually did. */
-  border-left: 2px solid var(--border);
-  padding-left: 0.75rem;
+  margin: 0;
+  border-left: 2px solid var(--border-strong);
+  padding-left: var(--sp-3);
   color: var(--text);
 }
 
 .orders {
   list-style: none;
-  margin: 0.75rem 0 0;
+  margin: var(--sp-4) 0 0;
   padding: 0;
-  display: grid;
-  gap: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 
 .orders li {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: var(--sp-2);
   align-items: baseline;
 }
 
@@ -1508,66 +1498,66 @@ table {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border);
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm, 0.25rem);
+  border: 1px solid var(--border-strong);
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.side--buy {
+.side--buy,
+.side--research {
   color: var(--pos);
   border-color: var(--pos);
+  background: var(--pos-soft);
 }
 
 .side--sell,
 .side--refused {
   color: var(--neg);
   border-color: var(--neg);
+  background: var(--neg-soft);
+}
+
+.side--untrack,
+.side--adjust {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-soft);
 }
 
 .transcript {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.transcript button {
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.transcript button:hover {
-  color: var(--text);
-  border-color: var(--text);
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
 }
 
 /* A prompt runs to tens of kilobytes. Capped and scrolled, so one long pass
    cannot push every other event off the screen. */
-.verbatim,
-.journey-body {
-  margin: 0.75rem 0 0;
-  padding: 0.75rem;
-  border-radius: 0.25rem;
+.verbatim {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm, 0.25rem);
   background: var(--surface-2);
   border: 1px solid var(--border);
+  color: var(--text-muted);
   font-size: 0.8rem;
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-y: auto;
-  max-height: 28rem;
+  max-height: 26rem;
 }
 
+/* The journal is prose, not a transcript: it reads at body size, with no box
+   around it, because the card is already the box. */
 .journey-body {
-  max-height: none;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-size: 0.9rem;
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
 }

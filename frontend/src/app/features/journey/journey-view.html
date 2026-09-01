@@ -1,23 +1,32 @@
-<header class="page-head">
-  <h1>Journey</h1>
-  <p class="muted">
-    The last ten days, written by the app about itself. Every sentence comes from a trade, a charge,
-    a decision pass or a graded signal, so it cannot drift from the book.
-  </p>
-</header>
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Journey</h1>
+      <p class="subtitle">
+        The last ten days, written by the app about itself. Every sentence comes from a trade, a
+        charge, a decision pass or a graded signal, so it cannot drift from the book.
+      </p>
+    </div>
+  </header>
 
-@if (loading()) {
-  <div class="skeleton" style="height: 8rem"></div>
-} @else if (!entries().length) {
-  <div class="empty">
-    <p>Nothing recorded yet.</p>
-    <p class="muted">A day appears here once the agent has run a decision pass on it.</p>
-  </div>
-} @else {
-  @for (entry of entries(); track entry.date) {
-    <article class="card journey-day">
-      <h2>{{ entry.date | date: 'EEEE d MMMM' }}</h2>
-      <pre class="journey-body">{{ body(entry.markdown) }}</pre>
-    </article>
+  @if (loading()) {
+    <div class="skeleton" style="height: 8rem"></div>
+    <div class="skeleton" style="height: 8rem"></div>
+  } @else if (!entries().length) {
+    <div class="empty">
+      <p>Nothing recorded yet.</p>
+      <p class="hint">A day appears here once the agent has run a decision pass on it.</p>
+    </div>
+  } @else {
+    @for (entry of entries(); track entry.date) {
+      <article class="card">
+        <div class="card-head">
+          <strong>{{ entry.date | date: 'EEEE d MMMM' }}</strong>
+        </div>
+        <div class="card-body">
+          <pre class="journey-body">{{ body(entry.markdown) }}</pre>
+        </div>
+      </article>
+    }
   }
-}
+</section>
