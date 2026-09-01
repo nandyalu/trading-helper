@@ -1,9 +1,13 @@
-"""The autonomous paper-trading agent's book and trade log.
+"""The agent's book, trade log, and the record of what it decided.
 
-Read-only apart from ``/run``, which triggers a decision pass by hand — the
-same one the 13:35 UTC job runs. Placing orders is never exposed directly:
-the agent decides what to trade, and there is no endpoint that lets the
-dashboard place an order of its own.
+Read-only apart from ``/exits/{ticker}``, and that one places no trade. There
+is no route that starts a decision pass and none that places an order: the
+agent decides at 13:35 UTC and the dashboard reports what it did.
+
+A ``/run`` route used to exist, to fire a pass by hand. It is gone for the same
+reason the Discord commands are. A pass run off-schedule is a real decision in
+the record, made at a price and a time nobody planned, and nothing afterwards
+can tell it from the ones the schedule produced.
 """
 import json
 
@@ -16,7 +20,6 @@ from backend.api.schemas import (
     AgentBookOut,
     AgentComparisonOut,
     AgentEquityPointOut,
-    AgentRunOut,
     AgentTradeOut,
     AgentTradeRowOut,
     ActionResultOut,
@@ -61,34 +64,6 @@ def get_book():
 def get_trades():
     """Newest first — the log reads as a history, not a ledger to replay."""
     return [AgentTradeOut.model_validate(t) for t in reversed(db.get_agent_trades())]
-
-
-@router.post("/run", response_model=AgentRunOut)
-def run_now():
-    """Run a decision pass immediately. Refused outside the sandbox by
-    agent.run_once itself, which reports the reason rather than raising."""
-    run = agent.run_once()
-    if run.skipped:
-        raise HTTPException(status_code=409, detail=run.skipped)
-    return AgentRunOut(
-        reasoning=run.reasoning,
-        placed=[
-            {"ticker": o["ticker"], "side": o["side"], "quantity": o["quantity"],
-             "reason": o.get("reason")}
-            for o in run.placed
-        ],
-        rejected=[
-            {"ticker": r.ticker, "side": r.side, "quantity": r.quantity, "why": r.why}
-            for r in run.rejected
-        ],
-        failed=[
-            {"ticker": o["ticker"], "side": o["side"], "quantity": o["quantity"], "why": why}
-            for o, why in run.failed
-        ],
-        adjusted=run.adjusted,
-        researched=run.researched,
-        untracked=run.untracked,
-    )
 
 
 @router.get("/performance", response_model=AgentComparisonOut)
@@ -158,9 +133,11 @@ def get_unprotected():
 def arm_exits(ticker: str):
     """Place the missing exits on a position the agent already holds.
 
-    A write, unlike everything else here except /run — but it places no trade
-    and opens no position. It rests a stop and a take-profit under shares that
-    are already owned, which is the one action that can only reduce exposure.
+    The one write left, and it decides nothing. It rests the stop and target
+    the agent already chose, under shares it already owns, in the case where
+    the broker refused the bracket at purchase — usually because the cash was
+    unsettled. Nothing here opens a position or changes a size, and arming an
+    exit can only reduce exposure.
     """
     result = agent.arm_exits_now(ticker)
     if not result["ok"]:

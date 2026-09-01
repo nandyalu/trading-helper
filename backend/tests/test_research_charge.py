@@ -37,11 +37,20 @@ def store(monkeypatch):
     return rows
 
 
-def test_research_is_free_by_default(store):
-    """The live deployment has always behaved this way and must keep doing so
-    while a model comparison runs next door — a research charge would move the
-    agent's cash, and two variables at once make neither result clean."""
-    assert research.get_price() == 0.0
+def test_research_costs_five_cents_by_default(store):
+    """The charge is the point of letting the agent choose what to research.
+    Free research is just a longer watchlist, so a fresh container charges from
+    its first analysis rather than until somebody remembers to set a price."""
+    assert research.get_price() == 0.05
+    assert research.is_charging() is True
+
+
+def test_a_zero_price_still_makes_research_free(store):
+    """Worth being able to say deliberately, even though it is no longer the
+    default."""
+    research.set_price(0.0)
+    store.clear()
+
     assert research.is_charging() is False
     assert research.charge("GOOG") is None
     assert store == []
@@ -69,11 +78,11 @@ def test_a_negative_price_is_refused(store):
         research.set_price(-1)
 
 
-def test_an_unparseable_price_falls_back_to_free(store, monkeypatch):
+def test_an_unparseable_price_falls_back_to_the_default(store, monkeypatch):
     """A bad setting must not start charging an arbitrary amount."""
     monkeypatch.setattr(research.db, "get_setting", lambda k: "not a number")
 
-    assert research.get_price() == 0.0
+    assert research.get_price() == 0.05
 
 
 def test_a_failed_charge_never_undoes_the_analysis(store, monkeypatch):

@@ -17,7 +17,7 @@ _EPSILON = 1e-9
 
 
 # Marks a transaction whose date is the day it was imported, not the day the
-# shares were actually bought — see backend/services/broker.py. Anything
+# shares were actually bought. Anything
 # date-sensitive has to leave these lots out rather than trust the date.
 ESTIMATED_DATE_NOTE = "date unknown"
 

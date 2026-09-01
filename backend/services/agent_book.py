@@ -25,7 +25,9 @@ from backend.services.positions import compute_position
 log = logging.getLogger("trading-bot.agent_book")
 
 _BUDGET_SETTING_KEY = "agent_budget"
-DEFAULT_BUDGET = 1000.0
+# The experiment's stake. $10,000 is what the agent was given on 2026-09-01,
+# and it is the number every return on the dashboard is measured against.
+DEFAULT_BUDGET = 10_000.0
 
 # Cash below this can't buy a share of anything worth owning, and floating
 # point makes exact-zero comparisons unreliable after a few round trips.
@@ -107,14 +109,13 @@ class Book:
 
 
 def _default_budget() -> float:
-    """What a deployment starts with before anyone sets a budget.
+    """What the app starts with before anyone sets a budget.
 
-    An env var, because the two deployments start at different amounts and a
-    fresh database has no setting yet — the experiment would otherwise come up
-    on the live agent's $1,000 and have to be corrected by hand on first run,
-    which is exactly the kind of step that gets forgotten once and then
-    reported as a bug. Same pattern as the model: the env var is only the
-    default for an unset setting, and the settings page still wins.
+    ``AGENT_BUDGET`` overrides it, because a fresh database has no setting yet
+    and a new container should come up on the right number rather than be
+    corrected by hand on its first run — the kind of step that gets forgotten
+    once and then reported as a bug. Same pattern as the model: the env var is
+    only the default for an unset setting, and the settings page still wins.
     """
     raw = (os.environ.get("AGENT_BUDGET") or "").strip()
     if not raw:

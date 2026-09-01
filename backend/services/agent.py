@@ -1140,7 +1140,7 @@ def atr_stop(ticker: str, price: float) -> float | None:
     if atr is None:
         log.warning("No ATR for %s — cannot derive a stop", ticker)
         return None
-    suggestion = suggest_position(price, atr, equity=None)
+    suggestion = suggest_position(price, atr)
     if suggestion is None or suggestion.stop is None or suggestion.stop >= price:
         return None
     log.info(

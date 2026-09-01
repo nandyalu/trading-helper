@@ -1,6 +1,7 @@
 """Intraday alert watchdog and event-driven analysis triggers — all
 rule-based, no LLM involved. ``scan_for_alerts`` does one pass over every
-tracked ticker (watchlist ∪ open real positions ∪ open paper positions),
+ticker on the watchlist — which covers every holding, because the agent may
+not untrack a position it still owns —
 alerting on big daily moves, unusual volume, stop-level breaches, and
 price-target touches; big moves and volume spikes also nominate the ticker
 for an immediate TradingAgents run. ``earnings_tickers_to_analyze`` feeds the
@@ -20,8 +21,8 @@ from tradingagents.dataflows.stockstats_utils import yf_retry
 
 from backend.database import db
 from backend.database.models import Signal
-from backend.services import bars, listings
-from backend.services.positions import Position, compute_position
+from backend.services import bars, listings, ticker_book
+from backend.services.ticker_book import AgentPosition
 from backend.services.signals import price_crossed_target
 
 US_MARKET_TZ = ZoneInfo("America/New_York")
@@ -143,8 +144,7 @@ class AlertCandidate:
 def evaluate_ticker(
     ticker: str,
     snapshot: DailySnapshot,
-    real_position: Position | None,
-    paper_position: Position | None,
+    position: AgentPosition | None,
     target_signal: Signal | None,
     config: AlertConfig,
     today: datetime.date,
@@ -176,7 +176,7 @@ def evaluate_ticker(
             )
         )
 
-    held = any(p is not None and p.quantity > 0 for p in (real_position, paper_position))
+    held = position is not None and position.quantity > 0
 
     # Two stop alerts, deliberately separate. They answer different questions
     # and either can matter without the other:
@@ -204,23 +204,18 @@ def evaluate_ticker(
                 )
             )
 
-    stop_hits = []
-    for label, position in (("real", real_position), ("paper", paper_position)):
-        if position is not None and position.quantity > 0 and position.avg_cost > 0:
-            drop_pct = (1 - snapshot.price / position.avg_cost) * 100
-            if drop_pct >= config.stop_pct:
-                stop_hits.append(f"{label} avg cost ${position.avg_cost:,.2f} (−{drop_pct:.1f}%)")
-    if stop_hits:
-        alerts.append(
-            AlertCandidate(
-                ticker,
-                "stop_loss",
-                f"stop:{ticker}:{today}",
-                f"🛑 {ticker} at ${snapshot.price:,.2f} is over {config.stop_pct:g}% below your "
-                + " and ".join(stop_hits)
-                + ".",
+    if held and position.avg_cost > 0:
+        drop_pct = (1 - snapshot.price / position.avg_cost) * 100
+        if drop_pct >= config.stop_pct:
+            alerts.append(
+                AlertCandidate(
+                    ticker,
+                    "stop_loss",
+                    f"stop:{ticker}:{today}",
+                    f"🛑 {ticker} at ${snapshot.price:,.2f} is over {config.stop_pct:g}% below "
+                    f"the agent's ${position.avg_cost:,.2f} average cost (−{drop_pct:.1f}%).",
+                )
             )
-        )
 
     if (
         held
@@ -248,17 +243,15 @@ def evaluate_ticker(
 
 
 def _tracked_tickers() -> list[str]:
-    """Watchlist plus anything actually held, in either book — minus anything
-    that has stopped trading. A delisted holding still appears in the portfolio;
-    there is just nothing to watch, and no alert it could ever produce."""
-    tickers = set(db.get_watchlist())
-    for ticker in db.get_all_transaction_tickers():
-        if compute_position(db.get_transactions(ticker)).quantity > 0:
-            tickers.add(ticker)
-    for ticker in db.get_all_paper_tickers():
-        if compute_position(db.get_paper_transactions(ticker)).quantity > 0:
-            tickers.add(ticker)
-    return sorted(tickers - set(listings.inactive_tickers()))
+    """The watchlist, minus anything that has stopped trading.
+
+    A held ticker is always on the watchlist — the agent cannot untrack a
+    position it still owns, and Python refuses the attempt — so the watchlist
+    alone covers everything the agent holds. A delisted holding is dropped
+    here: it still sits in the book, there is just nothing left to watch and no
+    alert it could ever produce.
+    """
+    return sorted(set(db.get_watchlist()) - set(listings.inactive_tickers()))
 
 
 def scan_for_alerts() -> tuple[list[AlertCandidate], list[str]]:
@@ -276,15 +269,13 @@ def scan_for_alerts() -> tuple[list[AlertCandidate], list[str]]:
         snapshot = get_daily_snapshot(ticker)
         if snapshot is None or snapshot.last_bar_date != today:
             continue  # no fresh bar (fetch failed, holiday) — never alert on stale closes
-        real_position = compute_position(db.get_transactions(ticker))
-        paper_position = compute_position(db.get_paper_transactions(ticker))
+        position = ticker_book.agent_position(ticker, snapshot.price)
         target_signal = db.get_latest_signal_with_target(ticker)
         stop_signal = db.get_latest_signal_with_stop(ticker)
         for candidate in evaluate_ticker(
             ticker,
             snapshot,
-            real_position,
-            paper_position,
+            position,
             target_signal,
             config,
             today,

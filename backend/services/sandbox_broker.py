@@ -77,6 +77,23 @@ class NotSandboxError(RuntimeError):
     """Raised instead of placing an order when the client isn't simulated."""
 
 
+def orders_in(row: dict) -> list[dict]:
+    """The individual orders inside one order-history row.
+
+    Webull answers with *combo* wrappers, not orders: each row carries
+    ``client_order_id`` / ``combo_type`` / ``combo_order_id`` and an ``orders``
+    list holding the real order objects. A single-leg order is still wrapped in
+    a one-element list, so there is no flat case to special-case. The docs hint
+    at this only obliquely ("if they are group orders, will be returned
+    together"), and reading the top level instead finds no symbol, no side and
+    no quantity — every row parses to nothing.
+    """
+    orders = row.get("orders")
+    if isinstance(orders, list):
+        return [order for order in orders if isinstance(order, dict)]
+    return [row] if "symbol" in row else []
+
+
 def _assert_sandbox() -> None:
     if not quotes.is_sandbox():
         raise NotSandboxError(
@@ -552,8 +569,7 @@ def get_order_detail(client_order_id: str) -> dict | None:
     price, and quantity all live inside a one-element ``orders`` list, and the
     top level carries none of them. Reading the top level finds a dict that
     looks plausible and parses to nothing, so every fill stays pending forever.
-    ``broker.orders_in`` already unwraps this shape for order history; the same
-    unwrapping is what this needs.
+    ``orders_in`` unwraps it.
     """
     _assert_sandbox()
     client = quotes.get_api_client()
@@ -561,8 +577,6 @@ def get_order_detail(client_order_id: str) -> dict | None:
     if client is None or account_id is None:
         return None
     from webull.trade.trade.v3.order_opration_v3 import OrderOperationV3
-
-    from backend.services.broker import orders_in
 
     response = OrderOperationV3(client).get_order_detail(account_id, client_order_id)
     body = response.json() if hasattr(response, "json") else response

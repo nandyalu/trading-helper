@@ -27,18 +27,23 @@ log = logging.getLogger("trading-bot.research")
 
 _PRICE_SETTING_KEY = "research_price_usd"
 
-# Zero means research is free, which is how the live deployment has always
-# behaved and how it continues to behave unless someone sets a price.
-DEFAULT_PRICE = 0.0
+# What one analysis costs the agent. Roughly what a vendor charges for the same
+# work, so the constraint is real rather than invented: at 12 tickers it is
+# $0.60 a morning against a $10,000 book, about a 1.5% annual hurdle.
+#
+# The charge is the whole point of letting the agent choose what to research.
+# Free research is just a longer watchlist, and an agent that pays nothing for
+# being wrong about what was worth studying learns nothing from being wrong.
+DEFAULT_PRICE = 0.05
 
 
 def _default_price() -> float:
-    """The price a deployment starts at, before anyone sets one.
+    """The price the app starts at, before anyone sets one.
 
-    Zero unless RESEARCH_PRICE_USD says otherwise, so the live deployment
-    stays free even if this code is deployed there. The experiment's compose
-    sets $0.05 and comes up charging from its first analysis, rather than
-    running free until somebody remembers.
+    ``RESEARCH_PRICE_USD`` overrides it. Zero is accepted and makes research
+    free, which is worth being able to say deliberately — but it is no longer
+    the default, so a fresh container charges from its first analysis rather
+    than running free until somebody remembers.
     """
     raw = (os.environ.get("RESEARCH_PRICE_USD") or "").strip()
     if not raw:

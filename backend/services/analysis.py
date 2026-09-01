@@ -12,18 +12,15 @@ import time
 import urllib.request
 from collections.abc import Awaitable, Callable
 
-import discord
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients.openai_client import OPENAI_COMPATIBLE_PROVIDERS
 
 from backend.database import db
 from backend.database.models import Signal
-from backend.discord_bot.notify import notify
 from backend.services import bars, llm_usage, research, watchdog
 from backend.services import llm_traces
-from backend.services.paper import PAPER_EMOJI
-from backend.services.positions import Position, compute_position, describe_position, get_current_price
+from backend.services.positions import get_current_price
 from backend.services.signals import (
     BUYISH_DECISIONS,
     SELLISH_DECISIONS,
@@ -41,35 +38,9 @@ from backend.services.signals import (
     parse_time_horizon_days,
     plausible_level,
 )
-from backend.services.sizing import build_sizing_field, get_atr, suggest_position
+from backend.services.sizing import get_atr, suggest_position
 
 log = logging.getLogger("trading-bot.analysis")
-
-_DECISION_COLOR = {
-    "Buy": discord.Color.green(),
-    "Overweight": discord.Color.teal(),
-    "Hold": discord.Color.gold(),
-    "Underweight": discord.Color.orange(),
-    "Sell": discord.Color.red(),
-}
-
-# Rule-based only — no LLM involved in combining a real position with the
-# generic AI signal, this is just a lookup table.
-_ACTION_FOR_DECISION = {
-    "Sell": "Consider selling/trimming your {qty:g} shares.",
-    "Underweight": "Consider selling/trimming your {qty:g} shares.",
-    "Buy": "Consider adding to your position.",
-    "Overweight": "Consider adding to your position.",
-    "Hold": "Maintain your current position.",
-}
-
-# Discord hard limits: embed description <= 4096 chars, a field value <= 1024,
-# and the total of every embed in one message <= 6000. We put the bulk of the
-# rationale in the description (much roomier than a field) and spill any
-# overflow into one continuation field. Worst case (4096 + 1024 + position
-# field + footer + title) stays comfortably under the 6000 total.
-_DESCRIPTION_MAX = 4096
-_FIELD_MAX = 1024
 
 # Bounds how many analyses (graph.propagate() calls) run at once, regardless
 # of how many callers ask for one concurrently — matches the Ollama pool's
@@ -364,7 +335,7 @@ def _resolve_stop_loss(
     atr = get_atr(ticker)
     if atr is None:
         return None
-    suggestion = suggest_position(price, atr, equity=None)
+    suggestion = suggest_position(price, atr)
     return suggestion.stop if suggestion else None
 
 
@@ -638,94 +609,6 @@ def answer_question(context: str, question: str) -> str:
     if isinstance(content, list):  # some providers return content blocks
         content = " ".join(str(part) for part in content)
     return str(content)
-
-
-def build_trade_plan_field(levels: dict) -> str | None:
-    """The trade's exit level and the quality of the bet, as one embed field.
-    None when nothing survived — an empty section is worse than no section.
-
-    Takes the already-checked levels from _trade_plan_levels rather than
-    re-reading the trader plan, so the embed and the stored signal can never
-    disagree about what the plan was. The embed is posted before record_signal
-    runs, so a level the database rejects would otherwise still be the thing
-    the reader acts on.
-    """
-    entry = levels["entry_price"]
-    stop = levels["stop_loss"]
-    probability = levels["win_probability"]
-    risk_reward = levels["risk_reward"]
-    expected_value = levels["expected_value_r"]
-
-    lines = []
-    if entry is not None:
-        lines.append(f"Entry: ${entry:,.2f}")
-    if stop is not None:
-        risk_line = f"Stop: ${stop:,.2f}"
-        if entry:
-            risk_line += f" ({(stop / entry - 1) * 100:+.1f}% from entry)"
-        lines.append(risk_line)
-    if probability is not None:
-        lines.append(f"Win probability: {probability:.0f}% (the model's own estimate)")
-    if risk_reward is not None:
-        lines.append(f"Risk/reward: {risk_reward:.2f} : 1")
-    if expected_value is not None:
-        verdict = "favorable" if expected_value > 0 else "unfavorable"
-        lines.append(f"Expected value: {expected_value:+.2f}R — {verdict}")
-    return "\n".join(lines) if lines else None
-
-
-def format_decision_embed(
-    ticker: str,
-    final_state: dict,
-    decision: str,
-    position: Position | None = None,
-    sizing_field: str | None = None,
-    price: float | None = None,
-) -> discord.Embed:
-    """``price`` is the current quote. Without it the trade-plan levels are
-    shown unchecked, which is only right for callers that have no price to
-    check against."""
-    rationale = final_state.get("final_trade_decision", "") or "(none)"
-    embed = discord.Embed(
-        title=f"{ticker} — {decision}",
-        description=rationale[:_DESCRIPTION_MAX],
-        color=_DECISION_COLOR.get(decision, discord.Color.blurple()),
-        timestamp=datetime.datetime.now(datetime.timezone.utc),
-    )
-    if len(rationale) > _DESCRIPTION_MAX:
-        overflow = rationale[_DESCRIPTION_MAX : _DESCRIPTION_MAX + _FIELD_MAX]
-        embed.add_field(name="Rationale (cont.)", value=overflow, inline=False)
-
-    trade_plan = build_trade_plan_field(
-        _trade_plan_levels(
-            final_state.get("trader_investment_plan") or "",
-            rationale,
-            price,
-            decision,
-            horizon_params(final_state.get("horizon")),
-        )
-    )
-    if trade_plan:
-        embed.add_field(name="Trade plan", value=trade_plan[:_FIELD_MAX], inline=False)
-
-    if position is not None and position.quantity > 0:
-        lines = describe_position(ticker, position)
-        action = _ACTION_FOR_DECISION.get(decision, "").format(qty=position.quantity)
-        if action:
-            lines.append(f"\n**{action}**")
-        embed.add_field(name="Your Position", value="\n".join(lines), inline=False)
-
-    if sizing_field:
-        embed.add_field(name="Suggested sizing", value=sizing_field[:_FIELD_MAX], inline=False)
-
-    footer = ["TradingAgents", final_state.get("trade_date", "")]
-    if final_state.get("llm_model"):
-        footer.append(final_state["llm_model"])
-    cost = format_run_cost(final_state.get("llm_usage"))
-    if cost:
-        footer.append(cost)
-    embed.set_footer(text=" · ".join(part for part in footer if part))
-    return embed
 
 
 def format_run_cost(usage) -> str | None:

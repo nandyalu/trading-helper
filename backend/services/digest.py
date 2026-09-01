@@ -12,7 +12,8 @@ import discord
 
 from backend.database import db
 from backend.database.models import Alert, Signal
-from backend.services.positions import compute_position, get_current_price, signed_dollars
+from backend.services import ticker_book
+from backend.services.positions import get_current_price
 
 _ALERT_WORDS = {"big_move": "move", "volume": "volume", "stop_loss": "stop", "target": "target"}
 
@@ -31,27 +32,7 @@ class DigestData:
     alerts: list[Alert] = field(default_factory=list)
     win_rate_30d: tuple[int, int] = (0, 0)  # (passes, resolved)
     win_rate_all: tuple[int, int] = (0, 0)
-    real_book_line: str | None = None
-    paper_lines: list[str] = field(default_factory=list)
-
-
-def _book_line(get_transactions, tickers: list[str]) -> str | None:
-    """One-line open value + unrealized for a book; None when book is empty
-    or no position could be priced."""
-    total_value = total_cost = 0.0
-    for ticker in tickers:
-        position = compute_position(get_transactions(ticker))
-        if position.quantity <= 0:
-            continue
-        price = get_current_price(ticker)
-        if price is None:
-            continue
-        total_value += price * position.quantity
-        total_cost += position.avg_cost * position.quantity
-    if total_cost <= 0:
-        return None
-    pct = (total_value / total_cost - 1) * 100
-    return f"Open value ${total_value:,.2f} · unrealized {signed_dollars(total_value - total_cost)} ({pct:+.1f}%)"
+    book_lines: list[str] = field(default_factory=list)
 
 
 def gather_digest(now: datetime.datetime | None = None) -> DigestData:
@@ -75,20 +56,15 @@ def gather_digest(now: datetime.datetime | None = None) -> DigestData:
     ]
     data.win_rate_30d = (sum(s.outcome == "pass" for s in resolved_month), len(resolved_month))
     data.win_rate_all = (sum(s.outcome == "pass" for s in all_resolved), len(all_resolved))
-    data.real_book_line = _book_line(db.get_transactions, db.get_all_transaction_tickers())
-
-    for ticker in sorted(db.get_all_paper_tickers()):
-        position = compute_position(db.get_paper_transactions(ticker))
-        if position.quantity <= 0:
+    for ticker in sorted(db.get_watchlist()):
+        position = ticker_book.agent_position(ticker, get_current_price(ticker))
+        if position is None:
             continue
-        price = get_current_price(ticker)
-        if price is None:
-            data.paper_lines.append(f"{ticker}: {position.quantity:g} @ ${position.avg_cost:,.2f}")
-        else:
-            pct = (price / position.avg_cost - 1) * 100 if position.avg_cost else 0.0
-            data.paper_lines.append(
-                f"{ticker}: {position.quantity:g} @ ${position.avg_cost:,.2f} → ${price:,.2f} ({pct:+.1f}%)"
-            )
+        line = f"{ticker}: {position.quantity:g} @ ${position.avg_cost:,.2f}"
+        if position.price is not None:
+            pct = position.unrealized_pct
+            line += f" → ${position.price:,.2f}" + (f" ({pct:+.1f}%)" if pct is not None else "")
+        data.book_lines.append(line)
     return data
 
 
@@ -144,10 +120,8 @@ def format_digest_embed(data: DigestData) -> discord.Embed:
         )
         embed.add_field(name="Alerts this week", value=alert_text, inline=False)
 
-    if data.real_book_line:
-        embed.add_field(name="Real book", value=data.real_book_line, inline=False)
-    if data.paper_lines:
-        embed.add_field(name="Open paper positions", value="\n".join(data.paper_lines), inline=False)
+    if data.book_lines:
+        embed.add_field(name="What the agent holds", value="\n".join(data.book_lines), inline=False)
 
     return embed
 

@@ -18,14 +18,11 @@ from backend.api.routes import (
     alerts,
     digest,
     jobs,
-    paper,
-    portfolio,
     regime,
     scorecard,
     settings,
     signals,
     tickers,
-    transactions,
     watchlist,
 )
 from backend.discord_bot.client import start_discord, stop_discord
@@ -71,13 +68,10 @@ app = FastAPI(
 app.include_router(watchlist.router)
 app.include_router(tickers.router)
 app.include_router(signals.router)
-app.include_router(paper.router)
-app.include_router(portfolio.router)
 app.include_router(scorecard.router)
 app.include_router(digest.router)
 app.include_router(regime.router)
 app.include_router(settings.router)
-app.include_router(transactions.router)
 app.include_router(alerts.router)
 app.include_router(jobs.router)
 app.include_router(agent.router)

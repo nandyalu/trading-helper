@@ -118,7 +118,7 @@ def test_the_batch_job_arms_the_same_cooldown(agent_stub, monkeypatch):
     _open(monkeypatch)
     _weekday(monkeypatch)
     monkeypatch.setattr(scheduler, "notify", lambda *a, **kw: asyncio.sleep(0))
-    asyncio.run(scheduler._paper_agent_job())
+    asyncio.run(scheduler._agent_run_job())
 
     before = len(agent_stub)
     asyncio.run(scheduler._maybe_run_agent())

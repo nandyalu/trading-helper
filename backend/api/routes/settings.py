@@ -1,28 +1,29 @@
-"""Grouped settings — mirrors /papersize, /risk, /alertconfig, /dailysweep,
-and the /webullsync action (backend/discord_bot/client.py:187, 251, 307, 340, 223).
-All the underlying getters/setters are already pure BotSetting reads/writes;
-this just gives them one JSON shape instead of four Discord commands."""
+"""The settings the experiment can change while it runs.
+
+Every value here is a ``BotSetting`` row, so a change takes effect on the next
+job without a redeploy. That matters for the record: flipping an environment
+variable would change the model between one morning and the next, and the days
+either side of the restart would look like one run.
+
+What is *not* here is as deliberate as what is. There is no sync of a real
+brokerage account, no sizing knob, and no way to trade. The agent sizes its own
+positions and Python only refuses what cannot be executed as stated.
+"""
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.services import agent, agent_book, analysis, broker, deployment, paper, quotes, sizing, watchdog
-from backend.api.schemas import ActionResultOut, SettingsOut, SettingsPatchIn
+from backend.services import agent, agent_book, analysis, quotes, watchdog
+from backend.api.schemas import SettingsOut, SettingsPatchIn
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
 def _current_settings() -> SettingsOut:
-    equity, risk_pct = sizing.get_risk_settings()
     alerts = watchdog.load_config()
     return SettingsOut(
         horizon=analysis.get_horizon(),
         llm_model=analysis.get_model(),
         llm_model_choices=analysis.model_choices(),
-        paper_notional=paper.get_notional(),
-        risk_equity=equity,
-        risk_pct=risk_pct,
-        max_position_pct=sizing.get_max_position_pct(),
-        max_positions=sizing.get_max_positions(),
         alert_move_pct=alerts.move_pct,
         alert_stop_pct=alerts.stop_pct,
         alert_volume_mult=alerts.volume_mult,
@@ -30,7 +31,6 @@ def _current_settings() -> SettingsOut:
         daily_sweep_enabled=db.get_setting("daily_sweep") != "off",
         agent_enabled=agent.is_enabled(),
         agent_budget=agent_book.get_budget(),
-        agent_only=deployment.is_agent_only(),
         agent_min_win_probability=agent.get_conviction()[0],
         agent_min_risk_reward=agent.get_conviction()[1],
     )
@@ -54,27 +54,6 @@ def update_settings(payload: SettingsPatchIn):
             analysis.set_model(payload.llm_model)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if payload.paper_notional is not None:
-        if not 0 < payload.paper_notional <= 1_000_000:
-            raise HTTPException(status_code=400, detail="Paper notional must be between $0 and $1,000,000.")
-        paper.set_notional(payload.paper_notional)
-
-    if payload.risk_equity is not None and payload.risk_equity <= 0:
-        raise HTTPException(status_code=400, detail="Equity must be positive.")
-    if payload.risk_pct is not None and not 0 < payload.risk_pct <= 10:
-        raise HTTPException(status_code=400, detail="Risk % must be between 0 and 10.")
-    if payload.max_position_pct is not None and not 0 < payload.max_position_pct <= 100:
-        raise HTTPException(status_code=400, detail="Max position % must be between 0 and 100.")
-    if payload.max_positions is not None and not 1 <= payload.max_positions <= 50:
-        raise HTTPException(status_code=400, detail="Max positions must be between 1 and 50.")
-    if any(
-        value is not None
-        for value in (payload.risk_equity, payload.risk_pct, payload.max_position_pct, payload.max_positions)
-    ):
-        sizing.set_risk_settings(
-            payload.risk_equity, payload.risk_pct, payload.max_position_pct, payload.max_positions
-        )
 
     for key, value in (
         ("alert_move_pct", payload.alert_move_pct),
@@ -116,13 +95,3 @@ def update_settings(payload: SettingsPatchIn):
         agent.set_enabled(payload.agent_enabled)
 
     return _current_settings()
-
-
-@router.post("/webull-sync", response_model=ActionResultOut)
-def webull_sync():
-    if not broker.is_configured():
-        raise HTTPException(status_code=400, detail="Webull keys aren't configured — add them to .env first.")
-    summary = broker.run_sync()
-    if summary is None:
-        raise HTTPException(status_code=502, detail="Couldn't reach the Webull account API — check the logs.")
-    return ActionResultOut(message=summary)

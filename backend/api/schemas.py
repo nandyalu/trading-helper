@@ -88,61 +88,6 @@ class SignalDetailOut(SignalOut):
     agent_trades: list["AgentTradeRowOut"] = []
 
 
-class PaperPositionOut(OrmModel):
-    ticker: str
-    quantity: float
-    avg_cost: float
-    cost_basis: float
-    price: float | None
-    value: float | None
-    unrealized: float | None
-    unrealized_pct: float | None
-
-
-class PaperPortfolioOut(OrmModel):
-    positions: list[PaperPositionOut]
-    total_value: float
-    total_cost: float
-    total_unrealized: float
-    total_realized: float
-    missing_prices: list[str]
-
-
-class PaperSnapshotOut(OrmModel):
-    snapshot_date: date
-    open_value: float
-    open_cost: float
-    realized_pnl: float
-    spy_close: float | None
-
-
-class PortfolioPositionOut(OrmModel):
-    ticker: str
-    quantity: float
-    avg_cost: float
-    weight_pct: float | None
-    price: float | None
-    value: float | None
-    unrealized: float | None
-    unrealized_pct: float | None
-
-
-class BenchmarkComparisonOut(OrmModel):
-    book_return_pct: float
-    benchmark_return_pct: float
-    alpha_pct: float
-
-
-class PortfolioOut(OrmModel):
-    positions: list[PortfolioPositionOut]
-    total_value: float
-    total_cost: float
-    total_realized: float
-    missing_prices: list[str]
-    comparison: BenchmarkComparisonOut | None
-    concentration: list[str]
-
-
 class DecisionStatsOut(OrmModel):
     total: int
     passes: int
@@ -230,10 +175,12 @@ class TickerDetailOut(BaseModel):
 
 
 class TradeOut(BaseModel):
-    """A recorded buy or sell, in either book. ``book`` distinguishes them so
-    one timeline can carry both without the caller joining two lists."""
+    """One filled buy or sell by the agent, for the ticker timeline.
 
-    book: str  # "real" | "paper"
+    Only filled orders appear. A pending or rejected order marks no point on a
+    chart, and drawing one would show a trade at a price that was never paid.
+    """
+
     side: str  # "buy" | "sell"
     date: date
     price: float
@@ -256,16 +203,6 @@ class TickerEventsOut(BaseModel):
     # Lots, FIFO-matched across all three books: what was bought, what became
     # of it, and what it made or lost. ``trades`` above is the raw fills.
     lots: list[LotOut] = []
-
-
-class AnalyzeQueuedOut(BaseModel):
-    status: str = "queued"
-    ticker: str
-
-
-class AnalyzeAllQueuedOut(BaseModel):
-    status: str = "queued"
-    count: int
 
 
 class ActionResultOut(BaseModel):
@@ -309,11 +246,6 @@ class SettingsOut(BaseModel):
     # reached, which the UI shows as a plain text field rather than a dropdown
     # of one — see backend/services/analysis.py list_models().
     llm_model_choices: list[str]
-    paper_notional: float
-    risk_equity: float | None
-    risk_pct: float
-    max_position_pct: float
-    max_positions: int
     alert_move_pct: float
     alert_stop_pct: float
     alert_volume_mult: float
@@ -328,17 +260,11 @@ class SettingsOut(BaseModel):
     # True when this deployment runs the autonomous-analyst experiment and has
     # no real book or local paper book to show. Presentation only — it decides
     # nothing about whether orders are simulated.
-    agent_only: bool = False
 
 
 class SettingsPatchIn(BaseModel):
     horizon: str | None = None
     llm_model: str | None = None
-    paper_notional: float | None = None
-    risk_equity: float | None = None
-    risk_pct: float | None = None
-    max_position_pct: float | None = None
-    max_positions: int | None = None
     alert_move_pct: float | None = None
     alert_stop_pct: float | None = None
     alert_volume_mult: float | None = None
@@ -348,16 +274,6 @@ class SettingsPatchIn(BaseModel):
     agent_budget: float | None = None
     agent_min_win_probability: float | None = None
     agent_min_risk_reward: float | None = None
-
-
-class TransactionIn(BaseModel):
-    ticker: str
-    price: float
-    quantity: float
-
-
-class AskIn(BaseModel):
-    question: str
 
 
 class AgentHoldingOut(BaseModel):
@@ -456,21 +372,6 @@ class AgentOrderOut(BaseModel):
     quantity: float
     reason: str | None = None
     why: str | None = None  # why it was rejected or failed, when it was
-
-
-class AgentRunOut(BaseModel):
-    reasoning: str
-    placed: list[AgentOrderOut]
-    rejected: list[AgentOrderOut]
-    failed: list[AgentOrderOut]
-    # Exits moved to new levels. No position opened or closed, but the risk on
-    # an open one changed, so a run that only did this is not an idle run.
-    adjusted: list[str] = []
-    # Tickers it paid to have analysed, and tickers it stopped watching. Both
-    # change what tomorrow's sweep does and what it costs, so a run that only
-    # did these is not idle either — it was reported as one until 2026-08-27.
-    researched: list[str] = []
-    untracked: list[str] = []
 
 
 class AgentEventOrderOut(BaseModel):

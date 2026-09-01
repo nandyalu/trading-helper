@@ -197,9 +197,8 @@ LIVE_ORDER_DETAIL = {
 
 
 def test_the_order_detail_wrapper_is_unwrapped():
-    """broker.orders_in is the shared unwrapper; sandbox_broker must use it or
-    the fill is invisible."""
-    from backend.services.broker import orders_in
+    """The fill is invisible unless the combo wrapper is unwrapped first."""
+    from backend.services.sandbox_broker import orders_in
 
     order = orders_in(LIVE_ORDER_DETAIL)[0]
 
@@ -208,7 +207,7 @@ def test_the_order_detail_wrapper_is_unwrapped():
 
 
 def test_a_filled_order_is_settled_with_its_real_price(monkeypatch):
-    from backend.services.broker import orders_in
+    from backend.services.sandbox_broker import orders_in
 
     settled = {}
 

@@ -1,9 +1,13 @@
-"""Guards that only matter once a second deployment exists.
+"""Guards on which broker account the app trades, and on long-only.
 
-The autonomous-analyst experiment runs against the sandbox's *margin* account
-so the two books never mix. Two things change when it does, and both are
-safety-shaped: the account has to be selectable, and the broker stops
-enforcing long-only for us.
+The account is selectable because a second deployment once needed the sandbox's
+*margin* account to keep two books apart. One book runs now, on the cash
+account, and the selection stays: a typo in the environment must not be able to
+point order flow at the crypto or futures account.
+
+Long-only is enforced here rather than left to the account type. A cash account
+refuses a short; a margin account fills it. Depending on the account for that
+would make a safety rule a property of a setting.
 
 Pure — no broker calls.
 """
@@ -92,49 +96,6 @@ def test_a_buy_is_never_checked_against_holdings(monkeypatch):
         sandbox_broker.place_market_order("AAPL", "BUY", 1)
 
 
-# --- which deployment this is --------------------------------------------------
-
-
-def test_the_ordinary_deployment_is_the_default(monkeypatch):
-    from backend.services import deployment
-
-    monkeypatch.delenv("AGENT_ONLY", raising=False)
-    assert deployment.is_agent_only() is False
-
-
-@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
-def test_the_experiment_deployment_is_opt_in(monkeypatch, value):
-    from backend.services import deployment
-
-    monkeypatch.setenv("AGENT_ONLY", value)
-    assert deployment.is_agent_only() is True
-
-
-@pytest.mark.parametrize("value", ["0", "false", "no", "", "off", "maybe"])
-def test_anything_else_means_the_ordinary_deployment(monkeypatch, value):
-    """A flag that hides pages must fail towards showing them. Guessing that an
-    unrecognised value means "experiment" would silently hide the real book
-    from someone who relies on it."""
-    from backend.services import deployment
-
-    monkeypatch.setenv("AGENT_ONLY", value)
-    assert deployment.is_agent_only() is False
-
-
-def test_the_mode_decides_nothing_about_safety():
-    """AGENT_ONLY hides pages and skips jobs. Whether orders are simulated,
-    which account they reach, and whether the app may short are decided in
-    sandbox_broker and are identical in both deployments — a flag about what
-    to display must never become a flag about what is safe."""
-    import inspect
-
-    from backend.services import deployment
-
-    source = inspect.getsource(deployment)
-    for forbidden in ("sandbox", "account", "short", "order"):
-        assert forbidden not in source.lower().replace("# ", "").split("'''")[0].split('"""')[0]
-
-
 # --- a deployment comes up correct without hand-correction ---------------------
 
 
@@ -174,18 +135,18 @@ def test_a_bad_budget_falls_back_rather_than_breaking(monkeypatch, bad):
     assert agent_book.get_budget() == agent_book.DEFAULT_BUDGET
 
 
-def test_research_stays_free_unless_a_deployment_asks(monkeypatch):
-    """The live deployment must not start charging just because this code
-    reached it."""
+def test_the_research_price_defaults_and_can_be_overridden(monkeypatch):
+    """A fresh container must come up charging, without anyone setting a price
+    by hand on its first run."""
     from backend.services import research
 
     monkeypatch.setattr(research.db, "get_setting", lambda k: None)
 
     monkeypatch.delenv("RESEARCH_PRICE_USD", raising=False)
-    assert research.get_price() == 0.0
-
-    monkeypatch.setenv("RESEARCH_PRICE_USD", "0.05")
     assert research.get_price() == 0.05
+
+    monkeypatch.setenv("RESEARCH_PRICE_USD", "0.10")
+    assert research.get_price() == 0.10
 
 
 # --- one trade stream per app key ----------------------------------------------

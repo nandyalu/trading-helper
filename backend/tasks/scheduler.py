@@ -24,12 +24,9 @@ from backend.database import db
 from backend.services import (
     agent,
     analysis,
-    broker,
     candidates,
-    deployment,
     journey,
     listings,
-    paper,
     quotes,
     regime,
     watchdog,
@@ -186,9 +183,9 @@ async def _maybe_run_agent() -> None:
 
 
 async def _daily_signals_job() -> None:
-    """21:30 UTC (17:30 ET): grade what matured and snapshot the paper book.
+    """21:30 UTC (17:30 ET): grade what matured, then write the journal.
 
-    Stays after the close because both read the day's closing price. The
+    Stays after the close because grading reads the day's closing price. The
     watchlist sweep used to run here too and now runs in the morning instead —
     see _morning_sweep_job.
     """
@@ -207,16 +204,6 @@ async def _daily_signals_job() -> None:
     except Exception:
         log.exception("Could not write the journey")
 
-    # The paper book is a thing a person follows by hand. The experiment
-    # deployment has no such book, so snapshotting one would write a row of
-    # zeroes every evening and draw a flat line nobody asked for.
-    if deployment.is_agent_only():
-        return
-    try:
-        await asyncio.to_thread(paper.record_daily_snapshot)  # equity-curve point for /paper
-    except Exception:
-        log.exception("Paper snapshot failed")
-
 
 def daily_signals() -> None:
     run_on_main(_daily_signals_job)
@@ -233,8 +220,8 @@ async def _morning_sweep_job() -> None:
     sixteen hours later.
 
     07:00 rather than closer to the open, for two reasons that have nothing to
-    do with GPU time. The pre-open window is already busy — broker_sync at
-    12:35, morning_regime at 12:45, earnings_check at 13:00, the last of which
+    do with GPU time. The pre-open window is already busy — morning_regime at
+    12:45 and earnings_check at 13:00, the second of which
     runs its own analyses on the same pool — and a sweep that overran into the
     agent's 13:35 decision would hand it half a picture. This leaves two and a
     half hours of margin for a slow run or a retry.
@@ -345,38 +332,6 @@ def earnings_check() -> None:
     run_on_main(_earnings_check_job)
 
 
-async def _broker_sync_job() -> None:
-    """Pre-market (before regime/earnings): mirror Webull holdings into the
-    watchlist and position log so today's analyses cover everything held.
-    Posts only when something changed."""
-    if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
-        return
-    # There is no real portfolio to mirror in the experiment deployment, and
-    # its watchlist is the agent's own choice rather than a reflection of
-    # anyone's holdings.
-    if deployment.is_agent_only():
-        return
-    if not broker.is_configured():
-        return
-    # run_sync refuses in sandbox and explains why, which is right for someone
-    # who typed /webullsync and is waiting for an answer. Posting that same
-    # explanation unprompted every weekday morning is just noise, so the
-    # scheduled job stays quiet about it.
-    if quotes.is_sandbox():
-        return
-    try:
-        summary = await asyncio.to_thread(broker.run_sync)
-    except Exception:
-        log.exception("Webull sync failed")
-        return
-    if summary is None or "Everything already in sync" in summary:
-        return
-    await notify(summary)
-
-
-def broker_sync() -> None:
-    run_on_main(_broker_sync_job)
-
 
 async def _morning_regime_job() -> None:
     """Pre-market context post (12:45 UTC, before the earnings task): VIX,
@@ -419,7 +374,7 @@ def weekly_digest() -> None:
     run_on_main(_weekly_digest_job)
 
 
-async def _paper_agent_job() -> None:
+async def _agent_run_job() -> None:
     """13:35 UTC — 09:35 ET, five minutes after the open.
 
     Deliberately *not* chained to the 21:30 sweep that produces the signals.
@@ -443,7 +398,7 @@ async def _paper_agent_job() -> None:
     try:
         run = await asyncio.to_thread(agent.run_once)
     except Exception:
-        log.exception("Paper agent run failed")
+        log.exception("Agent decision pass failed")
         return
     # A quiet day is the common case and posting it every morning would train
     # you to ignore the channel. Rejections and broker failures are worth
@@ -452,12 +407,12 @@ async def _paper_agent_job() -> None:
         await notify(embed=agent.format_run_embed(run))
 
 
-def paper_agent() -> None:
-    run_on_main(_paper_agent_job)
+def agent_run() -> None:
+    run_on_main(_agent_run_job)
 
 
 def register_jobs() -> None:
-    """Registers all 8 scheduled jobs on the shared `scheduler`. Called once
+    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
     across restarts."""
@@ -465,7 +420,6 @@ def register_jobs() -> None:
     scheduler.add_task(task_name="daily_signals", func=daily_signals, interval=86400, delay=_seconds_until(21, 30))
     scheduler.add_task(task_name="morning_sweep", func=morning_sweep, interval=86400, delay=_seconds_until(11, 0))
     scheduler.add_task(task_name="earnings_check", func=earnings_check, interval=86400, delay=_seconds_until(13, 0))
-    scheduler.add_task(task_name="broker_sync", func=broker_sync, interval=86400, delay=_seconds_until(12, 35))
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
-    scheduler.add_task(task_name="paper_agent", func=paper_agent, interval=86400, delay=_seconds_until(13, 35))
+    scheduler.add_task(task_name="agent_run", func=agent_run, interval=86400, delay=_seconds_until(13, 35))

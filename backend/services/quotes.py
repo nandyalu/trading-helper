@@ -30,13 +30,13 @@ def is_sandbox() -> bool:
 
     Read from the environment rather than remembered from client construction
     so it answers the same before the client is built, and so a caller that
-    needs to refuse an action in sandbox (see broker.run_sync) never depends on
+    needs to refuse an action in sandbox never depends on
     the client having been initialized first."""
     return os.environ.get("WEBULL_SANDBOX", "").lower() in ("1", "true", "yes")
 
 
 def get_api_client():
-    """Shared, token-initialized Webull ApiClient (also used by backend/services/broker.py);
+    """Shared, token-initialized Webull ApiClient;
     None when keys aren't configured or initialization failed."""
     global _api_client, _api_client_done
     if _api_client_done:

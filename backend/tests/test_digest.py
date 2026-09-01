@@ -53,8 +53,7 @@ def test_full_week_renders_all_sections():
         alerts=[_alert(), _alert("stop_loss"), _alert()],
         win_rate_30d=(3, 4),
         win_rate_all=(10, 20),
-        real_book_line="Open value $5,000.00 · unrealized +$250.00 (+5.3%)",
-        paper_lines=["NVDA: 2.1 @ $470.00 → $482.00 (+2.6%)"],
+        book_lines=["NVDA: 2.1 @ $470.00 → $482.00 (+2.6%)"],
     )
     embed = format_digest_embed(data)
     text = "\n".join(f"{f.name}\n{f.value}" for f in embed.fields)
@@ -63,7 +62,6 @@ def test_full_week_renders_all_sections():
     assert "3 — 2 Hold, 1 Buy" in text
     assert "Last 30 days: **3/4 (75%)** · all-time: 10/20 (50%)" in text
     assert "3 — 2 move, 1 stop" in text
-    assert "Open value $5,000.00" in text
     assert "NVDA: 2.1 @ $470.00" in text
 
 
