@@ -69,9 +69,6 @@ class AgentServiceStub {
   readonly history = signal([]);
   readonly curve = signal<AgentEquityPoint[]>([]);
   async load(): Promise<void> {}
-  async runNow() {
-    return { placed: [], rejected: [], failed: [], reasoning: '' };
-  }
 }
 
 describe('AgentView', () => {

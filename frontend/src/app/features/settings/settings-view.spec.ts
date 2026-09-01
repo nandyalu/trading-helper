@@ -39,10 +39,6 @@ class SettingsServiceStub {
     this.patches.push(patch);
     this.settingsValue = { ...this.serverSettings, ...patch } as Settings;
   }
-
-  async webullSync() {
-    return { message: 'synced' };
-  }
 }
 
 describe('SettingsView', () => {

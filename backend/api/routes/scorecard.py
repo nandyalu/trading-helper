@@ -1,6 +1,6 @@
 """Signal track record — reuses backend.services.scorecard.build_scorecard directly,
 already a pure, DB-only function returning a plain dataclass (no extraction
-needed, unlike paper.py/portfolio.py's embed builders)."""
+needed)."""
 from fastapi import APIRouter
 
 from backend.api.schemas import CalibrationBandOut, CalibrationOut, ScorecardOut

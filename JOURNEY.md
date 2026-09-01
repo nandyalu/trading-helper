@@ -1,4 +1,4 @@
-# The analyst's journey — what we changed, and why
+# The agent's journey — what we changed, and why
 
 The app writes its own record: what it bought, what that cost, and what the agent said about it, day by day. Every sentence in it comes from a trade, a charge, or a decision pass, so it cannot drift from the book.
 
