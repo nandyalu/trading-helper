@@ -363,3 +363,69 @@ def test_a_free_deployment_states_no_figure(watching):
     # for realized profit and an empty cash balance.
     assert cost_line == "You are paying to have 2 tickers analysed every morning, and you may track at most 12."
     assert "would save" not in prompt
+
+
+# --- an empty balance ----------------------------------------------------------
+
+
+def test_an_empty_balance_says_so_instead_of_quoting_itself_as_a_limit(watching):
+    """The rules block opened with "must cost $-8.00 or less in total", which is
+    not an instruction anybody can follow. The agent reached that balance on
+    2026-08-28 and stayed there."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(cash=-8.0), [], {}, watchlist=["AAA"], max_watchlist=12, price=0.05,
+    )
+
+    assert "You have no money to spend. The balance is $-8.00." in prompt
+    assert "must cost $-8.00 or less" not in prompt
+
+
+def test_it_names_the_only_thing_that_raises_cash(watching):
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(cash=0.0), [], {}, watchlist=["AAA"], max_watchlist=12, price=0.05,
+    )
+
+    assert "Selling is the only thing that raises cash" in prompt
+
+
+def test_it_says_the_charge_continues_and_untracking_stops_part_of_it(watching):
+    """The reason this is not a stable state: propagate_ticker bills every
+    ticker the sweep touches, so a book at zero keeps drifting down."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(cash=-8.0), [], {}, watchlist=["AAA"], max_watchlist=12, price=0.05,
+    )
+
+    assert "charged tomorrow whether" in prompt
+    assert "Untracking raises no cash and stops part of the charge" in prompt
+
+
+def test_a_book_with_money_keeps_the_spending_limit(watching):
+    """The normal case must not change. The limit is the one rule three live
+    failures were fixed by wording carefully."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(cash=812.40), [], {}, watchlist=["AAA"], max_watchlist=12, price=0.05,
+    )
+
+    assert "must cost $812.40 or less in total" in prompt
+    assert "no money to spend" not in prompt
+
+
+def test_the_threshold_is_what_python_actually_refuses_at(watching):
+    """Cash above the research price is not "no money": the agent can still
+    commission an analysis, and screen() will accept it."""
+    watching()
+
+    prompt = agent.build_prompt(
+        _book(cash=0.06), [], {}, watchlist=["AAA"], max_watchlist=12, price=0.05,
+    )
+
+    assert "must cost $0.06 or less" in prompt
+    assert "no money to spend" not in prompt

@@ -615,6 +615,14 @@ order plus separately-armed exits.
 
 Newest first. Every entry says what changed and why.
 
+**2026-09-01 — an empty or negative balance says so, instead of quoting itself as a spending limit.** The rules block opened with "The buys you place must cost $-8.00 or less in total", which is not an instruction anybody can follow.
+
+The agent reached minus $8.00 on 2026-08-28, from a fill three cents above the price its order was screened at. That arithmetic is fixed. The state is still reachable, because **the daily research charge lands whether or not there is money for it**: `propagate_ticker` bills every ticker the sweep touches, so a book at zero keeps drifting down $0.05 a ticker a day with nothing to stop it.
+
+The prompt now states the condition, what it prevents, and what changes it. Below the research price the agent can buy nothing and commission nothing — `screen` already refuses both — but the charge on what it already tracks continues. Selling is the only thing that raises cash. Untracking raises none, and stops part of the drain.
+
+**Two things this deliberately does not do.** It does not stop the charge at zero: billing only when affordable would make the cost vanish exactly when it starts to bite, and the experiment is about deciding under a budget. And it does not size or forbid anything new — Python's refusals are unchanged, and the agent may still answer with nothing.
+
 **2026-09-01 — the watchlist section states what it costs, in dollars.** One line, and the reason is five days of the agent never once mentioning the watchlist.
 
 It had the parts. The menu section says an analysis costs $0.05, the watchlist section said "You are paying to have 3 tickers analysed every morning", and the rules say untracking "saves the analyses you would have paid for tomorrow and after". What no line gave was the product: **$0.15 a day**, and $0.10 of that on two names it holds none of.

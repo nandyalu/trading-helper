@@ -358,6 +358,12 @@ def build_prompt(
             ),
         ]
 
+    # What "no money" means here is what screen() refuses at: below the research
+    # price nothing can be commissioned, and below a share price nothing can be
+    # bought. The research price is the lower of the two and the one this app
+    # controls, so it is the threshold the prompt speaks about.
+    research_price_floor = price if price else 0.01
+
     min_probability, min_risk_reward = get_conviction()
     floors = []
     if min_probability:
@@ -433,8 +439,24 @@ def build_prompt(
     lines += [
         "",
         "Rules:",
-        f"- The buys you place must cost ${book.cash:,.2f} or less in total, added up "
-        "across every buy. Not each — in total.",
+        # A balance at or below zero used to render as "must cost $-8.00 or
+        # less in total", which is not an instruction anybody can follow. State
+        # the condition, what it prevents, and what changes it.
+        *(
+            [
+                f"- **You have no money to spend. The balance is ${book.cash:,.2f}.** You",
+                "  cannot buy anything and cannot pay for a new analysis until that",
+                "  changes. Selling is the only thing that raises cash.",
+                "- The analyses you already pay for run and are charged tomorrow whether",
+                "  or not there is money for them, so this gets worse on its own.",
+                "  Untracking raises no cash and stops part of the charge.",
+            ]
+            if book.cash < research_price_floor
+            else [
+                f"- The buys you place must cost ${book.cash:,.2f} or less in total, added up "
+                "across every buy. Not each — in total.",
+            ]
+        ),
         "- Orders execute in the order you list them, so a sell frees its cash for a buy",
         "  listed after it. To buy something you cannot currently afford, sell something",
         "  first and put that sell earlier in the list.",
