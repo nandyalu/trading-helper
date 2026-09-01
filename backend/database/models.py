@@ -205,6 +205,22 @@ class AgentRun(SQLModel, table=True):
     failed: int = 0
     adjusted: int = 0
     skipped: str | None = None
+    # **The prompt the model was given and the answer it returned, verbatim.**
+    # Counts and a one-line reasoning describe a decision; these are the
+    # decision. Behaviour here is mostly prompt, so a month of runs across
+    # three prompt revisions cannot be read apart afterwards unless each run
+    # kept the words it was actually shown.
+    #
+    # Both are NULL for every run before 2026-09-01, and cannot be backfilled:
+    # the prompt is assembled from a book, a watchlist and a signal list that
+    # have all since moved.
+    prompt: str | None = None
+    response: str | None = None
+    # Every order the pass produced, as JSON: side, ticker, quantity, reason.
+    # ``placed`` counts them and ``agenttrade`` holds the buys and sells, but
+    # an untrack, a research and an adjust move no shares and leave no row
+    # there — so without this the page cannot show what the agent actually did.
+    orders: str | None = None
     # What the agent tried and was refused, as JSON: ticker, side, quantity
     # and the reason, for each.
     #

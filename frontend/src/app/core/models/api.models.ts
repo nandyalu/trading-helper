@@ -448,3 +448,38 @@ export interface AgentTradeRow {
   held_days: number;
   is_open: boolean;
 }
+
+/** One order a decision pass produced. Buys and sells also land in
+ * `AgentTrade`; an untrack, a research and an adjust move no shares and
+ * appear only here. */
+export interface AgentEventOrder {
+  side: string;
+  ticker: string;
+  quantity: number;
+  reason: string;
+}
+
+/** One decision pass, with the words that produced it.
+ *
+ * `prompt` and `response` are the point of the Events page: the counts and the
+ * one-line reasoning describe a decision, and these two are it. Both are null
+ * for passes before 2026-09-01 and cannot be backfilled. */
+export interface AgentEvent {
+  id: number;
+  ran_at: string;
+  reasoning: string;
+  skipped: string | null;
+  equity: number | null;
+  cash: number | null;
+  research_spent: number | null;
+  prompt: string | null;
+  response: string | null;
+  orders: AgentEventOrder[];
+  refused: AgentOrder[];
+}
+
+/** One day of the generated journal, as markdown. */
+export interface JourneyEntry {
+  date: string;
+  markdown: string;
+}

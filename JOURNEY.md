@@ -37,6 +37,16 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-01 — the agent's prompt and answer are recorded, and there is a page for them.** `AgentRun` gains `prompt`, `response` and `orders`, and the dashboard gains an Events page that shows them.
+
+The counts and the one-line reasoning describe a decision. The prompt and the answer *are* the decision, and until now neither was kept anywhere: the agent's `_ask` uses a client the trace recorder never attaches to, so the analysis traces missed it. Behaviour here is mostly prompt, so a month of runs across three prompt revisions could not be told apart afterwards.
+
+**Every pass before today carries no prompt, and none can be backfilled** — the prompt is assembled from a book, a watchlist and a signal list that have all moved since. Those passes still appear on the page, saying so, rather than leaving a hole in the record.
+
+`orders` is stored separately from `agenttrade` because a buy or a sell lands there and an untrack, a research and an adjust do not. Without it the page would show a pass that untracked two tickers as having done nothing.
+
+A Journey page shows the last ten days of the generated journal, built from the same `journey.build()` the monthly markdown files come from, so the page and the files cannot disagree.
+
 **2026-09-01 — a negative balance no longer offers negative shares.** Every signal line said "With your $-8.00 cash you can afford -1 share(s)."
 
 `int(-8.00 // 36.51)` is -1 rather than 0, because floor division rounds toward negative infinity, and -1 is truthy — so the "you can afford" branch was taken and rendered the nonsense. The count is clamped at zero now, and the branch tests for a positive number rather than a non-zero one, since those two differ only when the answer is meaningless.

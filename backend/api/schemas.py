@@ -473,6 +473,41 @@ class AgentRunOut(BaseModel):
     untracked: list[str] = []
 
 
+class AgentEventOrderOut(BaseModel):
+    side: str
+    ticker: str
+    quantity: float = 0
+    reason: str = ""
+
+
+class AgentEventOut(BaseModel):
+    """One decision pass, with the words that produced it.
+
+    ``prompt`` and ``response`` are what the page exists for: the counts and
+    the one-line reasoning describe a decision, and these two are it. Both are
+    null for every pass before 2026-09-01 and cannot be reconstructed.
+    """
+
+    id: int
+    ran_at: datetime
+    reasoning: str = ""
+    skipped: str | None = None
+    equity: float | None = None
+    cash: float | None = None
+    research_spent: float | None = None
+    prompt: str | None = None
+    response: str | None = None
+    orders: list[AgentEventOrderOut] = []
+    refused: list[AgentOrderOut] = []
+
+
+class JourneyEntryOut(BaseModel):
+    """One day of the generated journal, as markdown."""
+
+    date: date
+    markdown: str
+
+
 class StrategyOut(OrmModel):
     name: str
     equity: float

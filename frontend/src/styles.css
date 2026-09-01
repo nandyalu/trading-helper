@@ -1460,3 +1460,114 @@ table {
   color: var(--text-muted);
   overflow-x: auto;
 }
+
+/* Events and Journey
+   ------------------
+   Both pages are feeds of long text rather than tables, so they need a
+   readable measure and a way to show a verbatim block without it dominating
+   the page. Colors come from the tokens above, never as literals. */
+
+.event + .event,
+.journey-day + .journey-day {
+  margin-top: 0.75rem;
+}
+
+.event-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.reasoning {
+  margin: 0.5rem 0 0;
+  /* The agent's own sentence, set apart from the orders below it: this is what
+     it said it was doing, and those are what it actually did. */
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--text);
+}
+
+.orders {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.orders li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.side {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.side--buy {
+  color: var(--pos);
+  border-color: var(--pos);
+}
+
+.side--sell,
+.side--refused {
+  color: var(--neg);
+  border-color: var(--neg);
+}
+
+.transcript {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.transcript button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.transcript button:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+/* A prompt runs to tens of kilobytes. Capped and scrolled, so one long pass
+   cannot push every other event off the screen. */
+.verbatim,
+.journey-body {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border-radius: 0.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  max-height: 28rem;
+}
+
+.journey-body {
+  max-height: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}

@@ -823,29 +823,58 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     # Read once and passed to both attempts, so the retry describes the same
     # watchlist the first answer was screened against.
     watchlist = sorted(db.get_watchlist())
-    reasoning, proposed = parse_decision(_ask(build_prompt(
+    # The exact prompt, kept so the Events page can show what was asked. A
+    # retry replaces it, because the retry is the prompt the accepted orders
+    # were actually screened from.
+    shown = build_prompt(
         book, signals, prices, closed=closed, regime_line=regime_line,
         horizon_days=horizon_days, menu=menu, price=research.get_price(),
         max_research=_max_research_per_day(),
         watchlist=watchlist, max_watchlist=_max_watchlist(),
-    )))
+    )
+    answer = _ask(shown)
+    reasoning, proposed = parse_decision(answer)
     accepted, rejected = screen(proposed, book, prices, by_ticker, menu_tickers)
     if not rejected:
-        return reasoning, accepted, rejected
+        return Decision(reasoning, accepted, rejected, shown, answer)
 
     log.info("Re-asking after %d refused order(s): %s", len(rejected), [r.why for r in rejected])
-    retry_reasoning, retry_proposed = parse_decision(
-        _ask(build_prompt(book, signals, prices, rejected=rejected, closed=closed,
-                     regime_line=regime_line, horizon_days=horizon_days, menu=menu,
-                     price=research.get_price(), max_research=_max_research_per_day(),
-                     watchlist=watchlist, max_watchlist=_max_watchlist()))
-    )
+    shown = build_prompt(book, signals, prices, rejected=rejected, closed=closed,
+                         regime_line=regime_line, horizon_days=horizon_days, menu=menu,
+                         price=research.get_price(), max_research=_max_research_per_day(),
+                         watchlist=watchlist, max_watchlist=_max_watchlist())
+    retry_answer = _ask(shown)
+    retry_reasoning, retry_proposed = parse_decision(retry_answer)
     if not retry_proposed:
         # A retry that proposes nothing is a decision to stand pat; keep the
         # first answer's accepted orders rather than discarding them.
-        return reasoning, accepted, rejected
+        return Decision(reasoning, accepted, rejected, shown, retry_answer)
     retry_accepted, retry_rejected = screen(retry_proposed, book, prices, by_ticker, menu_tickers)
-    return retry_reasoning or reasoning, retry_accepted, retry_rejected
+    return Decision(retry_reasoning or reasoning, retry_accepted, retry_rejected,
+                    shown, retry_answer)
+
+
+@dataclass
+class Decision:
+    """One decision pass: what was asked, what came back, and what survived.
+
+    ``prompt`` and ``response`` are kept verbatim because the counts and the
+    one-line reasoning describe a decision while these two *are* it. Behaviour
+    here is mostly prompt, so a month of runs across three prompt revisions
+    cannot be told apart afterwards without them.
+    """
+
+    reasoning: str
+    accepted: list[dict]
+    rejected: list
+    prompt: str = ""
+    response: str = ""
+
+    def __iter__(self):
+        """Unpack like the tuple this replaced, so existing callers and tests
+        that write ``reasoning, accepted, rejected = _decide(...)`` keep
+        working."""
+        return iter((self.reasoning, self.accepted, self.rejected))
 
 
 @dataclass
@@ -869,6 +898,10 @@ class AgentRun:
     untracked: list[str] = field(default_factory=list)
     book: agent_book.Book | None = None
     skipped: str | None = None  # why the run did nothing at all
+    # The words, kept for the Events page. Empty on a pass that never asked —
+    # a skipped run, or one the market was shut for.
+    prompt: str = ""
+    response: str = ""
 
     @property
     def acted(self) -> bool:
@@ -1397,12 +1430,18 @@ def run_once() -> AgentRun:
     # agent has no scarcity to reason about, and a menu it can take from for
     # free would just be a longer watchlist someone else chose.
     menu = _candidate_menu() if research.is_charging() else None
-    reasoning, accepted, rejected = _decide(
+    decision = _decide(
         book, signals, prices, closed=closed,
         regime_line=current_regime_line(), horizon_days=_horizon_days(), menu=menu,
     )
 
-    run = AgentRun(reasoning=reasoning, rejected=rejected, book=book)
+    reasoning, accepted, rejected = decision
+    # getattr, because Decision unpacks like the tuple it replaced and a caller
+    # may still hand back a plain one — several tests patch _decide that way.
+    # Accepting both is the point of keeping __iter__.
+    run = AgentRun(reasoning=reasoning, rejected=rejected, book=book,
+                   prompt=getattr(decision, "prompt", ""),
+                   response=getattr(decision, "response", ""))
     # **The newest signal per ticker, chosen explicitly.** These three used to
     # be dict comprehensions over the signal list, and a dict comprehension
     # keeps the *last* value it sees. The list arrives newest-first, so the
@@ -1570,6 +1609,28 @@ def _untrack(order: dict, run: "AgentRun") -> None:
     log.info("Agent stopped watching %s", ticker)
 
 
+def _orders_json(run: "AgentRun") -> str | None:
+    """Every order the pass produced, for the Events page.
+
+    ``agenttrade`` holds the buys and sells, but an untrack, a research and an
+    adjust move no shares and leave no row there. Without this the page could
+    show a pass that untracked two tickers as having done nothing.
+    """
+    orders = (
+        [{"side": o["side"], "ticker": o["ticker"],
+          "quantity": o.get("quantity") or 0,
+          "reason": str(o.get("reason") or "")[:300]}
+         for o in run.placed]
+        + [{"side": "adjust", "ticker": a.split()[0] if a else "", "quantity": 0,
+            "reason": a} for a in run.adjusted]
+        + [{"side": "research", "ticker": t, "quantity": 0, "reason": ""}
+           for t in run.researched]
+        + [{"side": "untrack", "ticker": t, "quantity": 0, "reason": ""}
+           for t in run.untracked]
+    )
+    return json.dumps(orders) if orders else None
+
+
 def _record_run(run: "AgentRun") -> None:
     """Write down what this pass decided, including when it decided nothing.
 
@@ -1591,6 +1652,9 @@ def _record_run(run: "AgentRun") -> None:
             adjusted=len(run.adjusted),
             skipped=run.skipped,
             refusals=_refusals_json(run),
+            prompt=run.prompt or None,
+            response=run.response or None,
+            orders=_orders_json(run),
             equity=book.equity if book else None,
             cash=book.cash if book else None,
             research_spent=book.research_spent if book else None,

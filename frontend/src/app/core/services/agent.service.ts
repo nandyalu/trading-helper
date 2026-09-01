@@ -11,6 +11,8 @@ import {
   AgentTradeRow,
   ActionResult,
   UnprotectedPosition,
+  AgentEvent,
+  JourneyEntry,
 } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -23,12 +25,16 @@ export class AgentService {
   private readonly _history = signal<AgentTradeRow[]>([]);
   private readonly _curve = signal<AgentEquityPoint[]>([]);
   private readonly _unprotected = signal<UnprotectedPosition[]>([]);
+  private readonly _events = signal<AgentEvent[]>([]);
+  private readonly _journey = signal<JourneyEntry[]>([]);
   readonly book = this._book.asReadonly();
   readonly trades = this._trades.asReadonly();
   readonly performance = this._performance.asReadonly();
   readonly history = this._history.asReadonly();
   readonly curve = this._curve.asReadonly();
   readonly unprotected = this._unprotected.asReadonly();
+  readonly events = this._events.asReadonly();
+  readonly journey = this._journey.asReadonly();
 
   /** Place the missing exits on a position the agent already holds. Rests a
    * stop and a take-profit under shares that are already owned, which is the
@@ -43,6 +49,22 @@ export class AgentService {
   async loadUnprotected(): Promise<void> {
     this._unprotected.set(
       await firstValueFrom(this.http.get<UnprotectedPosition[]>('/api/agent/unprotected')),
+    );
+  }
+
+  /** Decision passes with their prompts. Its own call, not part of load():
+   * a prompt is tens of kilobytes and the Auto trader page never shows one. */
+  async loadEvents(limit = 30): Promise<void> {
+    this._events.set(
+      await firstValueFrom(this.http.get<AgentEvent[]>(`/api/agent/events?limit=${limit}`)),
+    );
+  }
+
+  async loadJourney(days = 10): Promise<void> {
+    this._journey.set(
+      await firstValueFrom(
+        this.http.get<JourneyEntry[]>(`/api/agent/journey/entries?days=${days}`),
+      ),
     );
   }
 

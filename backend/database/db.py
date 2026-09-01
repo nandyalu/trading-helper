@@ -811,6 +811,9 @@ def record_agent_run(
     equity: float | None = None,
     cash: float | None = None,
     research_spent: float | None = None,
+    prompt: str | None = None,
+    response: str | None = None,
+    orders: str | None = None,
     *,
     _session: Session = None,
 ) -> int:
@@ -826,6 +829,9 @@ def record_agent_run(
         equity=equity,
         cash=cash,
         research_spent=research_spent,
+        prompt=prompt,
+        response=response,
+        orders=orders,
     )
     _session.add(row)
     _session.commit()
@@ -834,6 +840,17 @@ def record_agent_run(
 
 
 @read_session
-def get_agent_runs(*, _session: Session = None) -> list[AgentRun]:
-    """Every decision pass, oldest first — the spine of the journey."""
-    return list(_session.exec(select(AgentRun).order_by(AgentRun.ran_at)).all())
+def get_agent_runs(limit: int | None = None, *, _session: Session = None) -> list[AgentRun]:
+    """Decision passes, oldest first — the spine of the journey.
+
+    ``limit`` keeps the *newest* that many, then still returns them oldest
+    first, so a caller that wants a recent window does not have to reverse the
+    journey's ordering to get one.
+    """
+    query = select(AgentRun).order_by(AgentRun.ran_at)
+    if limit is not None:
+        newest = _session.exec(
+            select(AgentRun).order_by(AgentRun.ran_at.desc()).limit(limit)
+        ).all()
+        return list(reversed(newest))
+    return list(_session.exec(query).all())

@@ -35,6 +35,14 @@ export const routes: Routes = [
     loadComponent: () => import('./features/agent/agent-view').then((m) => m.AgentView),
   },
   {
+    path: 'events',
+    loadComponent: () => import('./features/events/events-view').then((m) => m.EventsView),
+  },
+  {
+    path: 'journey',
+    loadComponent: () => import('./features/journey/journey-view').then((m) => m.JourneyView),
+  },
+  {
     path: 'portfolio',
     loadComponent: () =>
       import('./features/portfolio/portfolio-dashboard').then((m) => m.PortfolioDashboard),

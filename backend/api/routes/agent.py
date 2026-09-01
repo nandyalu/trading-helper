@@ -5,10 +5,14 @@ same one the 13:35 UTC job runs. Placing orders is never exposed directly:
 the agent decides what to trade, and there is no endpoint that lets the
 dashboard place an order of its own.
 """
+import json
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 
 from backend.api.schemas import (
+    AgentEventOut,
+    JourneyEntryOut,
     AgentBookOut,
     AgentComparisonOut,
     AgentEquityPointOut,
@@ -162,6 +166,55 @@ def arm_exits(ticker: str):
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return ActionResultOut(message=result["message"])
+
+
+@router.get("/events", response_model=list[AgentEventOut])
+def get_events(limit: int = 30):
+    """Decision passes, newest first, with the prompt and the answer verbatim.
+
+    The counts and the one-line reasoning already had a home. These are the
+    words behind them, and they are the point: behaviour here is mostly
+    prompt, so a month of runs across three prompt revisions cannot be told
+    apart afterwards without the text each run actually saw.
+
+    Passes before 2026-09-01 carry no prompt or response and cannot be
+    backfilled — the prompt is assembled from a book, a watchlist and a signal
+    list that have all moved since. They are still listed, so the record has no
+    hole in it.
+    """
+    events = []
+    # Newest first for a page that reads as a feed.
+    for row in reversed(db.get_agent_runs(limit=limit)):
+        events.append(AgentEventOut(
+            id=row.id,
+            ran_at=row.ran_at,
+            reasoning=row.reasoning or "",
+            skipped=row.skipped,
+            equity=row.equity,
+            cash=row.cash,
+            research_spent=row.research_spent,
+            prompt=row.prompt,
+            response=row.response,
+            orders=json.loads(row.orders) if row.orders else [],
+            refused=json.loads(row.refusals) if row.refusals else [],
+        ))
+    return events
+
+
+@router.get("/journey/entries", response_model=list[JourneyEntryOut])
+def get_journey_entries(days: int = 10):
+    """The last ``days`` days of the generated journal, newest first.
+
+    Built from the same `journey.build()` the markdown files come from, so the
+    page and the files can never disagree. One entry per day that has one: a
+    day the agent did nothing still gets a line, because "nothing happened" is
+    a fact about the day rather than a gap in the record.
+    """
+    entries = journey.build()[-days:]
+    return [
+        JourneyEntryOut(date=day.date, markdown=journey.to_markdown([day], title=""))
+        for day in reversed(entries)
+    ]
 
 
 @router.get("/journey", response_class=PlainTextResponse)

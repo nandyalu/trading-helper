@@ -54,6 +54,8 @@ export class App {
     { path: '/portfolio', label: 'Portfolio', icon: 'briefcase' },
     { path: '/paper', label: 'Paper book', icon: 'file' },
     { path: '/agent', label: 'Auto trader', icon: 'zap' },
+    { path: '/events', label: 'Events', icon: 'chart' },
+    { path: '/journey', label: 'Journey', icon: 'book' },
   ];
 
   protected readonly bookNav = computed(() =>
