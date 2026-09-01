@@ -260,9 +260,9 @@ def _build_graph(
     one through TRADINGAGENTS_LLM_PROVIDER, but it is an ordinary config key
     rather than something read at import, so a caller can point a single run at
     a different vendor without restarting the container. That is what makes a
-    like-for-like model comparison possible: the alternative — flipping the env
-    var — runs the two models on different days, on different prices and
-    different news, which compares the market as much as the models.
+    a model switch readable: the alternative — flipping the env var and
+    redeploying — changes the model between one morning and the next, so the
+    first days after a switch compare the market as much as the models.
     """
     config = DEFAULT_CONFIG.copy()
     config["deep_think_llm"] = config["quick_think_llm"] = model or get_model()
@@ -298,7 +298,7 @@ async def propagate_ticker(
     graph (see _build_graph) and bounding concurrent runs via
     _analysis_semaphore. Returns (final_state, decision); recording and
     Discord posting are the caller's job (order matters — see
-    run_analysis_and_notify).
+    run_analysis_and_record).
 
     ``horizon`` reaches the prompts through propagate(), and comes back out in
     final_state, which is where record_signal reads it from — so the recorded
@@ -313,8 +313,8 @@ async def propagate_ticker(
     async with _analysis_semaphore:
         trade_date = datetime.date.today().isoformat()
         horizon = await asyncio.to_thread(get_horizon)
-        # An explicit model wins over the setting, so a comparison run can name
-        # the vendor's model without changing what the app is configured to use.
+        # An explicit model wins over the setting, so a one-off run can name a
+        # model without changing what the app is configured to use.
         model = model or await asyncio.to_thread(get_model)
         tracker = llm_usage.UsageTracker()
         # Started before the graph so the id names the file the first call
@@ -570,31 +570,22 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     return db.get_signal(signal_id)
 
 
-async def run_analysis_and_notify(ticker: str) -> Signal | None:
-    """propagate -> format embed -> notify() (a no-op if Discord isn't
-    configured/connected) -> record the signal, embedding the posted
-    message's id if there is one -> seed the paper-trade reaction. This is
-    what the API's analyze/analyze-all routes and the scheduled
-    sweep/triggered-analysis jobs use. Discord's own /analyze command does
-    NOT use this — it replies via the interaction it's responding to
-    instead of the configured notify channel, so it calls propagate_ticker()
-    + record_signal() directly (see backend/discord_bot/client.py)."""
+async def run_analysis_and_record(ticker: str) -> Signal | None:
+    """Run the graph and store the signal. Nothing is posted to Discord.
+
+    It used to post the whole analysis as an embed and seed a ✅ reaction that
+    executed the signal as a hand-followed paper trade. Both are gone as of
+    2026-09-01: there is one book now and only the agent trades it, so a
+    reaction that opens a position is a second decision-maker in the record.
+
+    The analysis itself is not sent either. Each one runs to thousands of words
+    and there are several a morning; they are read on the Signals page, where
+    they can be scrolled, compared and linked to the decision that used them.
+    Discord carries what the agent *did*, which is short and worth an alert.
+    """
     ticker = ticker.upper().strip()
     final_state, decision = await propagate_ticker(ticker)
-    position = compute_position(db.get_transactions(ticker))
-    sizing_field = await asyncio.to_thread(build_sizing_field, ticker, decision)
-    # Fetched here as well as in record_signal so the embed's trade plan is
-    # checked against the same price the stored one is.
-    price = await asyncio.to_thread(get_current_price, ticker)
-    embed = format_decision_embed(ticker, final_state, decision, position, sizing_field, price)
-    message = await notify(embed=embed)
-    signal = record_signal(ticker, final_state, decision, message_id=str(message.id) if message else None)
-    if message is not None:
-        try:
-            await message.add_reaction(PAPER_EMOJI)
-        except discord.HTTPException:
-            log.warning("Couldn't seed the ✅ reaction (missing Add Reactions permission?)")
-    return signal
+    return record_signal(ticker, final_state, decision)
 
 
 async def run_analyses(
@@ -615,7 +606,7 @@ async def run_analyses(
 
     async def _one(ticker: str) -> Signal | None:
         try:
-            return await run_analysis_and_notify(ticker)
+            return await run_analysis_and_record(ticker)
         except Exception:
             log.exception("Analysis failed for %s", ticker)
             if on_failure is not None:
@@ -757,61 +748,3 @@ def format_run_cost(usage) -> str | None:
 
 def _thousands(count: int) -> str:
     return f"{count / 1000:.1f}k" if count >= 1000 else str(count)
-
-
-# The model a comparison sweep runs, and the vendor it runs on. Both empty
-# means no comparison, which is the default. Kept as settings rather than env
-# vars so the experiment can be started and stopped without a redeploy — it is
-# meant to run for a week or two, not forever.
-_COMPARISON_MODEL_KEY = "comparison_model"
-_COMPARISON_PROVIDER_KEY = "comparison_provider"
-
-
-def get_comparison() -> tuple[str | None, str | None]:
-    """(model, provider) for the daily comparison sweep, or (None, None)."""
-    model = (db.get_setting(_COMPARISON_MODEL_KEY) or "").strip()
-    provider = (db.get_setting(_COMPARISON_PROVIDER_KEY) or "").strip()
-    return (model or None, provider or None)
-
-
-def set_comparison(model: str | None, provider: str | None = None) -> None:
-    """Start or stop the daily comparison. An empty model stops it."""
-    db.set_setting(_COMPARISON_MODEL_KEY, (model or "").strip())
-    db.set_setting(_COMPARISON_PROVIDER_KEY, (provider or "").strip())
-
-
-async def run_comparison(
-    tickers: list[str], model: str, provider: str | None = None
-) -> list[Signal]:
-    """Analyse the same tickers with a second model and record what it said.
-
-    Deliberately not ``run_analyses``. That posts every signal to Discord, and a
-    comparison sweep would announce the whole watchlist a second time — these
-    signals are evidence, not news. Everything else is shared: the same
-    semaphore bounds concurrency, and each signal is recorded and graded like
-    any other, which is what makes the scorecard's by-model table fill in on
-    its own about two weeks later.
-
-    Returns the signals recorded. One ticker failing never stops the rest: a
-    vendor that 503s on a single call should cost one comparison point, not the
-    day's whole sample.
-    """
-
-    async def _one(ticker: str) -> Signal | None:
-        try:
-            final_state, decision = await propagate_ticker(ticker, model=model, provider=provider)
-        except Exception:
-            log.exception("Comparison analysis failed for %s on %s", ticker, model)
-            return None
-        try:
-            return await asyncio.to_thread(record_signal, ticker, final_state, decision)
-        except Exception:
-            log.exception("Could not record the comparison signal for %s", ticker)
-            return None
-
-    results = await asyncio.gather(*(_one(t) for t in tickers))
-    recorded = [s for s in results if s is not None]
-    log.info(
-        "Comparison sweep on %s: %d of %d recorded", model, len(recorded), len(tickers)
-    )
-    return recorded

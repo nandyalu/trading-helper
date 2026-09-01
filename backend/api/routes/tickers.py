@@ -8,7 +8,7 @@ to. analyze/analyze-all dispatch via plain asyncio.create_task(); a full
 analysis can take minutes, far too long for a single HTTP request, so both
 return 202 immediately and the frontend polls GET /api/signals?ticker=...
 to see the result land. Discord posting (if configured) happens
-transparently inside backend.services.analysis.run_analysis_and_notify — this route
+transparently inside backend.services.analysis.run_analysis_and_record — this route
 never checks whether Discord is set up, since it isn't required either way.
 
 Current price for these routes comes from the ticker price cache
@@ -218,7 +218,7 @@ async def trigger_analyze(ticker: str):
 
     async def _dispatch():
         try:
-            await analysis.run_analysis_and_notify(ticker)
+            await analysis.run_analysis_and_record(ticker)
         except Exception:
             log.exception("analyze: analysis failed for %s", ticker)
 

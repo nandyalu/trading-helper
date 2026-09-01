@@ -110,12 +110,15 @@ async def _evaluate_pending_signals() -> None:
 
 
 async def _run_triggered_analyses(reasons: dict[str, str]) -> None:
-    """``reasons`` maps ticker to why it was triggered. Announces each, then
-    runs them together — the shared semaphore is the backpressure, not this
+    """``reasons`` maps ticker to why it was triggered, for the log.
+
+    Runs them together — the shared semaphore is the backpressure, not this
     function, so several triggered tickers use several GPUs instead of queueing
-    behind each other."""
+    behind each other. Nothing is announced: an analysis starting is not
+    something the agent did, and Discord carries only what it did.
+    """
     for ticker, reason in reasons.items():
-        await notify(f"⚡ {reason} — running an analysis of {ticker}...")
+        log.info("Triggered analysis for %s: %s", ticker, reason)
     await analysis.run_analyses(
         list(reasons),
         on_failure=lambda ticker: notify(f"Triggered analysis failed for {ticker} — check the logs."),
@@ -267,35 +270,6 @@ async def _morning_sweep_job() -> None:
     # two models always see the same day, the same prices and the same news —
     # a comparison run on its own clock would drift onto a different session
     # and measure the market as much as the model.
-    model, provider = analysis.get_comparison()
-    if model:
-        log.info("Comparison sweep: %s on %s", model, provider or "the configured vendor")
-        try:
-            recorded = await analysis.run_comparison(tickers, model, provider)
-        except Exception:
-            log.exception("Comparison sweep failed")
-            return
-        # Posted once for the sweep, not once per ticker: this is an experiment
-        # running in the background, and it should not crowd the day's signals.
-        if recorded:
-            # Says *when* they grade, not only where to look. The message used
-            # to point at the scorecard's by-model table, which shows resolved
-            # signals only — so a reader who followed it on the day of a sweep
-            # found the new model missing and no explanation of why. Every
-            # signal carries its own evaluation date, so the answer is here.
-            due = sorted(s.evaluation_date for s in recorded if s.evaluation_date)
-            when = (
-                f" The first grades {due[0]:%b %-d} and the last {due[-1]:%b %-d}; "
-                "until then they are pending and the scorecard's by-model table, "
-                "which counts resolved signals only, will not list this model."
-                if due else ""
-            )
-            await notify(
-                f"🔬 Comparison: {len(recorded)} of {len(tickers)} tickers analysed on "
-                f"`{model}`. They grade like any other signal.{when}"
-            )
-
-
 def morning_sweep() -> None:
     run_on_main(_morning_sweep_job)
 
@@ -439,8 +413,6 @@ async def _weekly_digest_job() -> None:
     except Exception:
         log.exception("Candidate screen failed")
         return
-    if found:
-        await notify(candidates.format_candidates(found))
 
 
 def weekly_digest() -> None:

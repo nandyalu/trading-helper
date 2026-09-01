@@ -8,7 +8,7 @@ used to do — the semaphore meant to bound concurrency never saw more than one
 caller at a time.
 
 These tests pin the dispatch shape. They never touch an LLM:
-``run_analysis_and_notify`` is replaced with a stub that records how many calls
+``run_analysis_and_record`` is replaced with a stub that records how many calls
 overlap. Plain sync tests driving ``asyncio.run`` — this suite has no
 pytest-asyncio and needs none for five tests.
 """
@@ -18,7 +18,7 @@ from backend.services import analysis
 
 
 class _Tracker:
-    """Stands in for run_analysis_and_notify, recording peak overlap."""
+    """Stands in for run_analysis_and_record, recording peak overlap."""
 
     def __init__(self, delay: float = 0.02, fail: set[str] | None = None):
         self.delay = delay
@@ -41,7 +41,7 @@ class _Tracker:
 
 
 def _run(monkeypatch, tracker, tickers, on_failure=None):
-    monkeypatch.setattr(analysis, "run_analysis_and_notify", tracker)
+    monkeypatch.setattr(analysis, "run_analysis_and_record", tracker)
     return asyncio.run(analysis.run_analyses(tickers, on_failure=on_failure))
 
 

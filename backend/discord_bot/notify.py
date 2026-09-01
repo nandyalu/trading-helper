@@ -37,7 +37,7 @@ async def notify(message: str | None = None, embed: discord.Embed | None = None)
     """Posts to the configured Discord channel; returns the sent message, or
     None if Discord isn't connected, no channel is configured, or the send
     failed. Every call site already treats a None return as "no Discord
-    side effect happened" (e.g. run_analysis_and_notify skips seeding the
+    side effect happened" (e.g. run_analysis_and_record skips seeding the
     ✅ reaction), so callers never need to branch on whether Discord is on."""
     if _client is None:
         return None
