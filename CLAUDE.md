@@ -589,6 +589,11 @@ The rules block:
   order: to research something when the list is full, list the untrack first
   and the research after it.
 - You cannot untrack something you hold. Sell it first [...]
+- If something is stopping you deciding well — a number you cannot see, a tool
+  you do not have, a rule that contradicts another — say so with side `note`.
+  It reaches the people who maintain you. Nothing acts on it automatically, so
+  it is a message and not a request.
+- A note is never a substitute for a decision. [...]
 - Doing nothing is a valid answer, and often the right one.
 - Before answering, add up what your buys cost and check it against your cash.
 
@@ -622,6 +627,16 @@ record would be of a strategy nobody chose.
   it learns it may sell to fund a buy, and untrack to fund a research. The
   advice in that retry is matched to the refusal — cash advice does not help a
   full watchlist, and the first live probe produced exactly that mistake.
+- **A `note` is accepted before any check that could refuse it**, so an account
+  with no cash left can still leave one. It moves no cash, no shares and no
+  watchlist slot, and **it does not count as acting** — a pass that only left a
+  note is still an idle pass. Without that, "I need better data" stands in for
+  the decision the agent owed.
+- **Broker failures are stored, not just counted**, and the last five from the
+  last three passes appear in the next prompt. `refusals` and `failures` are
+  separate columns on purpose: a refusal says the agent's arithmetic was wrong,
+  a failure says it formed the order correctly and the world would not take it.
+  Those are different facts and it needs the difference.
 
 ### How a position is opened and protected
 
@@ -651,6 +666,40 @@ The reasons that constrain a future edit stay here, in the sections above, becau
 ### Before changing the prompt
 
 Add the entry to **[JOURNEY.md](JOURNEY.md)** first, with the date and the reason. A month of runs across an undocumented prompt revision cannot be analysed, and the temptation to reconstruct the reasoning afterwards produces a story about what we would like to have been thinking.
+
+## A tool error goes to the model, not to the logs
+
+**A raising tool used to end the analysis.** On 2026-09-02 that discarded two
+complete forty-minute runs: the model asked for an indicator called
+`macd_histogram` when the real name is `macdh`, and the error listing all
+thirteen valid names went to the logs instead of to the model.
+
+Two things were wrong and the second was worse.
+
+**A caller error counted as vendor ill-health.** The bad name raised a plain
+`ValueError`, the router caught it generically and recorded it against the
+circuit breaker. Five bad names opened yfinance's circuit at the third, and for
+the next five minutes *every* `get_indicators` call failed with "No available
+vendor" — including the valid ones. `CircuitBreaker`'s own docstring says only
+transient errors should open it.
+
+So `BadVendorArgumentError` now marks "the request was wrong, the vendor is
+fine". The router **does not touch the breaker** for one and **does not fall
+through to the next vendor** — every vendor rejects the same invalid argument,
+so trying them in turn only wastes requests and buries the message.
+
+**Every `ToolNode` sets `handle_tool_errors`.** The model is handed the message
+and calls again, which is how a tool-calling model is meant to recover, at a
+cost of one call against an analysis of twenty.
+
+**The handler returns the message and nothing else.** No suggestion of what to
+try instead. A model told "that failed, try something else" invents a plausible
+substitute, and an invented answer that reads as data is exactly what
+disqualified four models in August. The vendor's message already names the
+valid values; anything past that is us guessing.
+
+`backend/tests/test_tool_errors_reach_the_model.py` holds the guarantee in this
+repo, so a submodule bump that reverts it fails here rather than in a live run.
 
 ## Per-run cost telemetry
 

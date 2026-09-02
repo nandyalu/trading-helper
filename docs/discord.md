@@ -28,12 +28,23 @@ The watchdog runs every fifteen minutes during market hours and posts only when 
 | 🎯 target touch | A holding reached the price target from its signal |
 | 🛑 / 🎯 a fill | A resting stop or take-profit executed. These arrive within a second of the fill |
 | ⚠️ unguarded position | The agent holds shares with nothing resting at the broker to close them |
+| 📝 the agent asked for something | It said what would help it decide better — a tool it lacks, a number it cannot see |
 
 Each alert posts at most once a day. A target alert posts once ever, per signal.
 
 ## What Discord does not post
 
 **The analyses themselves.** Each one runs to thousands of words and several arrive a morning. They are read on the Signals page, where they can be scrolled, compared, and opened beside the decision that used them.
+
+## When the agent asks for something
+
+The agent can end a decision pass with a note. It is a message to whoever maintains it: a tool it does not have, data it cannot see, a rule it finds contradictory.
+
+**Nothing acts on it.** It is the agent talking, not the agent trading, so it puts no second decision-maker in the record. If we build what it asks for, that is a change like any other and goes in the journal first.
+
+A note never replaces a decision. The prompt says so outright — otherwise "I need better data" becomes a way to avoid answering, and a pass that owed a decision returns a request instead.
+
+It appears high in the Discord post and in its own block on the Decisions page, apart from the orders.
 
 ## The unguarded-position alert
 
