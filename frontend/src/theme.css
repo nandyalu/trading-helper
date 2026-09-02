@@ -116,7 +116,12 @@
   /* The old fixed sidebar still uses this. Phase 1 replaces that shell with a
      top navigation and both tokens go with it. */
   --sidebar-w: 15rem;
-  --topbar-h: 4rem;
+  /* The masthead breathes at the top of a page and tightens once the reader
+     is into the content. Two tokens rather than magic numbers, because the
+     sticky offset on the timeline has to follow the collapsed height. */
+  --masthead-pad: 2.5rem;
+  --masthead-pad-tight: 0.75rem;
+  --topbar-h: 4.8rem;
   --page-max: 78rem;
 
   color-scheme: light dark;

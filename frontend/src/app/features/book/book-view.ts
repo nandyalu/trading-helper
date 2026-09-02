@@ -3,12 +3,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { AgentTrade } from '../../core/models/api.models';
-import { LineChart, LineChartPoint } from '../../shared/line-chart';
+import { EquityChart, EquityPoint } from '../../shared/equity-chart';
 import { AgentService } from '../../core/services/agent.service';
 
 @Component({
   selector: 'app-book-view',
-  imports: [RouterLink, UpperCasePipe, LineChart],
+  imports: [RouterLink, UpperCasePipe, EquityChart],
   templateUrl: './book-view.html',
 })
 export class BookView {
@@ -21,7 +21,7 @@ export class BookView {
   /** Equity per trading day. Plotted against the budget rather than from zero,
    * so the line crossing its own starting level is the thing you see first —
    * that is the only question this chart answers. */
-  protected readonly equityCurve = computed<LineChartPoint[]>(() =>
+  protected readonly equityCurve = computed<EquityPoint[]>(() =>
     this.agentService.curve().map((p) => ({ time: p.date, value: p.equity })),
   );
 
@@ -86,13 +86,29 @@ export class BookView {
     return value ? value.replace('T', ' ').slice(0, 16) : '—';
   }
 
-  protected money(value: number | null): string {
-    return value === null ? '—' : `$${value.toFixed(2)}`;
+  protected money(value: number | null, digits = 2): string {
+    if (value === null) return '—';
+    return `$${value.toLocaleString('en-US', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })}`;
   }
 
+  /** A gain or a loss, with its sign in the text. The `.money--pos` and
+   * `.money--neg` classes add the arrow; neither the colour nor the arrow is
+   * ever the only thing distinguishing the two. */
   protected signed(value: number | null): string {
     if (value === null) return '—';
-    return `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+    const abs = Math.abs(value).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return `${value >= 0 ? '+$' : '−$'}${abs}`;
+  }
+
+  protected signedPct(value: number | null): string {
+    if (value === null) return '—';
+    return `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}%`;
   }
 
   protected whenPlaced(trade: AgentTrade): string {

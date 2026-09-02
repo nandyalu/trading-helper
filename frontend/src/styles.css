@@ -190,7 +190,7 @@ body {
 .masthead-inner {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--masthead-pad) var(--sp-5);
   display: flex;
   align-items: center;
   gap: var(--sp-6);
@@ -198,8 +198,8 @@ body {
 }
 
 .masthead.scrolled .masthead-inner {
-  padding-top: var(--sp-2);
-  padding-bottom: var(--sp-2);
+  padding-top: var(--masthead-pad-tight);
+  padding-bottom: var(--masthead-pad-tight);
 }
 
 .brand {
@@ -211,14 +211,28 @@ body {
   flex-shrink: 0;
 }
 
-.brand-mark {
-  color: var(--text);
-  transition: transform 160ms ease;
-  transform-origin: left center;
+.brand:hover {
+  text-decoration: none;
 }
 
-.masthead.scrolled .brand-mark {
-  transform: scale(0.72);
+.brand-mark {
+  color: var(--text);
+}
+
+/* Sized here rather than through `transform`. A scaled element keeps its
+   original layout box, so the masthead could never collapse past the mark's
+   full height however small it looked. */
+.brand-mark svg {
+  width: 4rem;
+  height: 4rem;
+  transition:
+    width 160ms ease,
+    height 160ms ease;
+}
+
+.masthead.scrolled .brand-mark svg {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .brand-text {
@@ -229,24 +243,24 @@ body {
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: var(--t-lg);
+  font-size: var(--t-2xl);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   transition: font-size 160ms ease;
 }
 
 .masthead.scrolled .brand-name {
-  font-size: var(--t-md);
+  font-size: var(--t-lg);
 }
 
 /* Says what the site is to someone who arrived on a deep link and has never
    seen the front page. Folded away once they are reading, where it is just
    taking room. */
 .brand-sub {
-  font-size: var(--t-xs);
+  font-size: var(--t-sm);
   color: var(--text-faint);
   overflow: hidden;
-  max-height: 1.4em;
+  max-height: 1.6em;
   transition:
     max-height 160ms ease,
     opacity 160ms ease;
@@ -280,9 +294,11 @@ body {
   white-space: nowrap;
 }
 
-.topnav-link:hover {
+.topnav-link:hover,
+.topnav-link:hover:link {
   color: var(--text);
   background: var(--surface-2);
+  text-decoration: none;
 }
 
 /* The current page is marked by weight and ink, not by a coloured pill. One
@@ -348,6 +364,11 @@ body {
   color: var(--text-muted);
   text-decoration: none;
   border-bottom: 1px solid var(--border);
+}
+
+.drawer-link:hover {
+  color: var(--text);
+  text-decoration: none;
 }
 
 .drawer-link.active {
@@ -511,21 +532,6 @@ main {
   .page {
     padding: var(--sp-4) var(--sp-3) var(--sp-5);
   }
-}
-
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-}
-
-.page-head .subtitle {
-  margin: 0.15rem 0 0;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  max-width: 46rem;
 }
 
 .back-link {
@@ -2149,6 +2155,56 @@ table {
 .how-list strong {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   13b. Page headers
+   --------------------------------------------------------------------------
+   Every page opens the same way: what it is, in serif, and one line saying
+   what question it answers. That line is not decoration — it is the whole
+   progressive-depth idea. A general reader gets the answer from it and stops;
+   a technical reader keeps going into the tables below.
+   ========================================================================== */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.page-head h1 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--t-2xl);
+}
+
+.subtitle {
+  margin: 0;
+  max-width: var(--measure);
+  font-size: var(--t-md);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+}
+
+.subtitle strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A short standing line under a page head, for the pages that show money.
+   Smaller than the front page's band because a reader here has almost
+   certainly already met it — but never absent. */
+.page-warning {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--text-faint);
+}
+
+.page-warning strong {
+  color: var(--text-muted);
 }
 
 /* ==========================================================================

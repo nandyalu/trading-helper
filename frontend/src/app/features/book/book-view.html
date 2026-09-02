@@ -3,12 +3,16 @@
     <div>
       <h1>The book</h1>
       <p class="subtitle">
-        Everything the agent has done with its $10,000: what it holds now, what it has held, and
-        every order with the reason it gave. No real money is involved and no order can reach a real
-        account. It decides once a morning, at 13:35 UTC, and nobody can make it decide sooner.
+        <strong>What the agent did with the money.</strong> What it holds now, what it has held, and
+        every order with the reason it gave.
       </p>
     </div>
   </header>
+
+  <p class="page-warning">
+    No real money is involved — every order goes to a sandbox account. Nothing here is financial
+    advice.
+  </p>
 
   @if (book(); as b) {
     @if (!b.sandbox) {
@@ -23,61 +27,66 @@
       </p>
     }
 
-    <div class="stat-grid">
-      <div class="stat">
-        <span class="stat-label">Equity</span>
-        <span class="stat-value" [class.pass]="b.return_pct >= 0" [class.fail]="b.return_pct < 0">
-          {{ money(b.equity) }}
-        </span>
-        <span class="stat-note"
-          >{{ b.return_pct >= 0 ? '+' : '' }}{{ b.return_pct.toFixed(1) }}% against
-          {{ money(b.budget) }} budget</span
-        >
-      </div>
-      <div class="stat">
-        <span class="stat-label">Cash</span>
-        <span class="stat-value">{{ money(b.cash) }}</span>
-        <span class="stat-note">available to spend</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Invested</span>
-        <span class="stat-value">{{ money(b.invested) }}</span>
-        <span class="stat-note">at cost, across {{ b.holdings.length }} position(s)</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Realized</span>
+    <div class="scoreboard">
+      <div class="scoreboard-main">
+        <span class="scoreboard-label">The account today</span>
+        <span class="scoreboard-value money">{{ money(b.equity) }}</span>
         <span
-          class="stat-value"
-          [class.pass]="b.realized_pnl >= 0"
-          [class.fail]="b.realized_pnl < 0"
+          class="scoreboard-delta money"
+          [class.money--pos]="b.return_pct >= 0"
+          [class.money--neg]="b.return_pct < 0"
         >
-          {{ signed(b.realized_pnl) }}
+          {{ signedPct(b.return_pct) }} on the {{ money(b.budget, 0) }} it started with
         </span>
-        <span class="stat-note">closed trades only</span>
       </div>
+      <dl class="scoreboard-facts">
+        <div>
+          <dt>Cash</dt>
+          <dd class="money">{{ money(b.cash) }}</dd>
+        </div>
+        <div>
+          <dt>Invested</dt>
+          <dd class="money">{{ money(b.invested) }}</dd>
+        </div>
+        <div>
+          <dt>Realized</dt>
+          <dd
+            class="money"
+            [class.money--pos]="b.realized_pnl >= 0"
+            [class.money--neg]="b.realized_pnl < 0"
+          >
+            {{ signed(b.realized_pnl) }}
+          </dd>
+        </div>
+        <div>
+          <dt>Holding</dt>
+          <dd class="money">
+            {{ b.holdings.length }} {{ b.holdings.length === 1 ? 'name' : 'names' }}
+          </dd>
+        </div>
+      </dl>
     </div>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Equity curve</h2>
-        <p class="hint">
-          Cash plus the market value of what it holds, one point per trading day since its first
-          fill. Rebuilt from the ledger and each day's closing price, so it covers every day the
-          agent has traded rather than starting the day the chart was added.
-        </p>
+    @if (equityCurve().length === 0) {
+      <div class="empty">
+        <span class="empty-icon" aria-hidden="true">📈</span>
+        <strong>No curve yet</strong>
+        <span>It starts on the day the agent's first order fills.</span>
       </div>
-      <div class="card-body">
-        @if (equityCurve().length === 0) {
-          <div class="empty">
-            <span class="empty-icon" aria-hidden="true">📈</span>
-            <strong>No curve yet</strong>
-            <span>It starts on the day the agent's first order fills.</span>
-          </div>
-        } @else {
-          <app-line-chart [points]="equityCurve()" />
-        }
-      </div>
-    </section>
+    } @else {
+      <figure class="chart-figure">
+        <figcaption>
+          <span class="chart-title">Equity, day by day</span>
+          <span class="chart-note">
+            Cash plus the market value of what it holds, against the {{ money(b.budget, 0) }}
+            it began with — green above that line, red below. Rebuilt from the ledger and each day's
+            close, so it covers every day the agent has traded rather than starting when the chart
+            was added.
+          </span>
+        </figcaption>
+        <app-equity-chart [points]="equityCurve()" [baseline]="b.budget" />
+      </figure>
+    }
 
     @if (performance(); as p) {
       @if (p.strategies.length) {
