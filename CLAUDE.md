@@ -47,14 +47,20 @@ Two copies of the compose config exist and are **not synced automatically**:
   Dockge UI's compose editor — never wholesale-replace its `environment:`
   block or you'll clobber the hardcoded secrets.
 
-**One deployment runs from 2026-09-01.** The `trading-bot` and `analyst-bot`
-containers both stopped that day; their volumes are kept as a record of the two
-experiments that ended. The new container starts from an empty database and a
-freshly reset Webull paper account.
+**One deployment, `trading-experiment`, live since 2026-09-02.** The
+`trading-bot` and `analyst-bot` containers stopped on 2026-09-01; their volumes
+are kept as a record of the two experiments that ended. The new container runs
+on its own `agent_data` volume, from an empty database and a freshly reset
+Webull paper account.
 
-The dashboard ran on **8123**, not the 8080 the template defaults to — the
-deployed copy sets its own, the same drift the `environment:` block has.
-`docker ps` is the authority.
+**The experiment's start date is 2026-09-02, not the 1st.** The code was
+written on the 1st and nothing was running; the agent could first act on the
+2nd. `frontend/src/app/shared/experiment.ts` holds that date as one constant,
+and everything on the site that says "since" or "day N" reads it from there.
+
+The dashboard runs on **8125**, not the 8080 the template defaults to — the
+deployed copy sets its own port, the same drift the `environment:` block has.
+`docker ps` is the authority. The container is named `trading-experiment`.
 
 To inspect the live container: `docker logs trading-bot`, `docker exec
 trading-bot env`. Don't sudo-edit `/opt/stacks/...` directly — hand the user
@@ -116,7 +122,7 @@ That makes `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES` the knob that decides GPU
 utilization. With one deployment it should equal the backend count; anything
 above just queues in the proxy.
 
-**One deployment runs from 2026-09-01, so it gets all seven.** Set
+**One deployment runs, so it gets all seven.** Set
 `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=7`. The two-deployment arithmetic that
 used to live here — a 4/3 split, then a planned 2/5 — is gone with the second
 deployment.

@@ -3,12 +3,7 @@
        knowing what was being tried. -->
   <header class="hero">
     <div class="hero-body">
-      <p class="hero-eyebrow">
-        A public experiment
-        @if (dayNumber()) {
-          · day {{ dayNumber() }}
-        }
-      </p>
+      <p class="hero-eyebrow">A public experiment · began {{ startedOn }} · day {{ dayNumber }}</p>
       <h1 class="hero-title">
         What does an
         <!-- The phrase and its footnote mark are one unit. A break between them

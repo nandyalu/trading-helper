@@ -37,6 +37,27 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-02 — the experiment starts.** The container is deployed, the Webull paper account is reset, and the agent is switched on.
+
+**This is day one.** Not 2026-09-01, which is when the code was written: nothing was running that day — no container, no account, no book. The experiment starts when the agent can act.
+
+The state it begins from:
+
+| | |
+|---|---|
+| Budget | $10,000, all of it cash |
+| Holdings | none |
+| Watchlist | empty |
+| Signals | none |
+| Model | `gemma4-e4b-qat-128k` |
+| Concurrency | 7 |
+| Research charge | $0.05 an analysis |
+| Watchlist cap | 30 |
+
+**The watchlist starts empty on purpose.** The first morning sweep therefore analyses nothing, and the first real event is the 13:35 decision pass, where the agent sees the candidate menu and chooses what to pay to research. Whether it commissions anything at all on day one is the first observation, and it is the specific behaviour `gemma4-e4b-qat` was chosen for — the 2B model it replaced answered "no research" three mornings running.
+
+The site is not public yet.
+
 **2026-09-02 — the watchlist cap goes from 12 to 30, on a measurement.** The old number was derived rather than guessed, and the derivation rested on two figures that no longer hold.
 
 It assumed **three concurrent analyses** and **17.4 minutes each** — the numbers for a pool shared with a second deployment that ended on 2026-09-01. Twelve was four waves of three inside the two-hour window between the 11:00 sweep and `earnings_check` at 13:00.
@@ -86,7 +107,9 @@ The correct answer was inside the exception the entire time. So a tool error is 
 
 **The thing to watch.** Feeding errors back teaches a model to satisfy the checker. There is a version of this where the agent learns to phrase tool calls that pass rather than tool calls that ask for what it wanted. Watch for indicator choices getting narrower over time rather than more apt.
 
-**2026-09-01 — the experiment restarts, and everything except the agent is removed.** This is the largest change in the file and the only one that ends an experiment rather than adjusting one. Both previous deployments stop today. Their data is kept as a record and nothing carries forward: a new container, a freshly reset Webull paper account, an empty database.
+**2026-09-01 — everything except the agent is removed.** The largest change in this file, and the only one that ends an experiment rather than adjusting one. Both previous deployments stop today, their data kept as a record.
+
+**This entry is the preparation. The experiment itself starts on 2026-09-02** — see the entry above, where the new container is deployed with an empty database and a freshly reset account. Nothing was running on the 1st.
 
 The question the app now asks is one question. **What does an autonomous agent do with $10,000?**
 

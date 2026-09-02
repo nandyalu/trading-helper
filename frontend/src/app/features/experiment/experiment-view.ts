@@ -8,6 +8,7 @@ import { ScorecardService } from '../../core/services/scorecard.service';
 import { EquityChart, EquityPoint } from '../../shared/equity-chart';
 import { Logo } from '../../shared/logo';
 import { ClockTime, marketTime } from '../../shared/market-time';
+import { dayNumber, startedOn } from '../../shared/experiment';
 
 /** One row of the two-day timeline. */
 interface Beat {
@@ -62,13 +63,13 @@ export class ExperimentView {
     ),
   );
 
-  /** Days since the first equity point, which is the first fill rather than
-   * the day the container came up. */
-  protected readonly dayNumber = computed(() => {
-    const first = this.curve()[0];
-    if (!first) return 0;
-    return Math.max(1, Math.round((Date.now() - new Date(first.date).getTime()) / 86_400_000));
-  });
+  /** Which day of the experiment this is, and the date it began.
+   *
+   * Counted from the start date rather than from the first fill. A day the
+   * agent chose to do nothing is still a day of the experiment, and a counter
+   * that waits for the first purchase hides exactly those days. */
+  protected readonly dayNumber = dayNumber();
+  protected readonly startedOn = startedOn();
 
   /** The most recent pass that did something.
    *
