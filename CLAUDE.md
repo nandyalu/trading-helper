@@ -121,13 +121,23 @@ above just queues in the proxy.
 used to live here — a 4/3 split, then a planned 2/5 — is gone with the second
 deployment.
 
-**`_MAX_WATCHLIST` has to be re-derived at seven concurrent, not left at 12.**
-Twelve was four waves of three against the two-hour window between the 11:00
-sweep and `earnings_check` at 13:00. Seven concurrent is a different number, and
-**it is not 12 × 7/3** — gemma4's E-series keeps its per-layer embeddings in host
-RAM, so seven analyses contend for CPU and memory bandwidth far more than three
-do. Measure the seven-way analysis time first, then choose. Until that
-measurement exists, 12 is the safe number and is what ships.
+**Fourteen concurrent — two per card — is measured and works.** See
+[concurrency-benchmark.md](concurrency-benchmark.md) for the full run. The
+headline: 26 of 28 analyses finished, throughput is 3.2 min per analysis against
+13.2 alone (4.1x), and **the CPU is the bottleneck, not the GPUs** — the cards
+averaged 36-61% busy while the host CPU sat at 99.8% median. VRAM peaked at 5.5
+GiB of 8.0, RAM at 20.7 GB of 31, the pool at 701 W and 97 °C junction.
+
+So `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=14` is safe here, and
+**`_MAX_WATCHLIST` can go to about 30** against the 12 that ships — 120 minutes
+between the 11:00 sweep and `earnings_check` at 13:00, at 3.2 min each, is
+roughly 37, and 30 leaves room for the tail. Raise it, watch a week of real
+sweep durations, then decide.
+
+**What is not known is whether 14 beats 7.** There is no seven-concurrent
+measurement, and since the CPU is already pinned at 14, seven may give most of
+the throughput at half the per-analysis latency. One round of seven is about 25
+minutes and is the obvious next measurement.
 
 **Overshooting the sum costs latency, not failures, and an earlier note here
 was wrong about why.** It said `WAIT_TIMEOUT=600` is ten minutes against an
