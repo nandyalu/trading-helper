@@ -213,6 +213,12 @@
      the destinations sit above it where a reader expects a masthead. -->
 <a class="skip-link" href="#main">Skip to the content</a>
 
+<!-- Watched by an IntersectionObserver to decide whether the masthead is
+     collapsed. A zero-height marker at the top of the page, because its
+     position does not depend on the masthead's height — reading scrollY
+     instead made the two feed each other and the header flickered. -->
+<div #sentinel class="scroll-sentinel" aria-hidden="true"></div>
+
 <header class="masthead" [class.scrolled]="scrolled()">
   <div class="masthead-inner">
     <a class="brand" routerLink="/">

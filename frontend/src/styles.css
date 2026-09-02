@@ -145,6 +145,13 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+
+  /* **Off, and the masthead depends on it.** Browsers keep the visible content
+     still when something above the viewport changes size. The masthead is
+     exactly that: it shrinks on scroll, the browser compensates by moving the
+     scroll position back, the sentinel re-enters view, the masthead expands —
+     and it oscillated several times a second. */
+  overflow-anchor: none;
 }
 
 /* The icon sprite is markup, not content. Without this it lays out as a blank
@@ -182,6 +189,19 @@ body {
 /* Generous at the top of the page, compact once you are reading.
    The name is the first thing a stranger needs and the last thing a returning
    reader wants taking up the screen, so it starts big and shrinks on scroll. */
+/* Zero height, at the very top of the document. The masthead's collapsed
+   state is decided by whether this is still on screen. */
+/* Tall rather than a single pixel, which gives the observer hysteresis: a
+   stray pixel of scroll correction cannot push it back into view. */
+.scroll-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 5rem;
+  pointer-events: none;
+}
+
 .masthead {
   position: sticky;
   top: 0;
@@ -2058,15 +2078,46 @@ table {
   }
 }
 
-@media (max-width: 40rem) {
+/* Below this the mark and the headline cannot share a row. At 412px the
+   240px mark left the text column about 100px wide, which set the headline
+   three words to a line. */
+@media (max-width: 52rem) {
   .hero {
-    padding-top: var(--sp-6);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-5);
+    padding: var(--sp-6) 0 var(--sp-5);
   }
 
+  /* Above the headline rather than below it: the mark is the first thing on
+     the page and reads as a masthead for it. */
+  .hero-mark {
+    order: -1;
+    justify-self: start;
+  }
+
+  .hero-mark svg {
+    width: 5rem;
+    height: 5rem;
+  }
+
+  .hero-title {
+    font-size: clamp(1.75rem, 8.5vw, 2.5rem);
+  }
+
+  .hero-lede {
+    font-size: var(--t-base);
+  }
+}
+
+@media (max-width: 40rem) {
   .scoreboard {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--sp-4);
+  }
+
+  .guardrails {
+    padding: var(--sp-4);
   }
 }
 

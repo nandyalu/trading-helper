@@ -1,4 +1,13 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
@@ -28,15 +37,11 @@ const THEME_KEY = 'th-theme';
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, Logo],
   templateUrl: './app.html',
-  host: {
-    '(document:keydown.escape)': 'closeDrawer()',
-    // Passive by default in Angular's listener, and it only flips a boolean —
-    // the animation is CSS, so a fast scroll cannot queue work here.
-    '(window:scroll)': 'onScroll()',
-  },
+  host: { '(document:keydown.escape)': 'closeDrawer()' },
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly settingsService = inject(SettingsService);
 
   /** Two groups, six links.
@@ -85,8 +90,20 @@ export class App {
 
   /** True once the reader has scrolled past the top. The masthead starts
    * generous — the name is the first thing a stranger needs — and compacts
-   * once they are reading, where it is just taking screen. */
+   * once they are reading, where it is just taking screen.
+   *
+   * **Driven by a sentinel, not by scrollY, and that is the whole fix for a
+   * flicker.** Reading `window.scrollY` created a loop: past the threshold the
+   * masthead collapsed, the page grew shorter, the scroll position moved back
+   * under the threshold, the masthead expanded, and it oscillated several
+   * times a second.
+   *
+   * An IntersectionObserver watching a zero-height element at the top of the
+   * page cannot do that. The sentinel's position does not depend on the
+   * masthead's height, so the state it reports is stable. */
   protected readonly scrolled = signal(false);
+
+  private readonly sentinel = viewChild.required<ElementRef<HTMLElement>>('sentinel');
 
   protected readonly drawerOpen = signal(false);
   protected readonly theme = signal<'light' | 'dark'>(readStoredTheme());
@@ -104,12 +121,19 @@ export class App {
     );
   });
 
-  protected onScroll(): void {
-    const past = window.scrollY > 12;
-    if (past !== this.scrolled()) this.scrolled.set(past);
-  }
-
   constructor() {
+    afterNextRender(() => {
+      const el = this.sentinel().nativeElement;
+      // No observer means the masthead simply stays at full size. That is a
+      // smaller loss than a header that jumps.
+      if (typeof IntersectionObserver === 'undefined') return;
+      const io = new IntersectionObserver(([entry]) => this.scrolled.set(!entry.isIntersecting), {
+        rootMargin: '0px',
+      });
+      io.observe(el);
+      this.destroyRef.onDestroy(() => io.disconnect());
+    });
+
     this.applyTheme(this.theme());
     // Read once at startup: which copy this is, is a property of the container
     // rather than of the session, and cannot change while the page is open.
