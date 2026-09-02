@@ -2,7 +2,11 @@
   <header class="page-head">
     <div>
       <h1>Settings</h1>
-      <p class="subtitle">How the bot analyzes, sizes, and watches your positions.</p>
+      <p class="subtitle">
+        The experiment's parameters: which model runs the analyses, what horizon they aim at, and
+        what the watchdog treats as worth an alert. Changing one of these changes the experiment, so
+        write down what and why in the journal first.
+      </p>
     </div>
   </header>
 
@@ -36,9 +40,9 @@
         <h2>Analysis model</h2>
         <p class="hint">
           The LLM every analysis runs on. Each signal records the model it was made with, so the
-          scorecard's "By model" table shows how a new one compares before you trust it. A model
-          with a small context window may fail partway through an analysis rather than answer badly
-          — check the logs after switching.
+          scorecard's "By model" table splits the win rates, which is the only honest way to compare
+          two models. A model with a small context window may fail partway through an analysis
+          rather than answer badly — check the logs after switching.
         </p>
       </div>
       <div class="card-body">
