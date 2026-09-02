@@ -11,6 +11,14 @@
     </div>
   </header>
 
+  @if (verdict(); as v) {
+    <section class="verdict verdict--{{ v.tone }}">
+      <p class="verdict-label">Where it stands</p>
+      <p class="verdict-headline">{{ v.headline }}</p>
+      <p class="verdict-detail">{{ v.detail }}</p>
+    </section>
+  }
+
   @if (scorecard(); as s) {
     <div class="stat-grid">
       <div class="stat">

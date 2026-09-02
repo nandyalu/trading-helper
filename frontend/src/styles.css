@@ -2208,6 +2208,67 @@ table {
 }
 
 /* ==========================================================================
+   13c. The verdict
+   --------------------------------------------------------------------------
+   One block, at the top of the scorecard, saying in a sentence whether any of
+   this is working. **The tone that will be true for a long time is "waiting",
+   and it has to look as considered as the other three** — a site that treats
+   "not enough data" as an empty state is a site that will quietly start
+   reporting a percentage the moment it has six of them.
+
+   The tone is carried by a border and a label, never by colour alone.
+   ========================================================================== */
+
+.verdict {
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.verdict-label {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.verdict-headline {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  line-height: var(--lh-tight);
+  color: var(--text);
+}
+
+.verdict-detail {
+  margin: 0;
+  max-width: var(--measure);
+  font-size: var(--t-base);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+}
+
+.verdict--working {
+  border-left-color: var(--pos);
+}
+
+.verdict--not-working {
+  border-left-color: var(--neg);
+}
+
+.verdict--inconclusive {
+  border-left-color: var(--warn);
+}
+
+.verdict--waiting {
+  border-left-color: var(--accent);
+}
+
+/* ==========================================================================
    14. Long-form pages
    --------------------------------------------------------------------------
    The Idea, Method and Glossary are read rather than scanned, so they get the
