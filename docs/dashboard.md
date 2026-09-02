@@ -1,12 +1,43 @@
-# The dashboard
+# The site
 
 The web dashboard is where you look at what happened. Discord is where you hear that something happened. See [How it works](overview.md) for why they are separate.
 
 Open it at the root of whatever host and port the container serves, for example `http://localhost:8080/`.
 
-## Overview
+**Eight pages, each answering one question.** The old table had thirteen, one per data source — Tickers, Signals, Alerts, Regime and Digest each stood alone. That shape suited an operator and left a reader to work out which page held the answer. Alerts, the regime line and the weekly digest no longer have pages of their own: each is context for something else and now sits inside it.
 
-The landing page answers one question: is anything wrong?
+| Page | The question it answers |
+|---|---|
+| The experiment (`/`) | What is this, and how is it going? |
+| The book (`/book`) | What did it do with the money? |
+| Decisions (`/decisions`) | Why did it do that? |
+| Research (`/research`) | What did it study, and was it right? |
+| Scorecard (`/scorecard`) | Is it any good? |
+| Journal (`/journal`) | What have we changed, and when? |
+
+Old paths redirect rather than 404. Links to them exist in Discord posts and in the journal, and breaking them loses the trail back to whatever was being discussed.
+
+## Publishing it
+
+`PUBLIC_MODE=1` makes the backend refuse every write, so the site can be put on a public domain — behind a Cloudflare tunnel, say — without exposing the settings that choose the model and the budget, or the endpoint that places exit orders.
+
+**It is middleware, not a per-route check and not a hidden button.** A per-route check protects only the routes somebody remembered to annotate. Hiding a link stops nobody who can type a URL. The middleware refuses any method other than GET, HEAD or OPTIONS, which covers the route added next year by someone who never read this page.
+
+The frontend reads the flag only to drop the Settings link and the arm-exits button. A failure to read it leaves both showing — the backend still refuses, so the worst case is a dead end rather than a hole.
+
+Run the private copy without the variable and it behaves exactly as before.
+
+## The experiment
+
+The landing page is written for someone who has never heard of this. It gives the premise before it gives a number, because a return of +2.4% means nothing until you know what it is a return on and who chose the trades.
+
+The order is the design: what this is, then that nobody can nudge it, then the money, then the last thing the agent decided in its own words, then whether any of it is working.
+
+That last card is deliberately cautious. Below about twenty resolved signals it prints the count and says "not enough to say anything yet" rather than a percentage — three wins in four reads as 75% and means nothing.
+
+The headline figure comes from the book rather than the copy. Hardcoding it and reading it from the API in the same view is how a headline comes to contradict the number under it.
+
+## What needs attention
 
 **Needs attention** is the only block on the page that is a call to action, so it is the only one with a colored border. It lists three things:
 
