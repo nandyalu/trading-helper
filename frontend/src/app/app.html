@@ -213,10 +213,10 @@
      the destinations sit above it where a reader expects a masthead. -->
 <a class="skip-link" href="#main">Skip to the content</a>
 
-<header class="masthead">
+<header class="masthead" [class.scrolled]="scrolled()">
   <div class="masthead-inner">
     <a class="brand" routerLink="/">
-      <app-logo class="brand-mark" [size]="26" [frameOpacity]="0.45" />
+      <app-logo class="brand-mark" [size]="34" [frameOpacity]="0.45" />
       <span class="brand-text">
         <span class="brand-name">The Allowance</span>
         <span class="brand-sub">a public experiment</span>

@@ -135,6 +135,18 @@ body {
   flex-direction: column;
 }
 
+/* The icon sprite is markup, not content. Without this it lays out as a blank
+   block — it was pushing the masthead 156px down the page, which read as a
+   mysterious gap above the header. `position: absolute` rather than
+   `display: none`, because some browsers will not resolve a <use> into a
+   fully hidden tree. */
+.sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 /* Keyboard readers land here first. Long data pages are exactly where tabbing
    past a whole navigation every time becomes punishing. */
 .skip-link {
@@ -155,23 +167,39 @@ body {
   top: var(--sp-4);
 }
 
+/* Generous at the top of the page, compact once you are reading.
+   The name is the first thing a stranger needs and the last thing a returning
+   reader wants taking up the screen, so it starts big and shrinks on scroll. */
 .masthead {
   position: sticky;
   top: 0;
   z-index: 20;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid transparent;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.masthead.scrolled {
+  border-bottom-color: var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .masthead-inner {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 0 var(--sp-5);
-  min-height: var(--topbar-h);
+  padding: var(--sp-4) var(--sp-5);
   display: flex;
   align-items: center;
   gap: var(--sp-6);
+  transition: padding 160ms ease;
+}
+
+.masthead.scrolled .masthead-inner {
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
 }
 
 .brand {
@@ -185,26 +213,48 @@ body {
 
 .brand-mark {
   color: var(--text);
+  transition: transform 160ms ease;
+  transform-origin: left center;
+}
+
+.masthead.scrolled .brand-mark {
+  transform: scale(0.72);
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: var(--t-md);
+  font-size: var(--t-lg);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  transition: font-size 160ms ease;
+}
+
+.masthead.scrolled .brand-name {
+  font-size: var(--t-md);
 }
 
 /* Says what the site is to someone who arrived on a deep link and has never
-   seen the front page. */
+   seen the front page. Folded away once they are reading, where it is just
+   taking room. */
 .brand-sub {
   font-size: var(--t-xs);
   color: var(--text-faint);
+  overflow: hidden;
+  max-height: 1.4em;
+  transition:
+    max-height 160ms ease,
+    opacity 160ms ease;
+}
+
+.masthead.scrolled .brand-sub {
+  max-height: 0;
+  opacity: 0;
 }
 
 .topnav {

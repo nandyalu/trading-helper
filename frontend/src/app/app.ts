@@ -28,7 +28,12 @@ const THEME_KEY = 'th-theme';
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, Logo],
   templateUrl: './app.html',
-  host: { '(document:keydown.escape)': 'closeDrawer()' },
+  host: {
+    '(document:keydown.escape)': 'closeDrawer()',
+    // Passive by default in Angular's listener, and it only flips a boolean —
+    // the animation is CSS, so a fast scroll cannot queue work here.
+    '(window:scroll)': 'onScroll()',
+  },
 })
 export class App {
   private readonly router = inject(Router);
@@ -78,6 +83,11 @@ export class App {
    * dead end, not a security boundary. */
   protected readonly isPublic = signal(false);
 
+  /** True once the reader has scrolled past the top. The masthead starts
+   * generous — the name is the first thing a stranger needs — and compacts
+   * once they are reading, where it is just taking screen. */
+  protected readonly scrolled = signal(false);
+
   protected readonly drawerOpen = signal(false);
   protected readonly theme = signal<'light' | 'dark'>(readStoredTheme());
 
@@ -93,6 +103,11 @@ export class App {
       all.find((item) => item.path !== '/' && url.startsWith(item.path))?.label ?? 'Trading Helper'
     );
   });
+
+  protected onScroll(): void {
+    const past = window.scrollY > 12;
+    if (past !== this.scrolled()) this.scrolled.set(past);
+  }
 
   constructor() {
     this.applyTheme(this.theme());
