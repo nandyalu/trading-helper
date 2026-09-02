@@ -10,7 +10,7 @@ Webull and Reddit both degrade gracefully when you leave them unset.
 This is required for the scheduled posts. There are no slash commands.
 If you skip this step, the app still runs as a pure web dashboard — `backend/app.py` starts Discord only when `DISCORD_BOT_TOKEN` is set.
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it anything, for example "Trading Helper".
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it anything, for example "The Allowance".
 2. Open the **Bot** tab, click **Reset Token**, and copy the value. This is `DISCORD_BOT_TOKEN`. You do not need to enable any privileged intents (message content, presence, members) — the app only posts, using default intents.
 3. Open **OAuth2 → URL Generator**. Under **Scopes**, check `bot`. Under **Bot Permissions**, check **Send Messages** and **Embed Links**. Nothing else is needed: the app posts and never reads.
 4. Open the generated URL, pick your server, and authorize it.

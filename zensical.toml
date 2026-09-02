@@ -1,5 +1,5 @@
 [project]
-site_name = "Trading Helper"
+site_name = "The Allowance"
 site_description = "An autonomous AI agent trading a simulated account with $10,000. It picks what to research, pays for it, and every decision it makes is on the record."
 copyright = """
 Self-hosted docs · not financial advice

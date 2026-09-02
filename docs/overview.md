@@ -123,38 +123,13 @@ The grade used is the absolute one, not vs SPY: "the thesis plays out" is a clai
 
 ## Comparing two models
 
-Every signal records the model that produced it, and the Scorecard's **by model** table is what that column is for: switching models teaches you nothing if the win rates blend together.
+**The paired comparison sweep was removed on 2026-09-01.** One model runs now. The script that ran a second model over the same tickers is gone, along with the two settings that started and stopped it.
 
-To fill that table, run the watchlist through a second model without changing the one the app uses:
+`Signal.model` stays, and so does the Scorecard's **by model** table. Which model produced a row is a fact about that row, and the table fills on its own whenever the configured model changes.
 
-```bash
-python -m backend.scripts.compare_model --model gemini-2.5-flash-lite --provider google --apply
-```
+**What that costs is worth stating.** A comparison run on the same day, at the same prices, from the same news, is the only clean way to compare two models — the market moves more between two days than the models differ. Switching the model now means the days either side of the switch differ in both the model and the market, and nothing separates them.
 
-It records into the same database, on the same day, at the same prices, from the same news. That is the point. Running the sweep twice with the deployment switched between would compare two different days — and therefore the market as much as the models. A second container with its own database would run in parallel but split the evidence, so the one table built to compare them could not see both halves.
-
-Three things it deliberately does not do:
-
-- **It posts nothing to Discord.** A comparison sweep would announce every ticker a second time, and these signals are evidence rather than news.
-- **It does not change the configured model.** The provider and model apply to that run alone.
-- **The auto trader ignores what it produces.** The agent reads only signals from the model the app is set to use, so an experiment cannot quietly reach the live book.
-
-Grading needs no help: each signal carries its own evaluation date and is graded like any other. That is what turns this from a comparison of writing into a comparison of outcomes, about two weeks later.
-
-Without `--apply` it prints what would run and stops, because each ticker is a full analysis — minutes of GPU, or real money at a vendor.
-
-To run it every day rather than once:
-
-```bash
-python -m backend.scripts.compare_model --model gemini-3.5-flash-lite --provider google --schedule
-python -m backend.scripts.compare_model --stop
-```
-
-Scheduled, it runs **chained to the morning sweep** rather than on a clock of its own. That is the point: a comparison on a separate schedule drifts onto a different session, and then the two models are being judged on different prices and different news as much as on their own reasoning. One Discord line reports the sweep — not one per ticker, since this is an experiment running in the background and should not crowd the day's real signals.
-
-Stopping it keeps everything already recorded. Those signals grade on their own dates like any other.
-
-**Expect to wait.** A signal is graded on its horizon, so a week of paired runs at the swing horizon starts producing verdicts about two weeks after the first one, and the comparison is only worth reading once enough have resolved. Reading the reports on day one tells you which model writes more fluently, which is not the question.
+So a model switch is readable only in aggregate, over enough resolved signals on each side, and the by-model table is where to read it.
 
 ## Stop alerts
 

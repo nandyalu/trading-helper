@@ -1,8 +1,10 @@
-# Trading Helper
+# The Allowance
 
 **One question, asked in public: what does an autonomous AI agent do with $10,000?**
 
-Trading Helper is a self-hosted experiment. An agent gets a simulated brokerage account, a fixed budget, and a bill for every piece of research it orders. It decides what to study, what to buy, what to sell, and when to give up on a name. Nobody helps it. A web dashboard and a Discord channel report what it did.
+*The Allowance* — money given to someone to spend as they choose, inside rules they did not set. That is the setup exactly.
+
+The Allowance is a self-hosted experiment. An agent gets a simulated brokerage account, a fixed budget, and a bill for every piece of research it orders. It decides what to study, what to buy, what to sell, and when to give up on a name. Nobody helps it. A web dashboard and a Discord channel report what it did.
 
 The agent runs a multi-agent AI analysis ([TradingAgents](TradingAgents/README.md)) on the stocks it chooses to watch. The app records every call that analysis makes and grades each one against reality, against a SPY buy-and-hold, and against the analysis's own price target.
 
@@ -42,19 +44,24 @@ It answers with a list of actions, and Python refuses what cannot be executed as
 
 | Page | What's in it |
 |---|---|
-| [Setup](docs/setup.md) | How to get a Discord bot token, Webull sandbox keys, and the Ollama pool running |
+| [Running it yourself](docs/deploying.md) | **Start here to deploy it.** Prerequisites, every environment variable, and what goes wrong |
+| [Setup](docs/setup.md) | How to get each credential |
 | [How it works](docs/overview.md) | Architecture, the signal lifecycle, the daily schedule, data sources |
-| [The dashboard](docs/dashboard.md) | What each page shows |
+| [The site](docs/dashboard.md) | What each page shows, and how to publish it |
+| [What Discord posts](docs/discord.md) | The scheduled posts and the alerts |
+| [The daily workflow](docs/trading-workflow.md) | How to read the experiment |
+| [Finding your edge](docs/finding-your-edge.md) | How to read the scorecard without fooling yourself |
 | [The journey](JOURNEY.md) | Every change to the agent, when, and why |
-| [Finding your edge](docs/finding-your-edge.md) | How to read the scorecard |
 | [Model training](docs/model-training.md) | What it would take to make a small model reliable here |
 
 ## Quick start
 
 1. Copy these values into `.env`: `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, your Ollama settings, and `WEBULL_APP_KEY` / `WEBULL_APP_SECRET`. **Set `WEBULL_SANDBOX=1`.** The agent refuses to trade without it. See [Setup](docs/setup.md) for how to get each one.
 2. Build the image. In VSCode, press **Ctrl+Shift+B**. Or run `docker build -t trading-bot:local .`
-3. Deploy the image with a Docker Compose file, for example through [Dockge](https://github.com/louislam/dockge). Point `image:` at `trading-bot:local`, pass in the `.env` values from step 1, and mount a persistent volume at `/app/data`. The container applies database migrations by itself when it starts.
+3. Deploy it with a Docker Compose file. `dockge/trading-bot.compose.yaml` is the working template, with every setting commented. The container applies its own database migrations at startup.
 4. Open the dashboard and switch the agent on in Settings. It starts with an empty watchlist and buys its first research at the next decision pass.
+
+**[Running it yourself](docs/deploying.md) has the full version**, including how to run without a GPU pool and how to publish the site read-only.
 
 ## Honesty notes
 
