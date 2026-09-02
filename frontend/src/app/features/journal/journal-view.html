@@ -3,13 +3,17 @@
     <div>
       <h1>Journal</h1>
       <p class="subtitle">
-        What happened, written by the app about itself. Every sentence comes from a trade, a charge,
-        a decision pass or a graded signal, so it cannot drift from the book. The other half — why
-        <em>we</em> changed something — is kept by hand, in the repository's
-        <code>JOURNEY.md</code>.
+        <strong>What has been happening, day by day.</strong> Written by the app about itself: every
+        sentence comes from a trade, a charge, a decision pass or a graded signal, so it cannot
+        drift from the book.
       </p>
     </div>
   </header>
+
+  <p class="page-warning">
+    The other half — why <em>we</em> changed something — is kept by hand in the repository's
+    <code>JOURNEY.md</code>, because the app cannot know it.
+  </p>
 
   @if (digest(); as d) {
     <section class="card">

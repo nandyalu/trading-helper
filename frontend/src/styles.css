@@ -107,14 +107,26 @@ a:hover {
 
 /* `pass` marks a signal the market proved right, and a number on the good
    side of zero. `fail` is the other direction. */
+/* Gains and losses in prose and in tables.
+ *
+ * **Colour is never the only difference.** Every value wearing these already
+ * carries a sign or a word — "+2.4%", "−$14.80", "pass", "fail" — because the
+ * validator puts this red and green at ΔE 6.7 for the two common forms of
+ * colourblindness. Roughly one man in twelve cannot separate them.
+ *
+ * `.money--pos` and `.money--neg` are the stronger version, adding an arrow.
+ * Use those where a figure stands alone; these where it sits beside its own
+ * label or word. */
 .pass {
   color: var(--pos);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .fail {
   color: var(--neg);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .warning {
@@ -502,12 +514,44 @@ main {
     display: flex;
   }
 
+  /* With the nav hidden there is nothing between the brand and the tools, so
+     the brand has to give up the space itself. At the desktop size it pushed
+     the theme and menu buttons 23px off the right edge of every page. */
   .masthead-inner {
     gap: var(--sp-3);
+    justify-content: space-between;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-name {
+    font-size: var(--t-lg);
+  }
+
+  .masthead.scrolled .brand-name {
+    font-size: var(--t-md);
+  }
+
+  .brand-mark svg {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .masthead.scrolled .brand-mark svg {
+    width: 2rem;
+    height: 2rem;
   }
 
   .brand-sub {
     display: none;
+  }
+
+  .masthead-tools {
+    margin-left: auto;
   }
 }
 

@@ -3,14 +3,19 @@
     <div>
       <h1>Research</h1>
       <p class="subtitle">
-        What the agent studies, and what each study concluded. It chose every name here and pays for
-        all of them every morning — about
+        <strong>What it pays to study, and what that money bought.</strong> The agent chose every
+        name here, and it is charged for all of them every morning — about
         <strong>${{ dailyCost().toFixed(2) }} a day</strong> at {{ tickers().length }}
-        {{ tickers().length === 1 ? 'ticker' : 'tickers' }}. Nothing on this page adds or removes
-        one.
+        {{ tickers().length === 1 ? 'ticker' : 'tickers' }}.
       </p>
     </div>
   </header>
+
+  <p class="page-warning">
+    Nothing on this page adds or removes a ticker. The agent commissions research to add one and
+    untracks to drop one — a name added by hand would cost it nothing and read, later, as its own
+    choice.
+  </p>
 
   <!-- The watchlist: what it pays for. -->
   <section class="card">
