@@ -19,6 +19,7 @@ function event(over: Partial<AgentEvent> = {}): AgentEvent {
     response: '{"reasoning": "…", "orders": []}',
     orders: [{ side: 'untrack', ticker: 'CRM', quantity: 0, reason: 'No shares held.' }],
     refused: [],
+    failed: [],
     ...over,
   };
 }
@@ -126,5 +127,48 @@ describe('DecisionsView', () => {
 
   it('says the feed is empty rather than rendering nothing at all', async () => {
     expect((await render()).textContent).toContain('No decision passes recorded yet');
+  });
+  it('shows a note apart from the orders, and not as an order', async () => {
+    // A note has no ticker and no quantity. Rendered in the orders list it
+    // would read as a trade in a stock called "".
+    service.events.set([
+      event({
+        orders: [
+          { side: 'buy', ticker: 'AAPL', quantity: 2, reason: 'cheap' },
+          { side: 'note', ticker: '', quantity: 0, reason: 'I cannot see sector data.' },
+        ],
+        refused: [],
+        failed: [],
+      }),
+    ]);
+
+    const el = await render();
+
+    expect(el.querySelector('.agent-note')?.textContent).toContain('I cannot see sector data.');
+    expect(el.querySelector('.orders')?.textContent).not.toContain('I cannot see sector data.');
+    expect(el.querySelector('.orders')?.textContent).toContain('AAPL');
+  });
+
+  it('tells a broker failure apart from a refusal', async () => {
+    // The two mean different things and the page has to say so: one is the
+    // agent's arithmetic being wrong, the other is the world declining an
+    // order it formed correctly.
+    service.events.set([
+      event({
+        orders: [],
+        refused: [
+          { side: 'buy', ticker: 'MSFT', quantity: 9, reason: null, why: 'not enough cash' },
+        ],
+        failed: [
+          { side: 'buy', ticker: 'NVDA', quantity: 1, reason: null, why: 'unsettled funds' },
+        ],
+      }),
+    ]);
+
+    const text = (await render()).textContent ?? '';
+
+    expect(text).toContain('not enough cash');
+    expect(text).toContain('unsettled funds');
+    expect(text).toContain('broker said no');
   });
 });

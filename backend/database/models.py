@@ -220,6 +220,23 @@ class AgentRun(SQLModel, table=True):
     # placed orders need no copy here — they are in agenttrade — but a refusal
     # leaves no other trace at all.
     refusals: str | None = None
+    # What the broker refused, as JSON: ticker, side, quantity and the reason.
+    #
+    # Separate from ``refusals``, which is what *Python* declined before an
+    # order was ever sent. These two mean different things to the agent: a
+    # screening refusal says its arithmetic was wrong, and a broker failure
+    # says the world would not take the order it correctly formed. Only the
+    # count was kept until 2026-09-02, which made a failure invisible to the
+    # next morning's prompt — so the agent proposed the same thing again, was
+    # refused again, and nothing in the record explained the loop.
+    failures: str | None = None
+    # The agent's own messages to whoever maintains it, as a JSON list.
+    #
+    # Nothing reads these automatically and nothing acts on them. They are
+    # evidence about the prompt and the tool set — the thing this experiment
+    # exists to produce — and until there was somewhere to put them the only
+    # way to learn the agent was stuck was to infer it from twenty prompts.
+    notes: str | None = None
     # The book as it stood when the pass finished, so the narrative never has
     # to recompute a past day's equity from prices that have since moved.
     equity: float | None = None

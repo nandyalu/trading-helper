@@ -37,6 +37,36 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-02 — the agent can say what it needs, and it is told what went wrong.** Three changes, all about the same gap: the agent acts blind to its own failures and has no way to say so.
+
+**1. A `note` action.** The agent may include `{"side": "note", "reason": "..."}` in its answer. It buys nothing, sells nothing, costs nothing and is refused for nothing. It is the agent addressing whoever maintains it — asking for a tool it lacks, data it cannot see, or a rule it finds contradictory.
+
+The reason to add it is that this experiment exists to be read. "I could not decide well because I cannot see X" is primary evidence about the prompt and the tool set, and until now the only way to learn it was to infer it from twenty prompts. A note says it in one line.
+
+It stays inside the rule the whole app is built on: **it acts on nothing.** The agent talking is not a second decision-maker; the agent trading would be. Nothing automatic reads a note and changes anything — if we build what it asks for, that is a change like any other and gets its own entry here first.
+
+**A note never replaces a decision**, and the prompt says so. Without that, "I need better data" becomes a way to avoid answering, and a pass that should have said "hold everything" says nothing instead.
+
+**2. Yesterday's failures appear in today's prompt.** The prompt showed the agent its closed trades and its track record, but never its *failed* orders. An order the broker refused yesterday was invisible this morning, so the agent would propose the same thing again and be refused again, with nothing in the record explaining the loop.
+
+This is deliberately a prompt section and not a mid-pass retry. It costs no extra LLM call, adds no risk of looping on a persistent error, and leaves a decision pass as one comparable unit — which matters, because the pass is what we compare across days.
+
+**3. A failed tool call goes back to the model instead of ending the analysis.** This one comes from a measurement rather than a guess. The 14-way concurrency run on 2026-09-02 lost two complete 40-minute analyses to this:
+
+```
+RuntimeError: No available vendor for 'get_indicators'
+```
+
+The model had asked for an indicator called `macd_histogram`. There is no such name; the one it wanted is `macdh`. Across the run it invented five — `macd_histogram`, `macd_hist`, `boll_upper`, `boll_lower` — and the vendor rejected each with a message that **lists every valid name**. Three recovered. Two escaped and discarded the whole analysis.
+
+The correct answer was inside the exception the entire time. So a tool error is now handed back to the model once, with its message, and the model is asked again. It costs one call and saves an analysis.
+
+**Once, not until it works.** An unbounded retry turns an analysis into a loop of unknown length against a slow local model, and a genuinely broken vendor would spin forever. One retry converts a typo into a recovery; a second would be trying to argue a broken tool into working.
+
+**Only errors the model can act on.** A wrong indicator name is actionable — the valid list is right there. A network timeout is not: the model cannot fix it, and asking invites it to invent a workaround, which is the exact failure that disqualified four models in August. The retry is limited to errors whose message tells the caller what to do differently.
+
+**The thing to watch.** Feeding errors back teaches a model to satisfy the checker. There is a version of this where the agent learns to phrase tool calls that pass rather than tool calls that ask for what it wanted. Watch for indicator choices getting narrower over time rather than more apt.
+
 **2026-09-01 — the experiment restarts, and everything except the agent is removed.** This is the largest change in the file and the only one that ends an experiment rather than adjusting one. Both previous deployments stop today. Their data is kept as a record and nothing carries forward: a new container, a freshly reset Webull paper account, an empty database.
 
 The question the app now asks is one question. **What does an autonomous agent do with $10,000?**

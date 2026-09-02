@@ -404,7 +404,13 @@ class AgentEventOut(BaseModel):
     prompt: str | None = None
     response: str | None = None
     orders: list[AgentEventOrderOut] = []
+    # What Python declined before anything was sent.
     refused: list[AgentOrderOut] = []
+    # What the broker declined after it was sent. Kept apart from `refused`
+    # because the two mean different things: one says the agent's arithmetic
+    # was wrong, the other says it formed the order correctly and the world
+    # would not take it.
+    failed: list[AgentOrderOut] = []
 
 
 class JourneyEntryOut(BaseModel):

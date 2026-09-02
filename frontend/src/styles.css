@@ -1804,3 +1804,35 @@ table {
     gap: var(--sp-4);
   }
 }
+
+/* --- the agent asking for something ---------------------------------------
+   Set apart from the orders beside it. A note is the agent addressing whoever
+   maintains it, not something it did, and rendering the two the same way would
+   lose that distinction — which is the only reason the note exists. */
+
+.agent-note {
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  background: var(--info-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.agent-note-label {
+  margin: 0 0 var(--sp-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.agent-note-text {
+  margin: 0 0 var(--sp-2);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.agent-note .hint {
+  margin: 0;
+}

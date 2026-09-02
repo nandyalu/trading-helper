@@ -174,6 +174,7 @@ def get_events(limit: int = 30):
             response=row.response,
             orders=json.loads(row.orders) if row.orders else [],
             refused=json.loads(row.refusals) if row.refusals else [],
+            failed=json.loads(row.failures) if row.failures else [],
         ))
     return events
 

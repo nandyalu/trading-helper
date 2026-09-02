@@ -31,6 +31,7 @@ def agent_stub(monkeypatch):
         acted = False
         rejected = []
         failed = []
+        notes = []
         skipped = None
 
     def run_once():

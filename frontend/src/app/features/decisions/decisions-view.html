@@ -44,9 +44,23 @@
             <p class="reasoning">{{ event.reasoning }}</p>
           }
 
-          @if (event.orders.length || event.refused.length) {
+          @if (notesIn(event).length) {
+            <div class="agent-note">
+              <p class="agent-note-label">The agent asked for something</p>
+              @for (note of notesIn(event); track $index) {
+                <p class="agent-note-text">{{ note }}</p>
+              }
+              <p class="hint">
+                Nothing acts on this automatically. It is the agent telling whoever maintains it
+                what would help — a tool it lacks, a number it cannot see. Building what it asks for
+                is a change like any other, and goes in the journal first.
+              </p>
+            </div>
+          }
+
+          @if (tradesIn(event).length || event.refused.length || event.failed.length) {
             <ul class="orders">
-              @for (order of event.orders; track $index) {
+              @for (order of tradesIn(event); track $index) {
                 <li>
                   <span class="side side--{{ order.side }}">{{ order.side }}</span>
                   <strong>{{ order.ticker }}</strong>
@@ -65,7 +79,23 @@
                   <span class="muted">{{ order.why }}</span>
                 </li>
               }
+              @for (order of event.failed; track $index) {
+                <li>
+                  <span class="side side--refused">broker said no</span>
+                  <strong>{{ order.ticker }}</strong>
+                  <span class="muted">{{ order.why }}</span>
+                </li>
+              }
             </ul>
+            @if (event.failed.length) {
+              <p class="hint">
+                <strong>"Broker said no" is not the same as "refused".</strong> A refusal is the
+                agent's own arithmetic being wrong. This is an order it formed correctly that the
+                broker would not take — unsettled cash, a closed session, a symbol it will not
+                trade. The agent is shown these on its next few passes so it does not simply propose
+                the same thing again.
+              </p>
+            }
             @if (event.refused.length) {
               <!-- Worth explaining once per pass rather than assuming it reads
                    as self-evident: a refusal is the most revealing thing on the

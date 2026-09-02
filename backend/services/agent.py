@@ -167,6 +167,49 @@ def _recent_signals() -> list:
 # enough that the list does not crowd out today's actual decision.
 _HISTORY_SHOWN = 6
 
+# How many recent broker failures to show. Small on purpose: the point is
+# "this did not work, do not repeat it", and a long list of old failures
+# would push the signals that matter today further down the prompt.
+_FAILURES_SHOWN = 5
+
+# How far back to look for them. A failure from last month is history, not a
+# warning — the unsettled cash that caused it has long since settled.
+_FAILURE_LOOKBACK_RUNS = 3
+
+
+def describe_recent_failures(failures: list[dict]) -> list[str]:
+    """Orders the broker refused on earlier passes, for this pass's prompt.
+
+    **Different from the refusals fed back mid-pass.** Those are Python
+    declining an order before it is sent, and they say the agent's arithmetic
+    was wrong. These are orders that were correctly formed and that the world
+    would not take — unsettled cash, a closed session, a symbol the broker will
+    not trade.
+
+    The agent could not see these at all until 2026-09-02. It would form the
+    same order the next morning, be refused again, and nothing in the record
+    explained the repetition.
+
+    Deliberately a prompt section rather than a mid-pass retry: it costs no
+    extra call, cannot loop on an error that is not going away, and leaves a
+    decision pass as one comparable unit.
+    """
+    if not failures:
+        return []
+    lines = [
+        "Orders of yours the broker would not take recently. These were not "
+        "refused for arithmetic — they were formed correctly and rejected:"
+    ]
+    for f in failures[-_FAILURES_SHOWN:]:
+        side = str(f.get("side", "")).upper()
+        qty = f.get("quantity") or 0
+        lines.append(f"- {side} {qty:g} {f.get('ticker', '')}: {f.get('why', '')}")
+    lines.append(
+        "Take that into account. Proposing the same thing again will usually "
+        "fail the same way."
+    )
+    return lines
+
 
 def describe_history(closed: list) -> list[str]:
     """The agent's own track record, in its own prompt.
@@ -220,6 +263,7 @@ def build_prompt(
     max_research: int = 0,
     watchlist: list[str] | None = None,
     max_watchlist: int = 0,
+    failures: list[dict] | None = None,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -343,6 +387,10 @@ def build_prompt(
     history = describe_history(closed or [])
     if history:
         lines += ["", *history]
+
+    recent_failures = describe_recent_failures(failures or [])
+    if recent_failures:
+        lines += ["", *recent_failures]
 
     if rejected:
         lines += [
@@ -530,17 +578,28 @@ def build_prompt(
             else []
         ),
         "- Before answering, add up what your buys cost and check it against your cash.",
+        # The note action. Two sentences, and the second is the load-bearing
+        # one: without it "I need better data" becomes a way to avoid deciding,
+        # and a pass that owed a decision returns a request instead.
+        '- If something is stopping you deciding well — a number you cannot '
+        'see, a tool you do not have, a rule that contradicts another — say so '
+        'with side "note". It reaches the people who maintain you. Nothing '
+        'acts on it automatically, so it is a message and not a request.',
+        "- A note is never a substitute for a decision. Leave one if you have "
+        "something to say, and still answer with what you want done today, "
+        "including doing nothing.",
         "",
         "Reply with JSON only, in this exact shape:",
         '{"reasoning": "one or two sentences", "orders": '
         '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"},',
+        ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"},',
         # The untrack example appears only where untracking is possible. The
         # live deployment has no cap and no such action, and an example of an
         # order it can only have refused would cost it a retry to learn that.
-        (' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"},'
-         if max_watchlist
-         else ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"}]}'),
-        *([' {"ticker": "NOK", "side": "untrack", "reason": "why"}]}'] if max_watchlist else []),
+        *([' {"ticker": "NOK", "side": "untrack", "reason": "why"},'] if max_watchlist else []),
+        # Always last, so exactly one line closes the array and the object no
+        # matter which of the optional examples above are present.
+        ' {"side": "note", "reason": "what would help you decide better"}]}',
         "Use an empty list for orders if you want to hold everything.",
     ]
     return "\n".join(lines)
@@ -617,6 +676,23 @@ def screen(
 
     for order in orders:
         ticker = str(order.get("ticker", "")).upper().strip()
+        if str(order.get("side", "")).lower().strip() == "note":
+            # A message to whoever maintains this, and nothing else. It buys
+            # nothing, sells nothing, costs nothing, and is refused for
+            # nothing — so it is accepted before any check that could reject
+            # it, and it never touches cash, shares or the watchlist.
+            #
+            # It is deliberately not a request that anything acts on. The
+            # agent talking is not a second decision-maker in the record; the
+            # agent trading would be. If we build what it asks for, that is a
+            # change like any other and belongs in JOURNEY.md first.
+            text = str(order.get("reason") or "").strip()
+            if text:
+                accepted.append(
+                    {"side": "note", "ticker": ticker, "quantity": 0, "reason": text}
+                )
+            continue
+
         if str(order.get("side", "")).lower().strip() == "research":
             # Neither a buy nor a sell: it moves cash but no shares, and what
             # it buys is an opinion tomorrow rather than a position today.
@@ -803,6 +879,30 @@ def _ask(prompt: str) -> str:
     return str(content)
 
 
+def _recent_broker_failures() -> list[dict]:
+    """Orders the broker refused on the last few passes.
+
+    Read from the stored runs rather than held in memory, because the point is
+    to carry a failure across days — the process that saw it has long exited.
+
+    Bounded to the last few runs on purpose. A failure from last month is
+    history rather than a warning: the unsettled cash that caused it settled
+    weeks ago, and showing it would push today's signals further down the
+    prompt for nothing.
+    """
+    out: list[dict] = []
+    for row in db.get_agent_runs(limit=_FAILURE_LOOKBACK_RUNS):
+        if not row.failures:
+            continue
+        try:
+            parsed = json.loads(row.failures)
+        except ValueError:
+            continue
+        if isinstance(parsed, list):
+            out.extend(f for f in parsed if isinstance(f, dict))
+    return out
+
+
 def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=None, menu=None):
     """(reasoning, accepted, rejected), with one correction pass.
 
@@ -823,6 +923,9 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     # Read once and passed to both attempts, so the retry describes the same
     # watchlist the first answer was screened against.
     watchlist = sorted(db.get_watchlist())
+    # Orders the broker would not take on recent passes. Read once and given to
+    # both attempts, so the retry sees the same history the first answer did.
+    recent_failures = _recent_broker_failures()
     # The exact prompt, kept so the Events page can show what was asked. A
     # retry replaces it, because the retry is the prompt the accepted orders
     # were actually screened from.
@@ -831,6 +934,7 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
         horizon_days=horizon_days, menu=menu, price=research.get_price(),
         max_research=_max_research_per_day(),
         watchlist=watchlist, max_watchlist=_max_watchlist(),
+        failures=recent_failures,
     )
     answer = _ask(shown)
     reasoning, proposed = parse_decision(answer)
@@ -842,7 +946,8 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     shown = build_prompt(book, signals, prices, rejected=rejected, closed=closed,
                          regime_line=regime_line, horizon_days=horizon_days, menu=menu,
                          price=research.get_price(), max_research=_max_research_per_day(),
-                         watchlist=watchlist, max_watchlist=_max_watchlist())
+                         watchlist=watchlist, max_watchlist=_max_watchlist(),
+                         failures=recent_failures)
     retry_answer = _ask(shown)
     retry_reasoning, retry_proposed = parse_decision(retry_answer)
     if not retry_proposed:
@@ -896,6 +1001,15 @@ class AgentRun:
     # Tickers it stopped watching. No money moves either way, but tomorrow's
     # sweep is smaller for it, so this is a decision and not housekeeping.
     untracked: list[str] = field(default_factory=list)
+    # What the agent asked us for: a tool it lacks, data it cannot see, a rule
+    # it finds contradictory. Nothing reads these automatically and nothing
+    # acts on them — they are evidence about the prompt and the tool set, which
+    # is the thing this experiment exists to produce.
+    #
+    # Kept out of ``acted``: a pass that only left a note did not act, and
+    # counting it as action would let "I need better data" stand in for a
+    # decision the agent still owed.
+    notes: list[str] = field(default_factory=list)
     book: agent_book.Book | None = None
     skipped: str | None = None  # why the run did nothing at all
     # The words, kept for the Events page. Empty on a pass that never asked —
@@ -954,6 +1068,15 @@ def format_run_embed(run: AgentRun) -> "discord.Embed":
         embed.add_field(
             name="Exits moved",
             value="\n".join(run.adjusted)[:_FIELD_MAX],
+            inline=False,
+        )
+    if run.notes:
+        # High in the embed rather than at the bottom. A note is the agent
+        # telling us it is short of something, which is worth reading before
+        # the list of what it managed to do anyway.
+        embed.add_field(
+            name="📝 The agent asked for something",
+            value="\n".join(run.notes)[:_FIELD_MAX],
             inline=False,
         )
     if run.rejected:
@@ -1462,6 +1585,12 @@ def run_once() -> AgentRun:
     # stated by the trader, discarded if implausible against the traded price.
     targets = {t: s.price_target for t, s in latest.items() if s.price_target}
     for order in accepted:
+        if order["side"] == "note":
+            # Recorded and reported; nothing else happens. Placed before the
+            # broker paths so a note can never reach one of them.
+            run.notes.append(order["reason"])
+            log.info("Note from the agent: %s", order["reason"])
+            continue
         if order["side"] == "research":
             _commission_research(order, run)
             continue
@@ -1609,6 +1738,22 @@ def _untrack(order: dict, run: "AgentRun") -> None:
     log.info("Agent stopped watching %s", ticker)
 
 
+def _failures_json(run: "AgentRun") -> str | None:
+    """What the broker refused, so tomorrow's prompt can say so.
+
+    Only the count was kept until 2026-09-02. That made a failure invisible the
+    next morning: the agent would form the same order, be refused again, and
+    nothing in the record would explain the repetition.
+    """
+    if not run.failed:
+        return None
+    return json.dumps([
+        {"side": o.get("side", ""), "ticker": o.get("ticker", ""),
+         "quantity": o.get("quantity") or 0, "why": str(why)[:300]}
+        for o, why in run.failed
+    ])
+
+
 def _orders_json(run: "AgentRun") -> str | None:
     """Every order the pass produced, for the Events page.
 
@@ -1627,6 +1772,8 @@ def _orders_json(run: "AgentRun") -> str | None:
            for t in run.researched]
         + [{"side": "untrack", "ticker": t, "quantity": 0, "reason": ""}
            for t in run.untracked]
+        + [{"side": "note", "ticker": "", "quantity": 0, "reason": n}
+           for n in run.notes]
     )
     return json.dumps(orders) if orders else None
 
@@ -1655,6 +1802,8 @@ def _record_run(run: "AgentRun") -> None:
             prompt=run.prompt or None,
             response=run.response or None,
             orders=_orders_json(run),
+            failures=_failures_json(run),
+            notes=json.dumps(run.notes) if run.notes else None,
             equity=book.equity if book else None,
             cash=book.cash if book else None,
             research_spent=book.research_spent if book else None,

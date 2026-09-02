@@ -178,7 +178,9 @@ async def _maybe_run_agent() -> None:
     except Exception:
         log.exception("Event-driven agent run failed")
         return
-    if run.acted or run.rejected or run.failed:
+    # A note is worth posting even on a day it did nothing else: it is the
+    # agent saying it is short of something, which is the point of having it.
+    if run.acted or run.rejected or run.failed or run.notes:
         await notify(embed=agent.format_run_embed(run))
 
 
@@ -403,7 +405,9 @@ async def _agent_run_job() -> None:
     # A quiet day is the common case and posting it every morning would train
     # you to ignore the channel. Rejections and broker failures are worth
     # hearing about even when nothing was placed.
-    if run.acted or run.rejected or run.failed:
+    # A note is worth posting even on a day it did nothing else: it is the
+    # agent saying it is short of something, which is the point of having it.
+    if run.acted or run.rejected or run.failed or run.notes:
         await notify(embed=agent.format_run_embed(run))
 
 

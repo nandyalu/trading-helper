@@ -381,7 +381,13 @@ export interface AgentEvent {
   prompt: string | null;
   response: string | null;
   orders: AgentEventOrder[];
+  /** What Python declined before anything was sent. */
   refused: AgentOrder[];
+  /** What the broker declined after it was sent. Kept apart from `refused`
+   * because the two mean different things: one says the agent's arithmetic was
+   * wrong, the other says it formed the order correctly and the world would
+   * not take it. */
+  failed: AgentOrder[];
 }
 
 /** One day of the generated journal, as markdown. */

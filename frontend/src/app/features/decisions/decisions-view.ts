@@ -1,7 +1,7 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
-import { AgentEvent } from '../../core/models/api.models';
+import { AgentEvent, AgentEventOrder } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 
 /**
@@ -23,6 +23,20 @@ import { AgentService } from '../../core/services/agent.service';
   templateUrl: './decisions-view.html',
 })
 export class DecisionsView {
+  /** The agent's messages to whoever maintains it.
+   *
+   * They ride in `orders` because that is the record of everything one pass
+   * produced, but they are not orders and must not be rendered as one — a
+   * note has no ticker and no quantity. */
+  notesIn(event: AgentEvent): string[] {
+    return event.orders.filter((o) => o.side === 'note').map((o) => o.reason);
+  }
+
+  /** Everything the pass did that was not a note. */
+  tradesIn(event: AgentEvent): AgentEventOrder[] {
+    return event.orders.filter((o) => o.side !== 'note');
+  }
+
   private readonly agent = inject(AgentService);
   readonly events = this.agent.events;
   readonly loading = signal(true);
