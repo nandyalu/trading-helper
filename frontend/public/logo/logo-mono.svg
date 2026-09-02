@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
-  <title>Trading Helper</title>
+  <title>The Allowance</title>
   <desc>TA drawn as an equity curve: one rule is the T bar, the A crossbar and the starting line. The T drops below it, the A rises above. The corner brackets are the guardrails.</desc>
   <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M2.5 9.5V4.3A1.8 1.8 0 0 1 4.3 2.5H9.5"/>

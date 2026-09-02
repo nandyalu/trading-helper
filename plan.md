@@ -1,6 +1,6 @@
 # Making it a website worth publishing
 
-**Status: Phase 0 in progress.** Started 2026-09-02.
+**Status: Phases 0, 1 and 2 done. Phase 3 next.** Started 2026-09-02.
 
 This file is the working plan for the frontend redesign and the documentation that goes with it. It exists so the work survives a lost session. Update the status marks as phases land.
 
@@ -34,6 +34,26 @@ Recorded because the same mistakes are easy to make again.
 5. **A fresh deployment looked broken.** Empty states were unhandled, and empty is exactly what a developer sees on day one.
 6. **Nothing to share.** No `og:image`, so a pasted link unfurled as a grey box.
 
+## The name
+
+**The Allowance.** Decided 2026-09-02.
+
+Money given to someone to spend as they choose, inside rules they did not set. That is the setup exactly: $10,000, free choice, hard bounds.
+
+`Trading Helper` was wrong because nothing is being helped — the whole point is that nobody intervenes. `TradingAgents` is the framework this is built on and is already taken.
+
+It also keeps the logo. The mark draws **TA**, which now reads three ways at once: The Allowance, the TradingAgents framework, and the thing being measured.
+
+**Renaming is staged.** The name is in all new copy from today — the site, the docs, The Idea. The repository directory, the package names, the container names and the GitHub remote are left until the site is finished, so a rename does not touch every file while pages are still moving.
+
+Still to rename when the time comes:
+
+- The repo directory and the GitHub remote
+- `package.json`, `pyproject.toml`
+- `container_name` in the compose files, and the Dockge stacks
+- `CLAUDE.md`, `README.md` and the docs
+- The database volume name
+
 ## Decisions already made
 
 | Decision | Choice | Why |
@@ -48,20 +68,20 @@ Recorded because the same mistakes are easy to make again.
 
 ## The phases
 
-### Phase 0 — Design system — *in progress*
+### Phase 0 — Design system — **done**
 
 - Type scale, colour palette, spacing and radii as a deliberate ratio.
 - Chart palette **validated with the dataviz validator**, not eyeballed.
 - Dark palette chosen from the same ramps, not flipped.
 - **Deliverable: a `/preview` route on real content**, screenshotted for review before anything else changes.
 
-### Phase 1 — The shell
+### Phase 1 — The shell — **done**
 
 - Top navigation, content-first layout, generous reading measure.
 - Six primary destinations. **About** groups The Idea, Method and Glossary.
 - **The footer is a designed component**, carrying credits and the disclaimer, and meant to be read.
 
-### Phase 2 — The landing page
+### Phase 2 — The landing page — **done**
 
 - Hero with the framing above, and a **working asterisk** that expands into the guardrails: what the agent may do, and what it may not.
 - **The disclaimer is prominent.** A standing band under the hero, a line at the top of Book and Research, and the footer. Three placements, because "we put it in the footer" is not a defence.

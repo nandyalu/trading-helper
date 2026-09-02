@@ -1,10 +1,12 @@
 # The mark
 
+The logo for **The Allowance**.
+
 **TA, drawn as an equity curve.**
 
 One horizontal rule runs the width of the mark. It is the T's top bar and the A's crossbar at once, and it is the baseline — the money the agent started with, the same line the equity chart measures against.
 
-The T's stem drops below it in red. The A rises above it in green. Down then up, in the two colours the rest of the site uses for exactly that, so the initials of the framework this is built on also read as the thing being measured.
+The T's stem drops below it in red. The A rises above it in green. Down then up, in the two colours the rest of the site uses for exactly that, so TA reads three ways at once: The Allowance, the TradingAgents framework this is built on, and the thing being measured.
 
 The corner brackets are two things at once: the guardrails the agent cannot pass, and a viewfinder, because the point of the experiment is that it is under observation.
 

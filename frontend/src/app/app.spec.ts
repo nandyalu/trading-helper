@@ -42,7 +42,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand')?.textContent).toContain('Trading Helper');
+    expect(compiled.querySelector('.brand')?.textContent).toContain('The Allowance');
     expect(compiled.querySelector('.site-foot')).not.toBeNull();
   });
 
