@@ -1,6 +1,19 @@
 # Making it a website worth publishing
 
-**Status: Phases 0, 1 and 2 done. Phase 3 next.** Started 2026-09-02.
+**Status: Phases 0–2 and 4–9 done. Phase 3 substantially done.** Started 2026-09-02.
+
+| Phase | State |
+|---|---|
+| 0 · Design system | **Done** — tokens, three self-hosted faces, validated palette, the mark |
+| 1 · The shell | **Done** — masthead, drawer, designed footer with credits and the disclaimer |
+| 2 · The landing page | **Done** — on live data, with the computed two-day timeline |
+| 3 · The other pages | **Mostly done** — all page heads on the pattern; empty and error states still thin on some |
+| 4 · Glossary and tooltips | **Done** — 17 terms, `/glossary`, `<app-term>` |
+| 5 · The Idea | **Drafted** — marked as a draft until nandyalu puts it in his own voice |
+| 6 · Method | **Done** — including the limitations, which are the point |
+| 7 · Credits | **Done** — in the footer on every page |
+| 8 · Production readiness | **Mostly done** — og:image, focus rings, reduced motion, 54-render sweep. Not done: an accessibility audit with a real screen reader |
+| 9 · Documentation | **Done** — `docs/deploying.md` |
 
 This file is the working plan for the frontend redesign and the documentation that goes with it. It exists so the work survives a lost session. Update the status marks as phases land.
 
