@@ -3,6 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 
 import { SettingsService } from './core/services/settings.service';
+import { Logo } from './shared/logo';
 
 /** One destination in the sidebar. `icon` names a symbol in the sprite at the
  * top of app.html. */
@@ -25,7 +26,7 @@ const THEME_KEY = 'th-theme';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Logo],
   templateUrl: './app.html',
   host: { '(document:keydown.escape)': 'closeDrawer()' },
 })

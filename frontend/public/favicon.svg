@@ -1,15 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Same mark as app-logo: a path that moves inside a frame it never crosses.
-       Colours are literal here because a favicon has no page to inherit from,
-       and both are legible on a light or a dark browser chrome. -->
+  <!-- Same mark as app-logo: TA drawn as an equity curve inside its bounds.
+       One rule is the T's bar, the A's crossbar and the starting line; the T
+       drops below it and the A rises above. Colours are literal because a
+       favicon has no page to inherit from. -->
   <rect width="32" height="32" rx="7" fill="#17150f"/>
-  <g stroke="#faf9f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
-    <path d="M5.5 11.5V7.3A1.8 1.8 0 0 1 7.3 5.5H11.5" fill="none"/>
-    <path d="M20.5 5.5h4.2a1.8 1.8 0 0 1 1.8 1.8v4.2" fill="none"/>
-    <path d="M26.5 20.5v4.2a1.8 1.8 0 0 1-1.8 1.8h-4.2" fill="none"/>
-    <path d="M11.5 26.5H7.3a1.8 1.8 0 0 1-1.8-1.8v-4.2" fill="none"/>
+  <g stroke="#faf9f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.45" fill="none">
+    <path d="M5 11V6.8A1.8 1.8 0 0 1 6.8 5H11"/>
+    <path d="M21 5h4.2A1.8 1.8 0 0 1 27 6.8V11"/>
+    <path d="M27 21v4.2a1.8 1.8 0 0 1-1.8 1.8H21"/>
+    <path d="M11 27H6.8A1.8 1.8 0 0 1 5 25.2V21"/>
   </g>
-  <path d="M9 20.5 12 16.6l2.6 2.8 3-6.1 2.6 4.7 3.4-5.3"
-        fill="none" stroke="#6f9ee8" stroke-width="2.2"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17.4 22.6 21.3 9.8 25.2 22.6" fill="none" stroke="#2a9d6a"
+        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10.8 16V22.6" fill="none" stroke="#e05a4a"
+        stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M7.4 16H25.2" fill="none" stroke="#faf9f6"
+        stroke-width="2.4" stroke-linecap="round"/>
 </svg>

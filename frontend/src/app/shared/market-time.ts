@@ -1,18 +1,22 @@
 /**
- * The schedule, in the market's clock and in the reader's.
+ * The schedule, on the reader's own clock.
  *
- * Every job in this app is configured in UTC, and UTC is the wrong thing to
- * show anyone. The times only mean something against the US market session —
- * 13:35 UTC is not a fact worth reading, "9:35 AM ET, five minutes after the
- * open" is.
+ * Every job here is configured in UTC, and UTC is the wrong thing to show
+ * anyone: 13:35 UTC is not a fact worth reading. So each time is rendered in
+ * the reader's zone with the zone named — "9:35 AM EDT", "7:05 PM IST" — which
+ * is unambiguous on its own and needs no second line.
  *
- * So Eastern is primary, because that is the clock the experiment actually runs
- * on, and the reader's own zone comes second so they know whether it has
- * already happened where they are.
+ * **An earlier version printed the market's clock and the reader's side by
+ * side.** For anyone already on Eastern that is the same time twice, and for
+ * everyone else the zone label was already doing the work the second time was
+ * meant to do. One time, named, is enough.
  *
- * **Eastern, not EST.** The offset changes twice a year, and hardcoding −5
- * would put every time an hour out for eight months of it. `Intl` with the
- * `America/New_York` zone handles the switch.
+ * What the second line was really carrying — that these times hang off the US
+ * market session — belongs in one sentence under the list rather than repeated
+ * on every row.
+ *
+ * **Named zones, never a fixed offset.** Eastern moves twice a year, and
+ * hardcoding −5 would put every time an hour out for eight months of it.
  */
 
 const ET_ZONE = 'America/New_York';
@@ -56,13 +60,10 @@ export function zoneLabel(date: Date, zone: string): string {
 }
 
 export interface ClockTime {
-  /** "9:35 AM" on the market's clock. */
-  et: string;
-  /** "EDT" or "EST", whichever applies on that date. */
-  etZone: string;
-  /** The same moment where the reader is, or null when that is the same clock. */
-  local: string | null;
-  localZone: string | null;
+  /** "9:35 AM", on the reader's clock. */
+  time: string;
+  /** The zone it is in — "EDT", "IST", "GMT+5:30". */
+  zone: string;
   /** The underlying instant, for deciding what has already happened. */
   instant: Date;
 }
@@ -77,12 +78,5 @@ export interface ClockTime {
 export function marketTime(utcHour: number, utcMinute: number, on: Date = new Date()): ClockTime {
   const instant = at(utcHour, utcMinute, on);
   const zone = localZone();
-  const sameClock = readerIsEastern();
-  return {
-    et: format(instant, ET_ZONE),
-    etZone: zoneLabel(instant, ET_ZONE),
-    local: sameClock ? null : format(instant, zone),
-    localZone: sameClock ? null : zoneLabel(instant, zone),
-    instant,
-  };
+  return { time: format(instant, zone), zone: zoneLabel(instant, zone), instant };
 }

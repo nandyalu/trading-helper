@@ -170,6 +170,7 @@ a:hover {
 }
 
 .brand-mark {
+  color: var(--text);
   display: grid;
   place-items: center;
   width: 1.75rem;
@@ -1474,12 +1475,15 @@ table {
   min-width: 0;
 }
 
-/* Decorative. The headline already says everything the mark does, so it is
-   quiet enough not to compete and is hidden from screen readers by carrying no
-   label. */
+/* The mark at full strength. An earlier version sat at 10% and read as a
+   watermark, which threw away the one thing it is for: the red below the line
+   and the green above it are the same two colours the equity chart uses, and
+   at that opacity neither was visible.
+
+   It carries no label, so it is decorative to a screen reader — the headline
+   beside it already says everything the mark does. */
 .hero-mark {
   color: var(--text);
-  opacity: 0.1;
   justify-self: end;
 }
 
@@ -1831,22 +1835,11 @@ table {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* Two clocks, deliberately on two lines. Run together they wrapped mid-phrase,
-   which read as a mistake; stacked, the market's time leads and the reader's
-   own sits under it as the secondary fact it is. */
 .tl-time {
-  display: flex;
-  flex-direction: column;
   font-size: var(--t-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.35;
   color: var(--text-faint);
-}
-
-.tl-local {
-  font-weight: 400;
-  opacity: 0.75;
 }
 
 .tl-text {

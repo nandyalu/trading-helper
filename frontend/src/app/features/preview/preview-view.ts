@@ -120,16 +120,10 @@ export class PreviewView {
     },
   ];
 
-  /** The market's clock. Always shown, because it is the one the experiment
-   * actually runs on. */
-  protected marketClock(t: ClockTime): string {
-    return `${t.et} ${t.etZone}`;
-  }
-
-  /** The reader's own, or empty when they are already on the market's clock —
-   * printing the same time twice is noise rather than help. */
-  protected readerClock(t: ClockTime): string {
-    return t.local ? `${t.local} ${t.localZone}` : '';
+  /** One time, named. The zone label makes it unambiguous, which is what a
+   * second line in another zone was there for. */
+  protected clock(t: ClockTime): string {
+    return `${t.time} ${t.zone}`;
   }
 
   protected readonly terms = [

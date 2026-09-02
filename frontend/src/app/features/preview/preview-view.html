@@ -34,7 +34,7 @@
       </p>
     </div>
 
-    <app-logo class="hero-mark" [size]="260" />
+    <app-logo class="hero-mark" [size]="176" [frameOpacity]="0.28" />
   </header>
 
   <div class="guardrails-wrap">
@@ -156,12 +156,7 @@
       <ol class="timeline-list">
         @for (e of friday; track e.text) {
           <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
-            <span class="tl-time">
-              <span>{{ marketClock(e.t) }}</span>
-              @if (readerClock(e.t)) {
-                <span class="tl-local">{{ readerClock(e.t) }}</span>
-              }
-            </span>
+            <span class="tl-time">{{ clock(e.t) }}</span>
             <span class="tl-text">{{ e.text }}</span>
           </li>
         }
@@ -171,12 +166,7 @@
       <ol class="timeline-list">
         @for (e of monday; track e.text) {
           <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
-            <span class="tl-time">
-              <span>{{ marketClock(e.t) }}</span>
-              @if (readerClock(e.t)) {
-                <span class="tl-local">{{ readerClock(e.t) }}</span>
-              }
-            </span>
+            <span class="tl-time">{{ clock(e.t) }}</span>
             <span class="tl-text">{{ e.text }}</span>
           </li>
         }

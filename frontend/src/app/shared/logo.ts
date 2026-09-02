@@ -1,21 +1,22 @@
 import { Component, input } from '@angular/core';
 
 /**
- * The mark: a path that moves freely inside a frame it never crosses.
+ * The mark: **TA**, drawn as an equity curve inside its bounds.
  *
- * The experiment in one image. The corner brackets are two things at once —
- * the guardrails the agent cannot pass, and a viewfinder, because the whole
- * point is that this is under observation. The line inside is the equity curve:
- * it wanders, it falls, it recovers, and it stays in bounds.
+ * One horizontal rule runs the width of the mark. It is the T's top bar and
+ * the A's crossbar at once, and it is the baseline — the money the agent
+ * started with, the same line the equity chart measures against.
  *
- * Deliberately not a robot, a brain or a candlestick. The first two say "AI
- * product" and the third says "trading product", and this is neither — it is a
- * record of something being tried.
+ * The T's stem drops below it. The A rises above it. Down then up, in the two
+ * colours the rest of the site uses for exactly that, so the initials of the
+ * framework this is built on also read as the thing being measured.
  *
- * Drawn on a 32-unit grid with `currentColor`, so it inherits ink in both
- * themes and stays legible at 20px in the nav and at 200px in the hero. The
- * brackets are the heavier stroke: at favicon size the frame survives and the
- * line becomes texture, which still reads as "something contained".
+ * The corner brackets are the guardrails, and a viewfinder: the point of the
+ * experiment is that it is under observation.
+ *
+ * Drawn on a 32-unit grid. At favicon size the frame and the baseline survive
+ * and the letterforms become texture, which still reads as "something
+ * contained".
  */
 @Component({
   selector: 'app-logo',
@@ -31,28 +32,38 @@ import { Component, input } from '@angular/core';
       @if (label()) {
         <title>{{ label() }}</title>
       }
-      <!-- The bounds. Corners only: a closed box reads as a container, and
-           open corners read as limits, which is the truer statement. -->
+
+      <!-- The bounds. Corners only: a closed box reads as a container, open
+           corners read as limits, which is the truer statement. -->
       <g
         stroke="currentColor"
-        [attr.stroke-width]="2"
+        stroke-width="1.8"
         stroke-linecap="round"
         stroke-linejoin="round"
-        opacity="0.9"
+        [attr.opacity]="frameOpacity()"
       >
-        <path d="M3 10V4.8A1.8 1.8 0 0 1 4.8 3H10" />
-        <path d="M22 3h5.2A1.8 1.8 0 0 1 29 4.8V10" />
-        <path d="M29 22v5.2a1.8 1.8 0 0 1-1.8 1.8H22" />
-        <path d="M10 29H4.8A1.8 1.8 0 0 1 3 27.2V22" />
+        <path d="M2.5 9.5V4.3A1.8 1.8 0 0 1 4.3 2.5H9.5" />
+        <path d="M22.5 2.5h5.2a1.8 1.8 0 0 1 1.8 1.8v5.2" />
+        <path d="M29.5 22.5v5.2a1.8 1.8 0 0 1-1.8 1.8h-5.2" />
+        <path d="M9.5 29.5H4.3a1.8 1.8 0 0 1-1.8-1.8v-5.2" />
       </g>
-      <!-- The agent. Never touches the frame. -->
+
+      <!-- The A, above the line. Drawn first so the baseline sits over the
+           point where the legs cross it. -->
       <path
-        d="M7.5 20.5 11 16l3 3.2 3.5-7 3 5.4 4-6.1"
-        stroke="currentColor"
-        stroke-width="2"
+        d="M17 23.5 21.5 8.5 26 23.5"
+        [attr.stroke]="up()"
+        stroke-width="2.4"
         stroke-linecap="round"
         stroke-linejoin="round"
       />
+
+      <!-- The T, below it. -->
+      <path d="M10 15.5V23.5" [attr.stroke]="down()" stroke-width="2.4" stroke-linecap="round" />
+
+      <!-- The baseline: the T's bar, the A's crossbar, and where the agent
+           started, all one stroke. -->
+      <path d="M6 15.5H26" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
     </svg>
   `,
   styles: `
@@ -64,6 +75,11 @@ import { Component, input } from '@angular/core';
 })
 export class Logo {
   readonly size = input<number>(24);
-  /** Empty on a decorative instance sitting beside text that already says it. */
+  /** Empty on a decorative instance beside text that already says it. */
   readonly label = input<string>('');
+  /** The frame is quieter than the letterforms at large sizes and needs its
+   * full weight at small ones, where it is most of what survives. */
+  readonly frameOpacity = input<number>(0.55);
+  readonly up = input<string>('var(--pos)');
+  readonly down = input<string>('var(--neg)');
 }
