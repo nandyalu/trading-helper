@@ -1,0 +1,179 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Method</h1>
+      <p class="subtitle">
+        <strong>How this is run, and what it cannot tell you.</strong> Written for anyone deciding
+        whether the numbers on this site are worth believing.
+      </p>
+    </div>
+  </header>
+
+  <div class="prose">
+    <h2>The question</h2>
+    <p>
+      <strong>Not "can an AI make money".</strong> That question cannot be answered at this sample
+      size, in one market regime, with one model, and anyone claiming to have answered it is selling
+      something.
+    </p>
+    <p>
+      The question here is narrower: given real market data, a real cost for information, and no
+      human to lean on, what does a small language model actually do? Does it choose sensibly what
+      to study? Does it size positions it can afford? Does it change its mind for reasons that
+      survive reading?
+    </p>
+
+    <h2>The setup</h2>
+    <ul>
+      <li><strong>One agent</strong>, one simulated brokerage account, one book.</li>
+      <li>
+        <strong>A fixed budget</strong>, and it is told what that is. The broker's real balance is
+        never shown — the sandbox account holds far more, and if that number reached the prompt the
+        budget would mean nothing.
+      </li>
+      <li>
+        <strong>$0.05 per analysis</strong>, charged every morning for every ticker it keeps on its
+        watchlist, out of the same money it trades with.
+      </li>
+      <li>
+        <strong>No human input.</strong> No control on this site or in Discord can add a ticker,
+        start an analysis or place a trade.
+      </li>
+    </ul>
+
+    <h2>What is controlled, and what is not</h2>
+    <p>
+      <strong>Held constant:</strong> the model, the prompt, the analyst pipeline, the debate
+      rounds, the research price and the budget. Any change to these is dated in the journal before
+      it is made.
+    </p>
+    <p>
+      <strong>Not controlled, and not controllable:</strong> the market. Every result on this site
+      comes from one stretch of one market's history. A strategy that looks good in a rising market
+      has told you almost nothing about itself.
+    </p>
+
+    <h2>How a call is graded</h2>
+    <p>
+      Each analysis carries a horizon — 14 days for a swing call — and is judged when that arrives,
+      three ways:
+    </p>
+    <ul>
+      <li>
+        <strong>Absolute.</strong> A Buy passes if the price rose. A Sell passes if it fell. A Hold
+        passes if the price stayed inside a band.
+      </li>
+      <li>
+        <strong>Against SPY.</strong> A Buy must have beaten the index over the same window; a Sell
+        must have lagged it.
+      </li>
+      <li>
+        <strong>Against its own target.</strong> Whether the price the analysis named was reached at
+        any point in the window.
+      </li>
+    </ul>
+    <p>
+      <strong>The second is the one that counts.</strong> An absolute win rate of 70% in a rising
+      market can be worse than useless — holding the index and doing nothing would have beaten it.
+    </p>
+
+    <h2>What this design cannot tell you</h2>
+    <p>This is the section to read before any number on this site.</p>
+
+    <h3>One analysis is one sample</h3>
+    <p>
+      The model runs at temperature 1, which is its own publisher's recommended setting. Measured on
+      2 September 2026, fourteen tickers were analysed twice, minutes apart, on the same prices:
+      <strong>two of twelve comparable analyses reached the same decision.</strong>
+      Three flipped from bearish to bullish outright.
+    </p>
+    <p>
+      That is not a defect and lowering the temperature is not the fix — an earlier attempt to do
+      exactly that treated a symptom of a smaller model's capability as a sampling problem, and was
+      reverted. But it means <strong>no single signal is evidence</strong>, and it puts a floor
+      under what any change to the prompt can be credited with. A change that moves one morning's
+      decision has moved nothing detectable.
+    </p>
+
+    <h3>The sample is small and the regime is one</h3>
+    <p>
+      A few hundred graded signals over a few months, in whatever the market happened to be doing.
+      Twenty resolved calls is the point at which a win rate stops being noise; it is nowhere near
+      the point at which it becomes a finding about markets.
+    </p>
+
+    <h3>Simulated fills are not real fills</h3>
+    <p>
+      Orders go to a broker's sandbox. Fills there are cleaner than they would be with real money:
+      no partial fills to speak of, no market impact, and a spread that behaves. A strategy trading
+      small, liquid names is least affected by this, which is what the agent does — but "least
+      affected" is not "unaffected".
+    </p>
+
+    <h3>Survivorship in the candidate list</h3>
+    <p>
+      The names the agent may choose from come from a screener of liquid, actively traded stocks.
+      That list is drawn today, from companies that still exist and still trade. It is not the list
+      it would have seen at the start of the window.
+    </p>
+
+    <h3>The analyses are not independent of each other</h3>
+    <p>
+      Every analysis on a given morning reads the same macro data and much of the same news. A day
+      when the model is wrong about the market tends to be a day it is wrong about several stocks at
+      once, so the effective sample is smaller than the count of signals suggests.
+    </p>
+
+    <h3>A known intermittent fault</h3>
+    <p>
+      The market analyst sometimes prints its tool call as text instead of making it, or answers
+      without fetching anything. It is caught and retried, and the retry usually works. It predates
+      every fix made for it, and it has not been eliminated.
+    </p>
+
+    <h2>What runs it</h2>
+    <ul>
+      <li>
+        <strong>Model:</strong> <code>gemma4-e4b-qat-128k</code> — a 4B-effective build at its full
+        131,072-token context, entirely on one GPU in 3.7 GiB.
+      </li>
+      <li>
+        <strong>Hardware:</strong> seven AMD RX 6600s, 8 GiB each, one analysis per card, 32 GB of
+        host RAM.
+      </li>
+      <li>
+        <strong>Cost per analysis:</strong> about 19 LLM calls and 133,000 tokens, roughly 19
+        minutes at seven concurrent.
+      </li>
+      <li>
+        <strong>Data:</strong> Webull for quotes and the paper account, yfinance for price history,
+        FRED for macro series, Reddit's public feeds for sentiment.
+      </li>
+    </ul>
+    <p>
+      Measured on 2 September: the CPU is the bottleneck, not the GPUs. The cards sit around 60%
+      busy while the host CPU is pinned, because this model family keeps its per-layer embeddings in
+      host RAM. Running fourteen analyses at once instead of seven takes the same wall clock and
+      doubles the latency of each, so seven is what runs.
+    </p>
+
+    <h2>Why every prompt is published</h2>
+    <p>
+      Behaviour here is mostly prompt. A month of runs across three prompt revisions is three
+      experiments with no way to tell them apart, unless someone wrote down when the question
+      changed.
+    </p>
+    <p>
+      So the rule is that a change goes in the journal — dated, with the reason — <em>before</em>
+      it goes in the code. And every decision pass keeps the prompt it was given and the answer it
+      returned, word for word, on the Decisions page.
+    </p>
+
+    <h2>Reproducing it</h2>
+    <p>
+      The code is open. The documentation covers deploying it yourself, including running without a
+      GPU pool by pointing it at a hosted model instead. The API is read-only and unauthenticated on
+      the published copy, so the raw data behind every page on this site can be fetched directly.
+    </p>
+  </div>
+</section>

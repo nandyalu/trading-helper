@@ -58,6 +58,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/scorecard/scorecard-view').then((m) => m.ScorecardView),
   },
   {
+    path: 'method',
+    loadComponent: () => import('./features/method/method-view').then((m) => m.MethodView),
+  },
+  {
     path: 'glossary',
     loadComponent: () => import('./features/glossary/glossary-view').then((m) => m.GlossaryView),
   },
