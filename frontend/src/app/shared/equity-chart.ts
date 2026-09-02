@@ -82,10 +82,14 @@ export class EquityChart {
       this.series = this.chart.addSeries(BaselineSeries, this.seriesOptions());
       this.draw();
 
-      const resize = new ResizeObserver(() => {
-        this.chart?.applyOptions({ width: el.clientWidth });
-      });
-      resize.observe(el);
+      // Guarded: jsdom has no ResizeObserver, and a chart that throws during
+      // setup takes the whole page down with it. Without one the chart simply
+      // does not follow a window resize, which is a smaller loss.
+      const resize =
+        typeof ResizeObserver === 'undefined'
+          ? null
+          : new ResizeObserver(() => this.chart?.applyOptions({ width: el.clientWidth }));
+      resize?.observe(el);
 
       // Canvas cannot inherit a CSS variable, so the theme is read at creation
       // and again on every change. A chart that skips this keeps its old axis
@@ -96,7 +100,7 @@ export class EquityChart {
       });
 
       this.destroyRef.onDestroy(() => {
-        resize.disconnect();
+        resize?.disconnect();
         stop();
         this.chart?.remove();
       });

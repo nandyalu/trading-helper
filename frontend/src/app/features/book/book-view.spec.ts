@@ -147,7 +147,7 @@ describe('BookView', () => {
     await fixture.whenStable();
 
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('app-line-chart')).toBeTruthy();
+    expect(el.querySelector('app-equity-chart')).toBeTruthy();
     expect(el.textContent).not.toContain('No curve yet');
   });
 
