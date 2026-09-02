@@ -1,12 +1,12 @@
 <section class="page">
-  <a class="back-link" routerLink="/signals">← All signals</a>
+  <a class="back-link" routerLink="/research">← All signals</a>
 
   @if (signalDetail(); as s) {
     <header class="page-head">
       <div class="ticker-identity">
         <h1>{{ s.ticker }}</h1>
         <app-decision-badge [decision]="s.decision" />
-        <a class="chip" [routerLink]="['/tickers', s.ticker]">Ticker page</a>
+        <a class="chip" [routerLink]="['/research/ticker', s.ticker]">Ticker page</a>
       </div>
     </header>
 

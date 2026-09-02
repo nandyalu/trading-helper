@@ -232,6 +232,10 @@ export interface Settings {
   /** The conviction floor. Zero means off, which is the default. */
   agent_min_win_probability: number;
   agent_min_risk_reward: number;
+  /** True on the published copy, where the backend refuses every write. The
+   * shell reads it to drop the Settings link. Presentation only — the refusal
+   * is middleware, so a hidden link and a typed URL get the same answer. */
+  public: boolean;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'llm_model_choices'>>;

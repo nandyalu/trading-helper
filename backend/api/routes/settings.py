@@ -12,7 +12,7 @@ positions and Python only refuses what cannot be executed as stated.
 from fastapi import APIRouter, HTTPException
 
 from backend.database import db
-from backend.services import agent, agent_book, analysis, quotes, watchdog
+from backend.services import agent, agent_book, analysis, publish, quotes, watchdog
 from backend.api.schemas import SettingsOut, SettingsPatchIn
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -33,6 +33,7 @@ def _current_settings() -> SettingsOut:
         agent_budget=agent_book.get_budget(),
         agent_min_win_probability=agent.get_conviction()[0],
         agent_min_risk_reward=agent.get_conviction()[1],
+        public=publish.is_public(),
     )
 
 

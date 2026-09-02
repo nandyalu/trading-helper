@@ -2,6 +2,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
+import { SettingsService } from './core/services/settings.service';
+
 /** One destination in the sidebar. `icon` names a symbol in the sprite at the
  * top of app.html. */
 interface NavItem {
@@ -29,30 +31,35 @@ const THEME_KEY = 'th-theme';
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly settingsService = inject(SettingsService);
 
-  /** Grouped so eleven links do not read as one undifferentiated column.
-   * "Today" is what needs a decision now; "Track record" is evidence about
-   * how well the bot has done. */
+  /** Two groups, six links.
+   *
+   * "What it did" is the experiment as it happens; "The record" is evidence
+   * about whether it worked. The old table had eleven links across three
+   * groups, one per data source — a shape that suited an operator and left a
+   * reader to work out which page answered their question. */
   protected readonly primaryNav: NavItem[] = [
-    { path: '/', label: 'Overview', icon: 'grid', exact: true },
-    { path: '/tickers', label: 'Tickers', icon: 'list' },
-    { path: '/signals', label: 'Signals', icon: 'activity' },
-    { path: '/alerts', label: 'Alerts', icon: 'bell' },
-  ];
-
-  protected readonly bookNav: NavItem[] = [
-    { path: '/agent', label: 'Auto trader', icon: 'zap' },
-    { path: '/events', label: 'Events', icon: 'chart' },
-    { path: '/journey', label: 'Journey', icon: 'book' },
+    { path: '/', label: 'The experiment', icon: 'grid', exact: true },
+    { path: '/book', label: 'The book', icon: 'zap' },
+    { path: '/decisions', label: 'Decisions', icon: 'chart' },
+    { path: '/research', label: 'Research', icon: 'list' },
   ];
 
   protected readonly recordNav: NavItem[] = [
     { path: '/scorecard', label: 'Scorecard', icon: 'target' },
-    { path: '/digest', label: 'Weekly digest', icon: 'calendar' },
-    { path: '/regime', label: 'Market regime', icon: 'compass' },
+    { path: '/journal', label: 'Journal', icon: 'book' },
   ];
 
-  /** The bottom bar holds four links plus a button that opens the drawer. */
+  /** True on the published copy, where the backend refuses every write.
+   *
+   * It hides the Settings link, and that is all it does — the refusal itself
+   * is middleware, so a hidden link and a typed URL get the same answer. This
+   * is presentation: a link to a page whose every control returns 403 is a
+   * dead end, not a security boundary. */
+  protected readonly isPublic = signal(false);
+
+  /** The bottom bar holds the four primary links plus a button for the rest. */
   protected readonly tabNav = this.primaryNav;
 
   protected readonly drawerOpen = signal(false);
@@ -67,7 +74,6 @@ export class App {
     if (url === '/') return 'Overview';
     const all = [
       ...this.primaryNav,
-      ...this.bookNav,
       ...this.recordNav,
       { path: '/settings', label: 'Settings', icon: '' },
     ];
@@ -78,6 +84,14 @@ export class App {
 
   constructor() {
     this.applyTheme(this.theme());
+    // Read once at startup: which copy this is, is a property of the container
+    // rather than of the session, and cannot change while the page is open.
+    // A failure leaves it false, which shows the link — the backend still
+    // refuses the write, so the worst case is a dead end rather than a hole.
+    void this.settingsService
+      .load()
+      .then(() => this.isPublic.set(this.settingsService.settings()?.public ?? false))
+      .catch(() => this.isPublic.set(false));
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {

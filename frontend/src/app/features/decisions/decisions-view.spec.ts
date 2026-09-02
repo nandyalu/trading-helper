@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 
 import { AgentEvent } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
-import { EventsView } from './events-view';
+import { DecisionsView } from './decisions-view';
 
 /** A pass from 2026-09-01, the first day prompts were kept. */
 function event(over: Partial<AgentEvent> = {}): AgentEvent {
@@ -30,13 +30,13 @@ class AgentServiceStub {
   async loadJourney(): Promise<void> {}
 }
 
-describe('EventsView', () => {
+describe('DecisionsView', () => {
   let service: AgentServiceStub;
 
   beforeEach(async () => {
     service = new AgentServiceStub();
     await TestBed.configureTestingModule({
-      imports: [EventsView],
+      imports: [DecisionsView],
       providers: [{ provide: AgentService, useValue: service }],
     }).compileComponents();
   });
@@ -44,7 +44,7 @@ describe('EventsView', () => {
   /** The component clears `loading` in a `finally`, so the skeleton is still on
    * screen until the stub's promise has settled. */
   async function render(): Promise<HTMLElement> {
-    const fixture = TestBed.createComponent(EventsView);
+    const fixture = TestBed.createComponent(DecisionsView);
     await fixture.whenStable();
     return fixture.nativeElement as HTMLElement;
   }
@@ -62,7 +62,7 @@ describe('EventsView', () => {
 
   it('shows the prompt verbatim once opened', async () => {
     service.events.set([event()]);
-    const fixture = TestBed.createComponent(EventsView);
+    const fixture = TestBed.createComponent(DecisionsView);
     await fixture.whenStable();
 
     fixture.componentInstance.toggle(1, 'prompt');

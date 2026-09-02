@@ -1,16 +1,22 @@
 <section class="page">
   <header class="page-head">
     <div>
-      <h1>Tickers</h1>
+      <h1>Research</h1>
       <p class="subtitle">
-        What the agent watches. Every name here is analysed and charged every morning, and the agent
-        chose all of them — it commissions research to add one and untracks to drop one. Nothing on
-        this page adds or removes a ticker.
+        What the agent studies, and what each study concluded. It chose every name here and pays for
+        all of them every morning — about
+        <strong>${{ dailyCost().toFixed(2) }} a day</strong> at {{ tickers().length }}
+        {{ tickers().length === 1 ? 'ticker' : 'tickers' }}. Nothing on this page adds or removes
+        one.
       </p>
     </div>
   </header>
 
+  <!-- The watchlist: what it pays for. -->
   <section class="card">
+    <div class="card-head">
+      <h2>On the watchlist</h2>
+    </div>
     @if (loading()) {
       <div class="card-body stack" aria-hidden="true">
         <div class="skeleton skeleton-row"></div>
@@ -20,7 +26,7 @@
     } @else if (tickers().length === 0) {
       <div class="empty">
         <span class="empty-icon" aria-hidden="true">📈</span>
-        <strong>The watchlist is empty</strong>
+        <strong>Nothing tracked yet</strong>
         <span>A ticker appears here the morning the agent pays to research one.</span>
       </div>
     } @else {
@@ -30,14 +36,14 @@
             <tr>
               <th>Ticker</th>
               <th class="num">Price</th>
-              <th>Latest signal</th>
+              <th>Latest call</th>
             </tr>
           </thead>
           <tbody>
             @for (t of tickers(); track t.ticker) {
               <tr>
                 <td class="ticker-cell" data-label="">
-                  <a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a>
+                  <a [routerLink]="['/research/ticker', t.ticker]">{{ t.ticker }}</a>
                   @if (t.inactive) {
                     <span class="badge badge-warn" [attr.title]="t.inactive_reason">No data</span>
                   }
@@ -49,11 +55,11 @@
                     {{ t.current_price !== null ? '$' + t.current_price.toFixed(2) : '—' }}
                   }
                 </td>
-                <td data-label="Latest signal">
+                <td data-label="Latest call">
                   @if (t.latest_signal) {
                     <app-decision-badge [decision]="t.latest_signal.decision" />
                   } @else {
-                    <span class="muted">no signals</span>
+                    <span class="muted">not analysed yet</span>
                   }
                 </td>
               </tr>
@@ -64,12 +70,81 @@
     }
   </section>
 
+  <!-- Every analysis, in date order. -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Every analysis</h2>
+      <div class="segmented">
+        <button type="button" [class.active]="statusFilter() === ''" (click)="setFilter('')">
+          All
+        </button>
+        <button
+          type="button"
+          [class.active]="statusFilter() === 'pending'"
+          (click)="setFilter('pending')"
+        >
+          Maturing
+        </button>
+        <button
+          type="button"
+          [class.active]="statusFilter() === 'resolved'"
+          (click)="setFilter('resolved')"
+        >
+          Graded
+        </button>
+      </div>
+    </div>
+    @if (feed().length === 0) {
+      <div class="empty">
+        <span class="empty-icon" aria-hidden="true">🧠</span>
+        <strong>No analyses yet</strong>
+        <span>
+          The sweep runs each weekday at 11:00 UTC over everything on the watchlist above.
+        </span>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table data-table--stack">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Date</th>
+              <th>Decision</th>
+              <th>Graded</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of feed(); track s.id) {
+              <tr>
+                <td class="ticker-cell" data-label="">
+                  <a [routerLink]="['/research/analysis', s.id]">{{ s.ticker }}</a>
+                </td>
+                <td class="num" data-label="Date">{{ s.signal_date }}</td>
+                <td data-label="Decision"><app-decision-badge [decision]="s.decision" /></td>
+                <td data-label="Graded">
+                  @if (s.outcome) {
+                    <span [class.pass]="s.outcome === 'pass'" [class.fail]="s.outcome === 'fail'">
+                      {{ s.outcome }}
+                    </span>
+                  } @else {
+                    <span class="muted">still maturing</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <!-- The candidate menu, exactly as the agent is shown it. -->
   @if (candidates().length) {
     <section class="card">
       <div class="card-head">
-        <h2>What the agent may commission</h2>
+        <h2>What it may commission next</h2>
         <p class="hint">
-          The same menu the agent is shown in its prompt: liquid names from the screener it does not
+          The same menu the agent sees in its prompt: liquid names from the screener it does not
           already track — over $5, over 1M shares traded, and not up or down more than 30% today,
           which keeps the day's pumps out. It pays for every one it picks, and picking is its
           decision alone.

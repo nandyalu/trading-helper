@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 
 import { AgentBook, AgentEquityPoint, AgentTrade } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
-import { AgentView } from './agent-view';
+import { BookView } from './book-view';
 
 /** ZBH and GOOG as the book actually stood on 2026-08-13. */
 const BOOK: AgentBook = {
@@ -71,13 +71,13 @@ class AgentServiceStub {
   async load(): Promise<void> {}
 }
 
-describe('AgentView', () => {
+describe('BookView', () => {
   let service: AgentServiceStub;
 
   beforeEach(async () => {
     service = new AgentServiceStub();
     await TestBed.configureTestingModule({
-      imports: [AgentView],
+      imports: [BookView],
       providers: [{ provide: AgentService, useValue: service }, provideRouter([])],
     }).compileComponents();
   });
@@ -97,7 +97,7 @@ describe('AgentView', () => {
       exit(3, 'GOOG', 'stop', 315.04),
       exit(4, 'GOOG', 'target', 377.09),
     ]);
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     expect(holdingRow(fixture, 'ZBH')).toContain('$95.30');
@@ -112,7 +112,7 @@ describe('AgentView', () => {
     // The failure that started this: a bracket the broker refused left the
     // position naked, and the page said nothing at all.
     service.trades.set([exit(1, 'ZBH', 'stop', 95.3), exit(2, 'ZBH', 'target', 101.5)]);
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     const goog = holdingRow(fixture, 'GOOG');
@@ -121,7 +121,7 @@ describe('AgentView', () => {
 
   it('lists an exit resting on shares the book does not hold', async () => {
     service.trades.set([exit(9, 'VERI', 'stop', 1.1)]);
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -131,7 +131,7 @@ describe('AgentView', () => {
 
   it('says nothing about unmatched exits when every one has a holding', async () => {
     service.trades.set([exit(1, 'ZBH', 'stop', 95.3)]);
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -143,7 +143,7 @@ describe('AgentView', () => {
       { date: '2026-08-13', equity: 1004.04, cash: 17.45, market_value: 986.59 },
       { date: '2026-08-14', equity: 1006.48, cash: 17.45, market_value: 989.03 },
     ]);
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -154,7 +154,7 @@ describe('AgentView', () => {
   it('says the curve has not started rather than drawing an empty chart', async () => {
     // Before the first fill there is nothing to plot, and an axis with no line
     // on it reads as a bug.
-    const fixture = TestBed.createComponent(AgentView);
+    const fixture = TestBed.createComponent(BookView);
     await fixture.whenStable();
 
     const el = fixture.nativeElement as HTMLElement;

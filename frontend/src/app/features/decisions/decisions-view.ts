@@ -16,13 +16,13 @@ import { AgentService } from '../../core/services/agent.service';
  * kilobytes, and a feed that opens with one is a feed nobody scrolls.
  */
 @Component({
-  selector: 'app-events-view',
+  selector: 'app-decisions-view',
   standalone: true,
   imports: [DatePipe, DecimalPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './events-view.html',
+  templateUrl: './decisions-view.html',
 })
-export class EventsView {
+export class DecisionsView {
   private readonly agent = inject(AgentService);
   readonly events = this.agent.events;
   readonly loading = signal(true);

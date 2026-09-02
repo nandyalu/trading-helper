@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 
 import { JourneyEntry } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
-import { JourneyView } from './journey-view';
+import { JournalView } from './journal-view';
 
 class AgentServiceStub {
   readonly events = signal([]);
@@ -12,19 +12,19 @@ class AgentServiceStub {
   async loadJourney(): Promise<void> {}
 }
 
-describe('JourneyView', () => {
+describe('JournalView', () => {
   let service: AgentServiceStub;
 
   beforeEach(async () => {
     service = new AgentServiceStub();
     await TestBed.configureTestingModule({
-      imports: [JourneyView],
+      imports: [JournalView],
       providers: [{ provide: AgentService, useValue: service }],
     }).compileComponents();
   });
 
   async function render(): Promise<HTMLElement> {
-    const fixture = TestBed.createComponent(JourneyView);
+    const fixture = TestBed.createComponent(JournalView);
     await fixture.whenStable();
     return fixture.nativeElement as HTMLElement;
   }
@@ -41,7 +41,7 @@ describe('JourneyView', () => {
 
   it('drops the markdown heading, because the card already shows the date', async () => {
     // Printing both reads as a stutter.
-    const fixture = TestBed.createComponent(JourneyView);
+    const fixture = TestBed.createComponent(JournalView);
     await fixture.whenStable();
 
     const body = fixture.componentInstance.body('## 2026-08-28\n- Bought 260 SMCI.');

@@ -1,11 +1,11 @@
 <section class="page">
   <header class="page-head">
     <div>
-      <h1>Auto trader</h1>
+      <h1>The book</h1>
       <p class="subtitle">
-        A simulated account the model trades on its own, inside a fixed budget. No real money is
-        involved and no order can reach a real account. It decides once a morning, at 13:35 UTC, and
-        nobody can make it decide sooner.
+        Everything the agent has done with its $10,000: what it holds now, what it has held, and
+        every order with the reason it gave. No real money is involved and no order can reach a real
+        account. It decides once a morning, at 13:35 UTC, and nobody can make it decide sooner.
       </p>
     </div>
   </header>
@@ -18,8 +18,8 @@
       </p>
     } @else if (!b.enabled) {
       <p class="notice notice-info">
-        The agent is switched off — it won't trade on its own. Turn it on in
-        <a routerLink="/settings">Settings</a>, or use "Decide now" for a single pass.
+        The agent is switched off, so it is not trading. The record below stops where it was
+        switched off and resumes when it is switched back on.
       </p>
     }
 
@@ -83,7 +83,7 @@
       @if (p.strategies.length) {
         <section class="card">
           <div class="card-head">
-            <h2>Is the model earning its keep?</h2>
+            <h2>Against the strategies that need no model</h2>
             <p class="hint">
               The agent against the two things it could be replaced by, all starting from its first
               trade on {{ p.since }} with the same {{ money(p.budget) }}. The mechanical follower
@@ -157,7 +157,7 @@
               @for (h of b.holdings; track h.ticker) {
                 <tr>
                   <td class="ticker-cell" data-label="">
-                    <a [routerLink]="['/tickers', h.ticker]">{{ h.ticker }}</a>
+                    <a [routerLink]="['/research/ticker', h.ticker]">{{ h.ticker }}</a>
                   </td>
                   <td class="num" data-label="Shares">{{ h.quantity }}</td>
                   <td class="num" data-label="Avg cost">{{ money(h.avg_cost) }}</td>
@@ -258,7 +258,7 @@
               @for (r of history(); track $index) {
                 <tr>
                   <td class="ticker-cell" data-label="">
-                    <a [routerLink]="['/tickers', r.ticker]">{{ r.ticker }}</a>
+                    <a [routerLink]="['/research/ticker', r.ticker]">{{ r.ticker }}</a>
                     @if (r.is_open) {
                       <span class="muted"> still held</span>
                     }
@@ -320,7 +320,7 @@
               @for (t of trades(); track t.id) {
                 <tr>
                   <td class="ticker-cell" data-label="">
-                    <a [routerLink]="['/tickers', t.ticker]">{{ t.ticker }}</a>
+                    <a [routerLink]="['/research/ticker', t.ticker]">{{ t.ticker }}</a>
                   </td>
                   <td data-label="Side">{{ t.side | uppercase }}</td>
                   <td class="num" data-label="Shares">{{ t.quantity }}</td>

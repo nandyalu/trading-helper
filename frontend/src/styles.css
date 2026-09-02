@@ -1561,3 +1561,246 @@ table {
   word-break: break-word;
   color: var(--text);
 }
+
+/* ==========================================================================
+   11. The experiment's front door
+   --------------------------------------------------------------------------
+   These blocks exist only on `/`, which is the one page written for someone
+   who has never heard of this. Everywhere else composes the primitives above;
+   a landing page needs its own typographic scale to give the premise more
+   weight than the numbers under it, and that is the whole reason this section
+   exists rather than reusing `.page-head`.
+   ========================================================================== */
+
+.hero {
+  max-width: 46rem;
+  padding: var(--sp-6) 0 var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-2);
+}
+
+.hero-eyebrow {
+  margin: 0 0 var(--sp-3);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.hero-title {
+  margin: 0 0 var(--sp-4);
+  font-size: clamp(1.75rem, 4.2vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+/* The figure is the hook, so it carries the accent — and nothing else on the
+   page does, which is what keeps it a hook rather than decoration. */
+.hero-figure {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.hero-lede {
+  margin: 0 0 var(--sp-4);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.hero-lede--strong {
+  color: var(--text);
+}
+
+.hero-foot {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+/* --- the scoreboard ------------------------------------------------------- */
+
+/* One number the page is about, and four that qualify it. Not a `.stat-grid`
+   of five equal tiles: equity is the answer and the rest are footnotes, and a
+   grid of equals would say they matter equally. */
+.scoreboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.scoreboard-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.scoreboard-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.scoreboard-value {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard-delta {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  margin: 0;
+}
+
+.scoreboard-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.scoreboard-facts dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.scoreboard-facts dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- what it decided ------------------------------------------------------ */
+
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.order-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+
+/* Five sides, three meanings: money out, money in, and everything that moves
+   no money at all. The third group is grey on purpose — an `untrack` next to a
+   `buy` in the same colour would read as equally consequential. */
+.order-side {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.125rem var(--sp-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.order-side--buy {
+  background: var(--pos-soft);
+  color: var(--pos);
+}
+
+.order-side--sell {
+  background: var(--neg-soft);
+  color: var(--neg);
+}
+
+.order-reason {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+/* The agent's own words, set apart so they read as a quotation rather than as
+   the site's prose. This distinction is the point of the whole page. */
+.quote {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.big-fact {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.big-fact strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted-small {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+}
+
+.how-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.how-list strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding-top: var(--sp-4);
+  }
+
+  .scoreboard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-4);
+  }
+
+  .scoreboard-facts {
+    gap: var(--sp-4);
+  }
+}

@@ -229,15 +229,7 @@
         </a>
       }
 
-      <div class="nav-group-label">Books</div>
-      @for (item of bookNav; track item.path) {
-        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
-          <svg class="nav-icon" aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
-          {{ item.label }}
-        </a>
-      }
-
-      <div class="nav-group-label">Track record</div>
+      <div class="nav-group-label">The record</div>
       @for (item of recordNav; track item.path) {
         <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
           <svg class="nav-icon" aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
@@ -247,10 +239,14 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a class="nav-link" routerLink="/settings" routerLinkActive="active">
-        <svg class="nav-icon" aria-hidden="true"><use href="#i-sliders" /></svg>
-        Settings
-      </a>
+      <!-- Dropped on the published copy, where every write is refused anyway.
+           A link to a page whose every control returns 403 is a dead end. -->
+      @if (!isPublic()) {
+        <a class="nav-link" routerLink="/settings" routerLinkActive="active">
+          <svg class="nav-icon" aria-hidden="true"><use href="#i-sliders" /></svg>
+          Settings
+        </a>
+      }
       <a class="nav-link" href="/docs">
         <svg class="nav-icon" aria-hidden="true"><use href="#i-book" /></svg>
         Docs

@@ -257,6 +257,11 @@ class SettingsOut(BaseModel):
     # backend/services/agent.py on why it stays off until calibration earns it.
     agent_min_win_probability: float
     agent_min_risk_reward: float
+    # True on the published copy, where every write is refused. The frontend
+    # reads it to drop Settings from the nav and hide the arm-exits button —
+    # presentation only. The refusal itself is middleware, so a hidden button
+    # and a typed URL get the same answer.
+    public: bool = False
     # True when this deployment runs the autonomous-analyst experiment and has
     # no real book or local paper book to show. Presentation only — it decides
     # nothing about whether orders are simulated.

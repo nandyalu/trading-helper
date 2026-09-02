@@ -9,8 +9,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
@@ -26,7 +26,7 @@ from backend.api.routes import (
     watchlist,
 )
 from backend.discord_bot.client import start_discord, stop_discord
-from backend.services import trade_stream
+from backend.services import publish, trade_stream
 from backend.tasks.scheduler import register_jobs, scheduler
 
 log = logging.getLogger("trading-bot.app")
@@ -64,6 +64,35 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
+
+# --- the public read-only guard ------------------------------------------------
+#
+# Registered before every router, so it sees every request including the ones
+# added later. A per-route check would protect only the routes somebody
+# remembered to annotate, and the frontend hiding a button stops nobody who can
+# type a URL.
+#
+# GET and HEAD pass. OPTIONS passes because a browser preflight is not a write.
+# Everything else is refused with a reason a person can act on, rather than a
+# bare 403 that reads like a bug.
+_READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+@app.middleware("http")
+async def refuse_writes_when_public(request: Request, call_next):
+    if publish.is_public() and request.method not in _READ_METHODS:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": (
+                    "This is the published copy of the experiment and it is "
+                    "read-only. Nothing here can change what the agent does — "
+                    "that is the point of it."
+                )
+            },
+        )
+    return await call_next(request)
+
 
 app.include_router(watchlist.router)
 app.include_router(tickers.router)

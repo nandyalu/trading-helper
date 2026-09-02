@@ -7,11 +7,11 @@ import { LineChart, LineChartPoint } from '../../shared/line-chart';
 import { AgentService } from '../../core/services/agent.service';
 
 @Component({
-  selector: 'app-agent-view',
+  selector: 'app-book-view',
   imports: [RouterLink, UpperCasePipe, LineChart],
-  templateUrl: './agent-view.html',
+  templateUrl: './book-view.html',
 })
-export class AgentView {
+export class BookView {
   private readonly agentService = inject(AgentService);
   protected readonly book = this.agentService.book;
   protected readonly trades = this.agentService.trades;

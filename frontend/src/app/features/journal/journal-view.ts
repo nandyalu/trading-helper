@@ -14,13 +14,13 @@ import { AgentService } from '../../core/services/agent.service';
  * come from, so the page and the files can never disagree.
  */
 @Component({
-  selector: 'app-journey-view',
+  selector: 'app-journal-view',
   standalone: true,
   imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './journey-view.html',
+  templateUrl: './journal-view.html',
 })
-export class JourneyView {
+export class JournalView {
   private readonly agent = inject(AgentService);
   readonly entries = this.agent.journey;
   readonly loading = signal(true);

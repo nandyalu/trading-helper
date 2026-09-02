@@ -200,7 +200,7 @@
               @for (entry of tickerEntries(s.by_ticker); track entry[0]) {
                 <tr>
                   <td class="ticker-cell" data-label="">
-                    <a [routerLink]="['/tickers', entry[0]]">{{ entry[0] }}</a>
+                    <a [routerLink]="['/research/ticker', entry[0]]">{{ entry[0] }}</a>
                   </td>
                   <td class="num" data-label="Win rate">{{ rate(entry[1][0], entry[1][1]) }}</td>
                 </tr>
