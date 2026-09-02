@@ -1,139 +1,16 @@
-/* Trading Helper — global styles.
+/* Trading Helper — the experiment's own stylesheet.
  *
- * Layers, in order: design tokens, element defaults, application shell, page
- * primitives, then the few blocks that only one page uses. Feature templates
- * hold no styling of their own; they compose the classes defined here, so a
- * table on /signals and a table on /portfolio cannot drift apart.
+ * Layers, in order: fonts, design tokens, element defaults, the shell, page
+ * primitives, then the few blocks only one page uses. Feature templates hold
+ * no styling of their own; they compose the classes defined here, so two
+ * tables on two pages cannot drift apart.
+ *
+ * The tokens live in theme.css and the faces in fonts.css. Both are imported
+ * rather than inlined so the palette can be re-validated on its own.
  */
 
-/* ==========================================================================
-   1. Design tokens
-   ========================================================================== */
-
-:root {
-  /* Neutrals and surfaces. The page sits one step below the cards, so a card
-     reads as a card without needing a shadow to say so. */
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --surface-2: #f2f4f7;
-  --surface-3: #e9edf3;
-  --border: #e2e6ec;
-  --border-strong: #cfd6e0;
-
-  --text: #101828;
-  --text-muted: #5c6675;
-  --text-faint: #8a94a4;
-
-  /* One accent. Everything interactive uses it; nothing else does. */
-  --accent: #2f5fe0;
-  --accent-hover: #234ec4;
-  --accent-soft: #e8eefc;
-  --on-accent: #ffffff;
-
-  /* Money moves in two directions, so those are the only two semantic hues.
-     Amber marks a caution that is not yet a loss. */
-  --pos: #067a4b;
-  --pos-soft: #e2f5ec;
-  --neg: #c72d20;
-  --neg-soft: #fdeceb;
-  --warn: #a25c06;
-  --warn-soft: #fdf2e2;
-  --info-soft: var(--accent-soft);
-
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
-  --shadow-lg: 0 18px 40px -12px rgb(16 24 40 / 22%);
-
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --radius-pill: 999px;
-
-  --sp-1: 0.25rem;
-  --sp-2: 0.5rem;
-  --sp-3: 0.75rem;
-  --sp-4: 1rem;
-  --sp-5: 1.5rem;
-  --sp-6: 2rem;
-
-  --font:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-
-  --sidebar-w: 15rem;
-  --topbar-h: 3.5rem;
-  --page-max: 84rem;
-
-  color-scheme: light dark;
-}
-
-/* The dark palette is declared twice on purpose: once for readers who never
-   touch the toggle, once for readers who did. CSS has no way to share one
-   block between a media query and an attribute selector. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #0a0c11;
-    --surface: #131720;
-    --surface-2: #1a1f2a;
-    --surface-3: #232936;
-    --border: #232936;
-    --border-strong: #333b4a;
-
-    --text: #e8ebf1;
-    --text-muted: #98a1b2;
-    --text-faint: #6d7688;
-
-    --accent: #7ea2ff;
-    --accent-hover: #9bb6ff;
-    --accent-soft: #1a2440;
-    --on-accent: #0a0c11;
-
-    --pos: #45c98a;
-    --pos-soft: #10291f;
-    --neg: #ff7a6d;
-    --neg-soft: #2c1512;
-    --warn: #e0a44a;
-    --warn-soft: #2a2011;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 65%);
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #0a0c11;
-  --surface: #131720;
-  --surface-2: #1a1f2a;
-  --surface-3: #232936;
-  --border: #232936;
-  --border-strong: #333b4a;
-
-  --text: #e8ebf1;
-  --text-muted: #98a1b2;
-  --text-faint: #6d7688;
-
-  --accent: #7ea2ff;
-  --accent-hover: #9bb6ff;
-  --accent-soft: #1a2440;
-  --on-accent: #0a0c11;
-
-  --pos: #45c98a;
-  --pos-soft: #10291f;
-  --neg: #ff7a6d;
-  --neg-soft: #2c1512;
-  --warn: #e0a44a;
-  --warn-soft: #2a2011;
-
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-  --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 65%);
-
-  color-scheme: dark;
-}
-
-:root[data-theme='light'] {
-  color-scheme: light;
-}
+@import './fonts.css';
+@import './theme.css';
 
 /* ==========================================================================
    2. Element defaults
@@ -1835,4 +1712,403 @@ table {
 
 .agent-note .hint {
   margin: 0;
+}
+
+/* ==========================================================================
+   12. The experiment's front page
+   --------------------------------------------------------------------------
+   Blocks that exist on `/` and `/preview` only. Everywhere else composes the
+   primitives above; a front page needs its own typographic scale to give the
+   premise more weight than the numbers under it.
+   ========================================================================== */
+
+.preview-note {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+/* --- Hero ------------------------------------------------------------------ */
+
+.hero {
+  max-width: var(--measure);
+  padding: var(--sp-8) 0 var(--sp-6);
+}
+
+.hero-eyebrow {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.hero-title {
+  margin: 0 0 var(--sp-5);
+  font-family: var(--font-display);
+  font-size: var(--t-display);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* The figure is the hook, so it carries the accent — and nothing else in the
+   hero does, which is what keeps it a hook rather than decoration. */
+.hero-figure {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* The asterisk is a real control, not a typographic flourish: the guardrails
+   are the most interesting thing on the page to both audiences, and burying
+   them in a footnote nobody can reach wastes them. */
+.fn-mark {
+  border: 0;
+  background: none;
+  padding: 0 0.1em;
+  font: inherit;
+  font-size: 0.6em;
+  vertical-align: super;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.fn-mark:hover {
+  color: var(--accent-hover);
+}
+
+.hero-lede {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--t-md);
+  line-height: var(--lh-loose);
+  color: var(--text-muted);
+}
+
+.hero-lede--strong {
+  color: var(--text);
+}
+
+/* --- Guardrails ------------------------------------------------------------ */
+
+.guardrails {
+  margin-top: var(--sp-6);
+  padding: var(--sp-5);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.guardrails-label {
+  margin: 0 0 var(--sp-4);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--t-base);
+  color: var(--text-muted);
+}
+
+.guardrails-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--sp-5);
+}
+
+.guardrails-head {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.guardrails ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+/* --- Disclaimer ------------------------------------------------------------
+   Sized to be read. "We put it in the footer" is not a defence, so this sits
+   directly under the hero, in body type, on every page that shows money. */
+
+.disclaimer {
+  margin: 0 0 var(--sp-6);
+  padding: var(--sp-4);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.disclaimer strong {
+  color: var(--text);
+}
+
+/* --- Status: money left, rhythm right --------------------------------------- */
+
+.status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.status-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/* One number the page is about, and four that qualify it. Not five equal
+   tiles: equity is the answer and the rest are footnotes. */
+.scoreboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.scoreboard-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.scoreboard-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.scoreboard-value {
+  font-size: var(--t-3xl);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.scoreboard-delta {
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+
+.scoreboard-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  margin: 0;
+}
+
+.scoreboard-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.scoreboard-facts dt {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.scoreboard-facts dd {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+/* --- Chart ------------------------------------------------------------------ */
+
+.chart-figure {
+  margin: 0;
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.chart-figure figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-4);
+}
+
+/* The chart's own title names the series, which is why a single-series chart
+   needs no legend box. */
+.chart-title {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 600;
+}
+
+.chart-note {
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+
+/* --- The two-day timeline ---------------------------------------------------
+   What the agent did yesterday, and what happens today. This is what makes the
+   experiment read as running rather than reported, and it explains the daily
+   rhythm without a paragraph of prose. */
+
+.timeline {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--sp-4));
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.timeline-title {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--t-md);
+}
+
+.timeline-day {
+  margin: var(--sp-5) 0 var(--sp-3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.timeline-day:first-of-type {
+  margin-top: 0;
+}
+
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--sp-4);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* A dot on the rule. Filled means it happened; hollow means it is scheduled.
+   Shape carries that, not colour — the same rule as the money figures. */
+.tl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tl::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--sp-4) - 4px);
+  top: 0.4em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.tl--done::before {
+  background: var(--border-strong);
+}
+
+/* An event where the agent actually decided something gets the accent. There
+   is one of these a day and it is the one to read. */
+.tl--act::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.tl--now::before {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tl-time {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.tl-text {
+  font-size: var(--t-sm);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+.tl--act .tl-text,
+.tl--now .tl-text {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* --- Glossary preview -------------------------------------------------------- */
+
+.glossary-preview {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.glossary-preview dt {
+  font-weight: 600;
+  font-size: var(--t-sm);
+}
+
+.glossary-preview dd {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+@media (max-width: 62rem) {
+  .status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .timeline {
+    position: static;
+  }
+}
+
+@media (max-width: 40rem) {
+  .hero {
+    padding-top: var(--sp-6);
+  }
+
+  .scoreboard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-4);
+  }
 }

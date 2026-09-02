@@ -57,6 +57,12 @@ export const routes: Routes = [
     path: 'journal',
     loadComponent: () => import('./features/journal/journal-view').then((m) => m.JournalView),
   },
+  // The design system on real content. Kept out of the nav: it is a working
+  // surface, not a page anyone should land on.
+  {
+    path: 'preview',
+    loadComponent: () => import('./features/preview/preview-view').then((m) => m.PreviewView),
+  },
   {
     path: 'settings',
     loadComponent: () => import('./features/settings/settings-view').then((m) => m.SettingsView),

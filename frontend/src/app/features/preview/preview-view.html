@@ -1,0 +1,227 @@
+<div class="preview-note">
+  <strong>Design preview.</strong> Every figure below is invented. This page exists so the type,
+  palette and hierarchy can be judged on real shapes before the site is built on them.
+</div>
+
+<section class="page">
+  <!-- 1. The hero, with the working footnote. -->
+  <header class="hero">
+    <p class="hero-eyebrow">A public experiment · day 14</p>
+    <h1 class="hero-title">
+      What does an autonomous AI agent<button
+        class="fn-mark"
+        type="button"
+        aria-label="What the guardrails are"
+      >
+        *
+      </button>
+      do with <span class="hero-figure">$10,000</span>?
+    </h1>
+    <p class="hero-lede">
+      An AI agent has a simulated brokerage account, a fixed budget, and a bill for every piece of
+      research it orders. It decides what to study, what to buy, what to sell, and when to give up
+      on a name.
+    </p>
+    <p class="hero-lede hero-lede--strong">
+      Nobody helps it. There is no button on this site that adds a ticker, starts an analysis, or
+      places a trade.
+    </p>
+
+    <div class="guardrails">
+      <p class="guardrails-label">* with guardrails to keep it in bounds</p>
+      <div class="guardrails-cols">
+        <div>
+          <p class="guardrails-head">It chooses</p>
+          <ul>
+            <li>Which tickers to study, and pays $0.05 for each</li>
+            <li>What to buy and sell, and how much</li>
+            <li>Where to put its stop and target</li>
+            <li>Which names to stop watching</li>
+          </ul>
+        </div>
+        <div>
+          <p class="guardrails-head">It cannot</p>
+          <ul>
+            <li>Trade on margin, or short anything</li>
+            <li>Touch crypto, options or futures</li>
+            <li>Spend more cash than it holds</li>
+            <li>Reach a real account, ever</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. The disclaimer, where it is seen rather than buried. -->
+  <p class="disclaimer">
+    <strong>No real money is involved.</strong> Every order goes to a sandbox account and the agent
+    refuses to run at all without it. <strong>Nothing here is financial advice.</strong>
+  </p>
+
+  <!-- 3. The money. Equity curve first, then the account, then the holdings. -->
+  <section class="status">
+    <div class="status-main">
+      <div class="scoreboard">
+        <div class="scoreboard-main">
+          <span class="scoreboard-label">The account today</span>
+          <span class="scoreboard-value money">$10,243</span>
+          <span class="scoreboard-delta money money--pos">2.4% on the $10,000 it started with</span>
+        </div>
+        <dl class="scoreboard-facts">
+          <div>
+            <dt>Cash</dt>
+            <dd class="money">$1,204</dd>
+          </div>
+          <div>
+            <dt>In positions</dt>
+            <dd class="money">$9,039</dd>
+          </div>
+          <div>
+            <dt>Realized</dt>
+            <dd class="money money--pos">$118.40</dd>
+          </div>
+          <div>
+            <dt>Research spent</dt>
+            <dd class="money">$8.40</dd>
+          </div>
+        </dl>
+      </div>
+
+      <figure class="chart-figure">
+        <figcaption>
+          <span class="chart-title">Equity, day by day</span>
+          <span class="chart-note">
+            Against the $10,000 it began with. Green above that line, red below.
+          </span>
+        </figcaption>
+        <app-equity-chart [points]="curve()" [baseline]="10000" />
+      </figure>
+
+      <section class="card">
+        <div class="card-head"><h2>What it holds</h2></div>
+        <div class="table-wrap">
+          <table class="data-table data-table--stack">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th class="num">Shares</th>
+                <th class="num">Avg cost</th>
+                <th class="num">Invested</th>
+                <th class="num">Price</th>
+                <th class="num">Held</th>
+                <th class="num">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (h of holdings; track h.ticker) {
+                <tr>
+                  <td class="ticker-cell" data-label="">{{ h.ticker }}</td>
+                  <td class="num money" data-label="Shares">{{ h.shares }}</td>
+                  <td class="num money" data-label="Avg cost">${{ h.avgCost.toFixed(2) }}</td>
+                  <td class="num money" data-label="Invested">${{ h.invested.toFixed(2) }}</td>
+                  <td class="num money" data-label="Price">${{ h.price.toFixed(2) }}</td>
+                  <td class="num money" data-label="Held">{{ h.days }}d</td>
+                  <td
+                    class="num money"
+                    data-label="P&L"
+                    [class.money--pos]="h.pnl >= 0"
+                    [class.money--neg]="h.pnl < 0"
+                  >
+                    {{ signed(h.pnl) }} <span class="muted">{{ pct(h.pnl, h.invested) }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 4. The two-day timeline. -->
+    <aside class="timeline" aria-label="What happened and what is next">
+      <h2 class="timeline-title">The rhythm</h2>
+
+      <p class="timeline-day">Friday 29 August · last trading day</p>
+      <ol class="timeline-list">
+        <li class="tl tl--done">
+          <span class="tl-time">11:00</span>
+          <span class="tl-text">Analysed 12 tickers. Charged $0.60.</span>
+        </li>
+        <li class="tl tl--done">
+          <span class="tl-time">12:45</span>
+          <span class="tl-text">Regime read risk-on. VIX 16.7.</span>
+        </li>
+        <li class="tl tl--done tl--act">
+          <span class="tl-time">13:35</span>
+          <span class="tl-text">Bought 4 NVDA. Sold 2 AAPL. Dropped CRM.</span>
+        </li>
+        <li class="tl tl--done">
+          <span class="tl-time">21:30</span>
+          <span class="tl-text">Graded 2 signals. One beat SPY.</span>
+        </li>
+      </ol>
+
+      <p class="timeline-day">Monday 1 September · today</p>
+      <ol class="timeline-list">
+        <li class="tl tl--done">
+          <span class="tl-time">11:00</span>
+          <span class="tl-text">Analysed 12 tickers. Charged $0.60.</span>
+        </li>
+        <li class="tl tl--now">
+          <span class="tl-time">12:45</span>
+          <span class="tl-text">Regime check</span>
+        </li>
+        <li class="tl">
+          <span class="tl-time">13:00</span>
+          <span class="tl-text">Earnings check</span>
+        </li>
+        <li class="tl tl--act">
+          <span class="tl-time">13:35</span>
+          <span class="tl-text">It decides</span>
+        </li>
+        <li class="tl">
+          <span class="tl-time">21:30</span>
+          <span class="tl-text">Grading, then the journal</span>
+        </li>
+      </ol>
+    </aside>
+  </section>
+
+  <!-- 5. The agent's own words, and a tool error. -->
+  <section class="card">
+    <div class="card-head"><h2>What it said</h2></div>
+    <div class="card-body stack">
+      <blockquote class="quote">
+        NVDA's momentum is intact and the analyst put the stop well below the recent low, so the
+        risk is bounded. Trimming AAPL frees the cash without closing the position.
+      </blockquote>
+      <pre class="verbatim"
+        >{{ '{' }}"reasoning": "...", "orders": [
+  {{ '{' }}"ticker": "NVDA", "side": "buy", "quantity": 4, "reason": "momentum intact"{{ '}' }},
+  {{ '{' }}"side": "note", "reason": "I would decide better with forward earnings estimates."{{
+          '}'
+        }}
+]{{ '}' }}</pre>
+      <div class="agent-note">
+        <p class="agent-note-label">The agent asked for something</p>
+        <p class="agent-note-text">I would decide better with forward earnings estimates.</p>
+        <p class="hint">Nothing acts on this automatically.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Terms, as the tooltip content will read. -->
+  <section class="card">
+    <div class="card-head"><h2>Words that need explaining</h2></div>
+    <div class="card-body">
+      <dl class="glossary-preview">
+        @for (t of terms; track t[0]) {
+          <div>
+            <dt>{{ t[0] }}</dt>
+            <dd>{{ t[1] }}</dd>
+          </div>
+        }
+      </dl>
+    </div>
+  </section>
+</section>

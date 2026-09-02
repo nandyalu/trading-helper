@@ -1,0 +1,321 @@
+/* ==========================================================================
+   Design tokens — editorial research
+   --------------------------------------------------------------------------
+   This site is a published experiment, not a tool anyone operates. The palette
+   and the type say so before a word is read: warm paper rather than clinical
+   white, a serif for anything that makes a claim, and figures set in a face
+   with real tabular numerals.
+
+   **The chart colours were computed, not chosen.** Every categorical set below
+   passed the six checks — lightness band, chroma floor, colourblind separation,
+   normal-vision floor, and contrast against its own surface. An earlier,
+   hand-picked "restrained" set failed three of them: the colours that felt
+   tastefully muted read as grey to the validator, and two of them were
+   indistinguishable to a deuteranope. Restraint belongs in the chrome. A chart
+   series needs real chroma to do its job.
+
+   Re-run before changing any of them:
+     node scripts/validate_palette.js "<hex,hex,...>" --mode light --surface "#faf9f6"
+   ========================================================================== */
+
+:root {
+  /* --- Surfaces -----------------------------------------------------------
+     Warm rather than neutral. A cool grey ground reads as software; a warm one
+     reads as paper, which is the whole argument this design is making. */
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --surface-2: #f4f2ec;
+  --surface-3: #ebe8df;
+  --border: #e3dfd4;
+  --border-strong: #cec9ba;
+
+  /* Ink, also warm. Pure black on warm paper looks like a printing error. */
+  --text: #17150f;
+  --text-muted: #5b564a;
+  --text-faint: #8a8478;
+
+  /* One accent for anything interactive, and nothing else uses it. Deeper than
+     the chart's blue so a link never competes with a data series. */
+  --accent: #1f4b8f;
+  --accent-hover: #163a70;
+  --accent-soft: #e8eef8;
+  --on-accent: #ffffff;
+
+  /* --- Money ---------------------------------------------------------------
+     **These two must never be the only difference between two figures.**
+     The validator puts this pair at ΔE 6.7–7.8 for deuteranopia and
+     protanopia — the floor band. Roughly one man in twelve cannot separate
+     them. Every gain or loss therefore also carries a sign or an arrow, and
+     `.money` below enforces the tabular figures that make a column scannable
+     without relying on colour at all. */
+  --pos: #0f7a4d;
+  --pos-soft: #e4f2ea;
+  --neg: #c0392b;
+  --neg-soft: #fbeae8;
+  --warn: #9a6508;
+  --warn-soft: #fbf1de;
+  --info-soft: var(--accent-soft);
+
+  /* --- Chart series (validated; see the header) ---------------------------- */
+  --series-1: #2a6fd6;
+  --series-2: #d9622a;
+  --series-3: #0f9e6a;
+  --series-4: #8e44ad;
+  --series-5: #a67c0d;
+  --series-6: #4a3aa7;
+  /* Grid and axis stay recessive: the data is the ink, the frame is not. */
+  --chart-grid: #ece9e0;
+  --chart-axis: #b8b2a4;
+
+  /* --- Type ----------------------------------------------------------------
+     Three faces, each with one job. Newsreader makes claims, Inter carries
+     data, JetBrains Mono shows what the model was actually given. */
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* A modular scale at roughly 1.25, so sizes relate instead of being picked. */
+  --t-xs: 0.75rem;
+  --t-sm: 0.875rem;
+  --t-base: 1rem;
+  --t-md: 1.125rem;
+  --t-lg: 1.375rem;
+  --t-xl: 1.75rem;
+  --t-2xl: 2.25rem;
+  --t-3xl: 3rem;
+  --t-display: clamp(2.25rem, 5.5vw, 4rem);
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-normal: 1.6;
+  --lh-loose: 1.75;
+
+  /* Prose stops at a readable measure no matter how wide the window gets.
+     A 200-character line is unreadable however good the typeface is. */
+  --measure: 68ch;
+  --measure-narrow: 54ch;
+
+  --shadow-sm: 0 1px 2px rgb(23 21 15 / 5%);
+  --shadow-md: 0 4px 12px -2px rgb(23 21 15 / 8%);
+  --shadow-lg: 0 18px 40px -12px rgb(23 21 15 / 16%);
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+  --sp-8: 4.5rem;
+
+  /* The old fixed sidebar still uses this. Phase 1 replaces that shell with a
+     top navigation and both tokens go with it. */
+  --sidebar-w: 15rem;
+  --topbar-h: 4rem;
+  --page-max: 78rem;
+
+  color-scheme: light dark;
+}
+
+/* --- Dark ------------------------------------------------------------------
+   Selected, not flipped. The series are the same six hues re-stepped into the
+   dark lightness band (0.48–0.67) and re-validated against this surface — an
+   automatic inversion put five of them outside the band and two below the
+   contrast floor.
+
+   Declared twice because CSS cannot share one block between a media query and
+   an attribute selector. A token added to one and not the other is a bug that
+   only appears for half the readers. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #12110e;
+    --surface: #1a1815;
+    --surface-2: #23201b;
+    --surface-3: #2e2a24;
+    --border: #2e2a24;
+    --border-strong: #453f36;
+
+    --text: #f0ece3;
+    --text-muted: #a8a294;
+    --text-faint: #7a7466;
+
+    --accent: #6f9ee8;
+    --accent-hover: #8fb4ee;
+    --accent-soft: #1c2738;
+    --on-accent: #10141c;
+
+    --pos: #2a9d6a;
+    --pos-soft: #142a20;
+    --neg: #e05a4a;
+    --neg-soft: #2e1917;
+    --warn: #d1a52e;
+    --warn-soft: #2b2314;
+
+    --series-1: #4e8ddd;
+    --series-2: #d96733;
+    --series-3: #18a876;
+    --series-4: #a866c8;
+    --series-5: #b08811;
+    --series-6: #7a6ae0;
+    --chart-grid: #262219;
+    --chart-axis: #59533f;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 50%);
+    --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 65%);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #12110e;
+  --surface: #1a1815;
+  --surface-2: #23201b;
+  --surface-3: #2e2a24;
+  --border: #2e2a24;
+  --border-strong: #453f36;
+
+  --text: #f0ece3;
+  --text-muted: #a8a294;
+  --text-faint: #7a7466;
+
+  --accent: #6f9ee8;
+  --accent-hover: #8fb4ee;
+  --accent-soft: #1c2738;
+  --on-accent: #10141c;
+
+  --pos: #2a9d6a;
+  --pos-soft: #142a20;
+  --neg: #e05a4a;
+  --neg-soft: #2e1917;
+  --warn: #d1a52e;
+  --warn-soft: #2b2314;
+
+  --series-1: #4e8ddd;
+  --series-2: #d96733;
+  --series-3: #18a876;
+  --series-4: #a866c8;
+  --series-5: #b08811;
+  --series-6: #7a6ae0;
+  --chart-grid: #262219;
+  --chart-axis: #59533f;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 50%);
+  --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 65%);
+}
+
+/* ==========================================================================
+   Typographic primitives
+   ========================================================================== */
+
+/* Anything that makes a claim wears the serif. Headings, pull quotes, the
+   hero. Data and controls stay in Inter, which is better at small sizes and
+   has the tabular figures a column of money needs. */
+.display,
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.011em;
+}
+
+h1 {
+  font-size: var(--t-2xl);
+}
+h2 {
+  font-size: var(--t-lg);
+}
+h3 {
+  font-size: var(--t-md);
+}
+
+/* Prose that is meant to be read, not scanned. */
+.prose-measure {
+  max-width: var(--measure);
+}
+
+.lede {
+  font-size: var(--t-md);
+  line-height: var(--lh-loose);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+/* --- Money -----------------------------------------------------------------
+   Tabular figures so a column aligns on the decimal point, and a sign that is
+   part of the text rather than implied by the colour. `.money` is the only
+   correct way to render a gain or a loss on this site. */
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.money--pos {
+  color: var(--pos);
+}
+
+.money--neg {
+  color: var(--neg);
+}
+
+/* The arrow is the secondary encoding the validator requires. It is generated
+   content so it can never be forgotten at a call site, and it is hidden from
+   screen readers because the sign is already in the number. */
+.money--pos::before,
+.money--neg::before {
+  margin-right: 0.15em;
+  font-size: 0.8em;
+  speak: never;
+}
+
+.money--pos::before {
+  content: '▲';
+}
+
+.money--neg::before {
+  content: '▼';
+}
+
+/* Verbatim model input and output. Monospace, and never wrapped in a way that
+   changes what the model was given. */
+.verbatim,
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* ==========================================================================
+   Motion
+   ========================================================================== */
+
+/* Every transition on this site is a nicety. A reader who has asked for less
+   motion gets none, rather than a shortened version of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A focus ring that is visible on both grounds and never removed. Keyboard
+   navigation is not an accessibility extra here — it is how anyone reads a
+   long page of data. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
