@@ -32,7 +32,10 @@
   /* Ink, also warm. Pure black on warm paper looks like a printing error. */
   --text: #17150f;
   --text-muted: #5b564a;
-  --text-faint: #8a8478;
+  /* Clears 4.5:1 on every surface it appears on. The lighter shade this
+     replaced sat at 3.3–3.7, which is fine for large text and not for the
+     eyebrows, timestamps and column labels this is actually used on. */
+  --text-faint: #736d60;
 
   /* One accent for anything interactive, and nothing else uses it. Deeper than
      the chart's blue so a link never competes with a data series. */
@@ -52,7 +55,19 @@
   --pos-soft: #e4f2ea;
   --neg: #c0392b;
   --neg-soft: #fbeae8;
-  --warn: #9a6508;
+
+  /* **The chart's green and red are separate tokens, and that is not
+     duplication.** A number in prose has to clear 4.5:1 against its
+     background, which on a dark ground pushes the red lighter. A chart mark
+     has to sit inside a lightness band and stay separable to a colourblind
+     reader, which pushes it back down. One value cannot satisfy both, and
+     picking either one alone fails a real reader.
+
+     In light mode the two happen to agree. In dark mode they do not, and the
+     dark block below is where the difference is. */
+  --chart-pos: #0f7a4d;
+  --chart-neg: #c0392b;
+  --warn: #8d5c07;
   --warn-soft: #fbf1de;
   --info-soft: var(--accent-soft);
 
@@ -148,7 +163,7 @@
 
     --text: #f0ece3;
     --text-muted: #a8a294;
-    --text-faint: #7a7466;
+    --text-faint: #948d7e;
 
     --accent: #6f9ee8;
     --accent-hover: #8fb4ee;
@@ -156,8 +171,10 @@
     --on-accent: #10141c;
 
     --pos: #2a9d6a;
+    --chart-pos: #2a9d6a;
+    --chart-neg: #e05a4a;
     --pos-soft: #142a20;
-    --neg: #e05a4a;
+    --neg: #e8695a;
     --neg-soft: #2e1917;
     --warn: #d1a52e;
     --warn-soft: #2b2314;
@@ -187,7 +204,7 @@
 
   --text: #f0ece3;
   --text-muted: #a8a294;
-  --text-faint: #7a7466;
+  --text-faint: #948d7e;
 
   --accent: #6f9ee8;
   --accent-hover: #8fb4ee;
@@ -195,8 +212,10 @@
   --on-accent: #10141c;
 
   --pos: #2a9d6a;
+  --chart-pos: #2a9d6a;
+  --chart-neg: #e05a4a;
   --pos-soft: #142a20;
-  --neg: #e05a4a;
+  --neg: #e8695a;
   --neg-soft: #2e1917;
   --warn: #d1a52e;
   --warn-soft: #2b2314;

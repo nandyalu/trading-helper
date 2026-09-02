@@ -132,8 +132,11 @@ export class EquityChart {
 
   private seriesOptions() {
     const css = getComputedStyle(document.body);
-    const pos = css.getPropertyValue('--pos').trim();
-    const neg = css.getPropertyValue('--neg').trim();
+    // The chart's own pair, not the text pair. A number in prose needs 4.5:1
+    // contrast, which on a dark ground pushes the red lighter than the chart's
+    // lightness band allows — so the two are separate tokens. See theme.css.
+    const pos = css.getPropertyValue('--chart-pos').trim();
+    const neg = css.getPropertyValue('--chart-neg').trim();
     return {
       baseValue: { type: 'price' as const, price: this.baseline() },
       topLineColor: pos,
