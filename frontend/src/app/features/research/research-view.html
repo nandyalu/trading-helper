@@ -17,6 +17,17 @@
     choice.
   </p>
 
+  @if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The research record could not be read</strong>
+      <span>
+        The app is up but the API did not answer. Every analysis is stored — this page will show
+        them again shortly.
+      </span>
+    </div>
+  }
+
   <!-- The watchlist: what it pays for. -->
   <section class="card">
     <div class="card-head">

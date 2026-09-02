@@ -14,6 +14,15 @@
   @if (loading()) {
     <div class="skeleton" style="height: 10rem"></div>
     <div class="skeleton" style="height: 10rem"></div>
+  } @else if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The decision record could not be read</strong>
+      <span>
+        The app is up but the API did not answer. Every pass is stored — this page will show them
+        again shortly.
+      </span>
+    </div>
   } @else if (!events().length) {
     <div class="empty">
       <p>No decision passes recorded yet.</p>

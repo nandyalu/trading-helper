@@ -220,6 +220,15 @@
         </div>
       </section>
     </div>
+  } @else if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The scorecard could not be read</strong>
+      <span>
+        The app is up but the API did not answer. Nothing is lost — the grades are stored, and this
+        page will show them again shortly.
+      </span>
+    </div>
   } @else {
     <div class="stat-grid" aria-hidden="true">
       <div class="skeleton skeleton-card"></div>

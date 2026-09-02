@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { DecisionStats } from '../../core/models/api.models';
@@ -100,8 +100,14 @@ export class ScorecardView {
     };
   });
 
+  /** True when the scorecard could not be fetched at all. Distinct from
+   * "nothing graded yet", which is a real answer — a page that shows a
+   * skeleton forever because a request failed is telling the reader nothing
+   * and looks broken. */
+  protected readonly failed = signal(false);
+
   constructor() {
-    void this.scorecardService.load();
+    void this.scorecardService.load().catch(() => this.failed.set(true));
   }
 
   /** A percentage-point gap, signed. Positive means the model claimed more

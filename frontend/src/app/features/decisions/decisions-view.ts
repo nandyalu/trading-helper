@@ -54,8 +54,16 @@ export class DecisionsView {
   /** Which panels are open, keyed `${id}:prompt` / `${id}:response`. */
   private readonly open = signal<Set<string>>(new Set());
 
+  /** True when the page's own data could not be fetched. Distinct from "there
+   * is nothing yet", which is a real answer — a skeleton that never resolves
+   * tells the reader nothing and looks broken. */
+  protected readonly failed = signal(false);
+
   constructor() {
-    void this.agent.loadEvents().finally(() => this.loading.set(false));
+    void this.agent
+      .loadEvents()
+      .catch(() => this.failed.set(true))
+      .finally(() => this.loading.set(false));
   }
 
   isOpen(id: number, which: 'prompt' | 'response'): boolean {

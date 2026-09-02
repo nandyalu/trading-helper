@@ -49,9 +49,14 @@ export class ResearchView {
    * The agent is shown this same figure; a reader should see what it sees. */
   protected readonly dailyCost = computed(() => this.tickers().length * 0.05);
 
+  /** True when the page's own data could not be fetched. Distinct from "there
+   * is nothing yet", which is a real answer — a skeleton that never resolves
+   * tells the reader nothing and looks broken. */
+  protected readonly failed = signal(false);
+
   constructor() {
-    void this.tickersService.load();
-    void this.reloadSignals();
+    void this.tickersService.load().catch(() => this.failed.set(true));
+    void this.reloadSignals().catch(() => this.failed.set(true));
     // Not awaited with the rest: it calls the screener and is slower, and the
     // page should show what is already tracked first.
     void this.watchlistService.loadCandidates().catch(() => {});

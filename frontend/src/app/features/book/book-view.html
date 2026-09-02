@@ -14,6 +14,17 @@
     advice.
   </p>
 
+  @if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The book could not be read</strong>
+      <span>
+        The app is up but the API did not answer. Nothing is lost — the ledger is stored, and this
+        page will show it again shortly.
+      </span>
+    </div>
+  }
+
   @if (book(); as b) {
     @if (!b.sandbox) {
       <p class="notice notice-warn">

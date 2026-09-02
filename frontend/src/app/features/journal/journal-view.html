@@ -55,6 +55,17 @@
     </section>
   }
 
+  @if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The journal could not be read</strong>
+      <span>
+        The app is up but the API did not answer. Every entry is stored — this page will show them
+        again shortly.
+      </span>
+    </div>
+  }
+
   @if (loading()) {
     <div class="skeleton" style="height: 8rem"></div>
     <div class="skeleton" style="height: 8rem"></div>

@@ -68,8 +68,13 @@ export class BookView {
     return this.restingStops().filter((t) => !held.has(t.ticker));
   });
 
+  /** True when the page's own data could not be fetched. Distinct from "there
+   * is nothing yet", which is a real answer — a skeleton that never resolves
+   * tells the reader nothing and looks broken. */
+  protected readonly failed = signal(false);
+
   constructor() {
-    void this.agentService.load();
+    void this.agentService.load().catch(() => this.failed.set(true));
   }
 
   /** Signed percentage against the budget, so the row reads the same way as

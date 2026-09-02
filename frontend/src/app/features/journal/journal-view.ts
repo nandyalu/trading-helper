@@ -35,9 +35,14 @@ export class JournalView {
   readonly digest = this.digestService.digest;
   readonly loading = signal(true);
 
+  /** True when the journal itself could not be fetched. The digest failing is
+   * survivable — it is a summary of what is below it — but with no entries at
+   * all the page has nothing to say and must say why. */
+  readonly failed = signal(false);
+
   constructor() {
     void Promise.all([
-      this.agent.loadJourney(10),
+      this.agent.loadJourney(10).catch(() => this.failed.set(true)),
       // Never allowed to fail the page. The digest is a summary of what is
       // below it; a week that cannot be summarised should still show its days.
       this.digestService.load().catch(() => {}),
