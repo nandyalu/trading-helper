@@ -224,8 +224,7 @@ class DigestOut(OrmModel):
     alerts: list[AlertOut]
     win_rate_30d: tuple[int, int]
     win_rate_all: tuple[int, int]
-    real_book_line: str | None
-    paper_lines: list[str]
+    book_lines: list[str]
 
 
 class RegimeOut(OrmModel):

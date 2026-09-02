@@ -1,4 +1,5 @@
 """Unit tests for the pure formatting in backend/services/digest.py."""
+import dataclasses
 import datetime
 
 from backend.services.digest import DigestData, format_digest_embed
@@ -70,3 +71,27 @@ def test_resolved_list_truncates_at_ten():
     embed = format_digest_embed(data)
     resolved_field = next(f for f in embed.fields if f.name == "Signals resolved this week")
     assert "…and 3 more" in resolved_field.value
+
+
+def test_the_response_schema_matches_what_the_service_builds():
+    """DigestOut must be constructible from DigestData, field for field.
+
+    **This is the shape of bug it exists to catch.** When the two books were
+    removed, `DigestData` lost `real_book_line` and `paper_lines` and gained
+    `book_lines`. `DigestOut` kept the old two, so `/api/digest` returned a 500
+    on every request — and nothing failed, because no test ever built the
+    response model from the dataclass.
+    """
+    from backend.api.schemas import DigestOut
+
+    built = {f.name for f in dataclasses.fields(DigestData)}
+    required = {
+        name
+        for name, field in DigestOut.model_fields.items()
+        if field.is_required()
+    }
+    missing = required - built
+    assert not missing, (
+        f"DigestOut requires {sorted(missing)}, which gather_digest does not build. "
+        "The endpoint would 500."
+    )
