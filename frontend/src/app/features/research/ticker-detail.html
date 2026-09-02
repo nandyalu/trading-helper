@@ -34,6 +34,9 @@
         that will execute.
         @if (agentPosition()?.arm_queued) {
           <strong>Queued — the exits go on at the next open.</strong>
+        } @else if (isPublic()) {
+          <!-- The published copy states the fact and offers no button: the
+               backend refuses the write, so a button here would only fail. -->
         } @else {
           <button class="btn btn-sm" type="button" (click)="armExits()" [disabled]="arming()">
             {{ arming() ? 'Placing…' : 'Place the exits' }}

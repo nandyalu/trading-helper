@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { Lot, Signal, TickerDetail, TickerEvents } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { TickersService } from '../../core/services/tickers.service';
 import { WatchlistService } from '../../core/services/watchlist.service';
 import { DecisionBadge } from '../../shared/decision-badge';
@@ -31,12 +32,17 @@ interface TimelineEntry {
 export class TickerDetailPage {
   private readonly route = inject(ActivatedRoute);
   private readonly agentService = inject(AgentService);
+  private readonly settingsService = inject(SettingsService);
   private readonly tickersService = inject(TickersService);
   private readonly watchlistService = inject(WatchlistService);
 
   protected readonly ticker = signal(this.route.snapshot.paramMap.get('ticker') ?? '');
   protected readonly detail = signal<TickerDetail | null>(null);
   protected readonly events = signal<TickerEvents | null>(null);
+  /** True on the published copy. Hides the arm-exits button, which is the one
+   * write this app still has. The backend refuses it either way — this removes
+   * a control that would only ever return 403. */
+  protected readonly isPublic = signal(false);
   protected readonly arming = signal(false);
   protected readonly armMessage = signal<string | null>(null);
   // 30 days, matching the 1-2 week trade horizon: the window a signal is
@@ -145,6 +151,10 @@ export class TickerDetailPage {
 
   constructor() {
     void this.refresh();
+    void this.settingsService
+      .load()
+      .then(() => this.isPublic.set(this.settingsService.settings()?.public ?? false))
+      .catch(() => this.isPublic.set(false));
   }
 
   private signalDetail(s: Signal): string {
