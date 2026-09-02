@@ -21,7 +21,13 @@ Old paths redirect rather than 404. Links to them exist in Discord posts and in 
 
 `PUBLIC_MODE=1` makes the backend refuse every write, so the site can be put on a public domain — behind a Cloudflare tunnel, say — without exposing the settings that choose the model and the budget, or the endpoint that places exit orders.
 
-**It is middleware, not a per-route check and not a hidden button.** A per-route check protects only the routes somebody remembered to annotate. Hiding a link stops nobody who can type a URL. The middleware refuses any method other than GET, HEAD or OPTIONS, which covers the route added next year by someone who never read this page.
+It does two things, and the second matters more than the first.
+
+**Every write is refused.** This is middleware, not a per-route check and not a hidden button. A per-route check protects only the routes somebody remembered to annotate. Hiding a link stops nobody who can type a URL. The middleware refuses any method other than GET, HEAD or OPTIONS, which covers the route added next year by someone who never read this page.
+
+**Nothing runs.** No scheduler, no Discord, no trade stream. The published site is a second container over the same database, and if it also ran the scheduler there would be two agents deciding on one book — two sweeps paying twice for the same research, two decision passes at 13:35, two sets of orders at the broker against one ledger. **None of that arrives as an HTTP request**, so refusing writes would not have stopped any of it. So PUBLIC_MODE means one thing said two ways: this copy does not act.
+
+Point the tunnel at the public container, not the private one. `dockge/trading-bot.compose.yaml` has both, with the public one bound to loopback so the tunnel reaches it and the LAN does not. Mount the volume read-write for it: SQLite writes its `-wal` and `-shm` sidecars even to read, and a read-only mount fails to open the database at all. The guarantee is PUBLIC_MODE, not the mount flag.
 
 The frontend reads the flag only to drop the Settings link and the arm-exits button. A failure to read it leaves both showing — the backend still refuses, so the worst case is a dead end rather than a hole.
 

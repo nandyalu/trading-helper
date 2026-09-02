@@ -40,6 +40,27 @@ _SITE_DIR = _BASE_DIR / "site"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Start the scheduler, Discord and the trade stream — unless this is the
+    published copy, which observes and never acts.
+
+    **This is the half of PUBLIC_MODE that matters most, and it is not about
+    the API at all.** The published copy is a second container over the same
+    database. If it also ran the scheduler there would be two agents deciding
+    on one book: two sweeps paying twice for the same research, two decision
+    passes at 13:35, and two sets of orders at the broker against one ledger.
+    The refused writes would not stop any of it, because none of it arrives as
+    an HTTP request.
+
+    So PUBLIC_MODE means one thing said two ways: this copy does not act. It
+    refuses writes, and it runs no jobs, posts nothing to Discord, and holds no
+    trade-event subscription — the last of which also matters because Webull
+    allows one per app key, and a second subscriber is refused outright.
+    """
+    if publish.is_public():
+        log.info("PUBLIC_MODE — serving reads only: no scheduler, no Discord, no trade stream")
+        yield
+        return
+
     register_jobs()
     scheduler.start()
     await start_discord()

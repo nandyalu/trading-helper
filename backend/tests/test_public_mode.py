@@ -85,3 +85,68 @@ def test_writes_are_allowed_when_private(client):
 def test_the_settings_payload_says_which_copy_this_is(client):
     assert client(True).get("/api/settings").json()["public"] is True
     assert client(False).get("/api/settings").json()["public"] is False
+
+
+# --- the half that is not about HTTP at all ------------------------------------
+
+
+def test_the_published_copy_runs_no_jobs(monkeypatch):
+    """Two containers over one database must not both run the agent.
+
+    This is the half of PUBLIC_MODE that matters most. A second copy running
+    the scheduler would sweep twice — paying twice for the same research — and
+    decide twice at 13:35, placing two sets of orders against one ledger. None
+    of that arrives as an HTTP request, so refusing writes would not stop any
+    of it.
+    """
+    import asyncio
+
+    monkeypatch.setenv("PUBLIC_MODE", "1")
+    started = []
+    monkeypatch.setattr("backend.app.register_jobs", lambda: started.append("jobs"))
+    monkeypatch.setattr("backend.app.scheduler.start", lambda: started.append("scheduler"))
+    monkeypatch.setattr("backend.app.trade_stream.start", lambda: started.append("stream"))
+
+    async def fake_discord():
+        started.append("discord")
+
+    monkeypatch.setattr("backend.app.start_discord", fake_discord)
+
+    from backend.app import lifespan
+
+    async def run():
+        async with lifespan(None):
+            pass
+
+    asyncio.run(run())
+    assert started == []
+
+
+def test_the_private_copy_starts_everything(monkeypatch):
+    import asyncio
+
+    monkeypatch.delenv("PUBLIC_MODE", raising=False)
+    started = []
+    monkeypatch.setattr("backend.app.register_jobs", lambda: started.append("jobs"))
+    monkeypatch.setattr("backend.app.scheduler.start", lambda: started.append("scheduler"))
+    monkeypatch.setattr("backend.app.scheduler.shutdown", lambda: None)
+    monkeypatch.setattr("backend.app.trade_stream.start", lambda: started.append("stream"))
+    monkeypatch.setattr("backend.app.trade_stream.stop", lambda: None)
+
+    async def fake_start():
+        started.append("discord")
+
+    async def fake_stop():
+        pass
+
+    monkeypatch.setattr("backend.app.start_discord", fake_start)
+    monkeypatch.setattr("backend.app.stop_discord", fake_stop)
+
+    from backend.app import lifespan
+
+    async def run():
+        async with lifespan(None):
+            pass
+
+    asyncio.run(run())
+    assert set(started) == {"jobs", "scheduler", "stream", "discord"}
