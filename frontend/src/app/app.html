@@ -207,108 +207,137 @@
   </symbol>
 </svg>
 
-<div class="shell">
-  <aside class="sidebar" [class.open]="drawerOpen()">
+<!-- The shell.
+     A top navigation, not a sidebar. A fixed left rail is what a tool looks
+     like, and this is a publication: the reading column gets the width, and
+     the destinations sit above it where a reader expects a masthead. -->
+<a class="skip-link" href="#main">Skip to the content</a>
+
+<header class="masthead">
+  <div class="masthead-inner">
     <a class="brand" routerLink="/">
-      <app-logo class="brand-mark" [size]="22" [frameOpacity]="0.5" />
-      Trading Helper
+      <app-logo class="brand-mark" [size]="26" [frameOpacity]="0.45" />
+      <span class="brand-text">
+        <span class="brand-name">Trading Helper</span>
+        <span class="brand-sub">a public experiment</span>
+      </span>
     </a>
 
-    <nav class="nav" aria-label="Main">
+    <nav class="topnav" aria-label="Main">
       @for (item of primaryNav; track item.path) {
         <a
-          class="nav-link"
+          class="topnav-link"
           [routerLink]="item.path"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: !!item.exact }"
+          >{{ item.label }}</a
         >
-          <svg class="nav-icon" aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
-          {{ item.label }}
-        </a>
       }
-
-      <div class="nav-group-label">The record</div>
       @for (item of recordNav; track item.path) {
-        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
-          <svg class="nav-icon" aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
-          {{ item.label }}
-        </a>
+        <a class="topnav-link" [routerLink]="item.path" routerLinkActive="active">{{
+          item.label
+        }}</a>
       }
     </nav>
 
-    <div class="sidebar-foot">
-      <!-- Dropped on the published copy, where every write is refused anyway.
-           A link to a page whose every control returns 403 is a dead end. -->
-      @if (!isPublic()) {
-        <a class="nav-link" routerLink="/settings" routerLinkActive="active">
-          <svg class="nav-icon" aria-hidden="true"><use href="#i-sliders" /></svg>
-          Settings
-        </a>
-      }
-      <a class="nav-link" href="/docs">
-        <svg class="nav-icon" aria-hidden="true"><use href="#i-book" /></svg>
-        Docs
-      </a>
-      <button class="nav-link" type="button" (click)="toggleTheme()">
+    <div class="masthead-tools">
+      <button
+        class="icon-btn"
+        type="button"
+        (click)="toggleTheme()"
+        [attr.aria-label]="theme() === 'dark' ? 'Use the light theme' : 'Use the dark theme'"
+      >
         <svg class="nav-icon" aria-hidden="true">
           <use [attr.href]="theme() === 'dark' ? '#i-sun' : '#i-moon'" />
         </svg>
-        {{ theme() === 'dark' ? 'Light theme' : 'Dark theme' }}
       </button>
-    </div>
-  </aside>
-
-  @if (drawerOpen()) {
-    <button class="scrim" type="button" aria-label="Close menu" (click)="closeDrawer()"></button>
-  }
-
-  <div class="content">
-    <header class="topbar">
       <button
-        class="btn btn-ghost btn-icon"
+        class="icon-btn menu-btn"
         type="button"
+        (click)="toggleDrawer()"
         [attr.aria-expanded]="drawerOpen()"
         aria-label="Menu"
-        (click)="toggleDrawer()"
       >
-        <svg aria-hidden="true"><use [attr.href]="drawerOpen() ? '#i-close' : '#i-menu'" /></svg>
+        <svg class="nav-icon" aria-hidden="true"><use href="#i-list" /></svg>
       </button>
-      <span class="topbar-title">{{ currentLabel() }}</span>
-      <span class="spacer"></span>
-      <button
-        class="btn btn-ghost btn-icon"
-        type="button"
-        [attr.aria-label]="theme() === 'dark' ? 'Use the light theme' : 'Use the dark theme'"
-        (click)="toggleTheme()"
-      >
-        <svg aria-hidden="true">
-          <use [attr.href]="theme() === 'dark' ? '#i-sun' : '#i-moon'" />
-        </svg>
-      </button>
-    </header>
-
-    <main>
-      <router-outlet />
-    </main>
+    </div>
   </div>
 
-  <nav class="tabbar" aria-label="Sections">
-    <div class="tabbar-inner">
-      @for (item of tabNav; track item.path) {
+  <!-- Below the masthead on a narrow screen. Everything stays reachable
+       without a drawer that hides half the site behind a tap. -->
+  @if (drawerOpen()) {
+    <nav class="drawer" aria-label="All sections">
+      @for (item of allNav(); track item.path) {
         <a
-          class="tab"
+          class="drawer-link"
           [routerLink]="item.path"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: !!item.exact }"
+          >{{ item.label }}</a
         >
-          <svg aria-hidden="true"><use [attr.href]="'#i-' + item.icon" /></svg>
-          {{ item.label }}
-        </a>
       }
-      <button class="tab" type="button" (click)="toggleDrawer()">
-        <svg aria-hidden="true"><use href="#i-menu" /></svg>
-        More
-      </button>
+      <a class="drawer-link" href="/docs">Docs</a>
+    </nav>
+  }
+</header>
+
+<main id="main">
+  <router-outlet />
+</main>
+
+<footer class="site-foot">
+  <div class="site-foot-inner">
+    <div class="foot-about">
+      <app-logo [size]="30" [frameOpacity]="0.4" />
+      <p class="foot-lede">
+        One autonomous AI agent, a simulated account, and a bill for every piece of research it
+        orders. Every decision it makes is on the record.
+      </p>
+      <!-- Said here as well as on the front page. Someone who arrives on a
+           deep link never sees the hero, and this is not a line to hide. -->
+      <p class="foot-warning">
+        <strong>No real money is involved</strong> — every order goes to a sandbox account.
+        <strong>Nothing here is financial advice.</strong>
+      </p>
     </div>
-  </nav>
-</div>
+
+    <div class="foot-cols">
+      <div>
+        <p class="foot-head">The experiment</p>
+        @for (item of primaryNav.concat(recordNav); track item.path) {
+          <a
+            [routerLink]="item.path"
+            [routerLinkActiveOptions]="{ exact: !!item.exact }"
+            routerLinkActive="active"
+            >{{ item.label }}</a
+          >
+        }
+      </div>
+
+      <div>
+        <p class="foot-head">About</p>
+        @for (item of aboutNav; track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
+        }
+        <a href="/docs">Documentation</a>
+        <a href="https://github.com/nandyalu/trading-helper" rel="noopener">Source code</a>
+      </div>
+
+      <!-- Credit where it is due. This is built on other people's work and
+           the footer is where anyone would look for that. -->
+      <div>
+        <p class="foot-head">Built on</p>
+        <a href="https://github.com/TauricResearch/TradingAgents" rel="noopener">TradingAgents</a>
+        <a href="https://developer.webull.com" rel="noopener">Webull OpenAPI</a>
+        <a href="https://ollama.com/library/gemma4" rel="noopener">Gemma 4</a>
+        <a href="https://fred.stlouisfed.org" rel="noopener">FRED</a>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot-fine">
+    An experiment by <a href="https://github.com/nandyalu" rel="noopener">nandyalu</a>, built with
+    the help of Claude Opus 5. Market data from Webull and yfinance; macro series from FRED; social
+    sentiment from Reddit.
+  </p>
+</footer>

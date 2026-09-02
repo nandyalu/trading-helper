@@ -43,6 +43,7 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.brand')?.textContent).toContain('Trading Helper');
+    expect(compiled.querySelector('.site-foot')).not.toBeNull();
   });
 
   it('reaches every page from the drawer', async () => {
@@ -50,8 +51,14 @@ describe('App', () => {
     // the drawer would be unreachable on a small screen.
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
+    // Every route has to be reachable without the top nav, which is hidden
+    // below 52rem. The drawer is the only way in on a phone.
+    const shell = fixture.componentInstance as unknown as { toggleDrawer: () => void };
+    shell.toggleDrawer();
+    fixture.detectChanges();
+
     const links = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('.sidebar a[href]'),
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.drawer a[href]'),
     ).map((a) => a.getAttribute('href'));
 
     for (const path of [
@@ -61,6 +68,9 @@ describe('App', () => {
       '/research',
       '/scorecard',
       '/journal',
+      '/idea',
+      '/method',
+      '/glossary',
       '/settings',
     ]) {
       expect(links).toContain(path);
@@ -68,19 +78,25 @@ describe('App', () => {
   });
 
   it('opens and closes the drawer', async () => {
+    // The drawer opens below the masthead rather than sliding over the page.
+    // A panel that covers what you were reading is one you close again to
+    // check where you were — so there is no scrim to dismiss any more.
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const shell = fixture.componentInstance as unknown as Shell;
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('.drawer')).toBeNull();
 
     shell.toggleDrawer();
-    await fixture.whenStable();
+    fixture.detectChanges();
     expect(shell.drawerOpen()).toBe(true);
-    expect((fixture.nativeElement as HTMLElement).querySelector('.scrim')).not.toBeNull();
+    expect(el.querySelector('.drawer')).not.toBeNull();
 
     shell.closeDrawer();
-    await fixture.whenStable();
+    fixture.detectChanges();
     expect(shell.drawerOpen()).toBe(false);
-    expect((fixture.nativeElement as HTMLElement).querySelector('.scrim')).toBeNull();
+    expect(el.querySelector('.drawer')).toBeNull();
   });
 
   it('remembers the chosen theme', async () => {
@@ -104,9 +120,12 @@ describe('App', () => {
     settings.isPublic = true;
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
+    const shell = fixture.componentInstance as unknown as { toggleDrawer: () => void };
+    shell.toggleDrawer();
+    fixture.detectChanges();
 
     const links = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('.sidebar a[href]'),
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.drawer a[href]'),
     ).map((a) => a.getAttribute('href'));
 
     expect(links).not.toContain('/settings');

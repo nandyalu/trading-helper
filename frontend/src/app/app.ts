@@ -52,6 +52,24 @@ export class App {
     { path: '/journal', label: 'Journal', icon: 'book' },
   ];
 
+  /** Context rather than data. These explain the experiment instead of
+   * reporting it, so they sit in the footer and the drawer rather than
+   * competing with the six destinations that change every day. */
+  protected readonly aboutNav: NavItem[] = [
+    { path: '/idea', label: 'The idea', icon: 'book' },
+    { path: '/method', label: 'Method', icon: 'file' },
+    { path: '/glossary', label: 'Glossary', icon: 'list' },
+  ];
+
+  /** Everything, for the narrow-screen drawer. Every route has to be reachable
+   * without a sidebar, and app.spec asserts it. */
+  protected readonly allNav = computed(() => [
+    ...this.primaryNav,
+    ...this.recordNav,
+    ...this.aboutNav,
+    ...(this.isPublic() ? [] : [{ path: '/settings', label: 'Settings', icon: 'sliders' }]),
+  ]);
+
   /** True on the published copy, where the backend refuses every write.
    *
    * It hides the Settings link, and that is all it does — the refusal itself
@@ -59,9 +77,6 @@ export class App {
    * is presentation: a link to a page whose every control returns 403 is a
    * dead end, not a security boundary. */
   protected readonly isPublic = signal(false);
-
-  /** The bottom bar holds the four primary links plus a button for the rest. */
-  protected readonly tabNav = this.primaryNav;
 
   protected readonly drawerOpen = signal(false);
   protected readonly theme = signal<'light' | 'dark'>(readStoredTheme());
@@ -73,11 +88,7 @@ export class App {
   protected readonly currentLabel = computed(() => {
     const url = this.url().split('?')[0];
     if (url === '/') return 'Overview';
-    const all = [
-      ...this.primaryNav,
-      ...this.recordNav,
-      { path: '/settings', label: 'Settings', icon: '' },
-    ];
+    const all = this.allNav();
     return (
       all.find((item) => item.path !== '/' && url.startsWith(item.path))?.label ?? 'Trading Helper'
     );

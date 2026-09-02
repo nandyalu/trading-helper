@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <title>Trading Helper</title>
+  <desc>TA drawn as an equity curve: one rule is the T bar, the A crossbar and the starting line. The T drops below it, the A rises above. The corner brackets are the guardrails.</desc>
+  <rect width="32" height="32" rx="7" fill="#17150f"/>
+  <g stroke="#faf9f645" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.5 9.5V4.3A1.8 1.8 0 0 1 4.3 2.5H9.5"/>
+    <path d="M22.5 2.5h5.2a1.8 1.8 0 0 1 1.8 1.8v5.2"/>
+    <path d="M29.5 22.5v5.2a1.8 1.8 0 0 1-1.8 1.8h-5.2"/>
+    <path d="M9.5 29.5H4.3a1.8 1.8 0 0 1-1.8-1.8v-5.2"/>
+  </g>
+  <path d="M17 23.5 21.5 8.5 26 23.5" stroke="#2a9d6a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 15.5V23.5" stroke="#e05a4a" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M6 15.5H26" stroke="#faf9f6" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
