@@ -50,6 +50,10 @@ export const routes: Routes = [
       import('./features/research/signal-detail').then((m) => m.SignalDetailPage),
   },
   {
+    path: 'idea',
+    loadComponent: () => import('./features/idea/idea-view').then((m) => m.IdeaView),
+  },
+  {
     path: 'scorecard',
     loadComponent: () => import('./features/scorecard/scorecard-view').then((m) => m.ScorecardView),
   },

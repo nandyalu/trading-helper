@@ -1,0 +1,175 @@
+<section class="page">
+  <p class="draft-note">
+    <strong>Draft.</strong> This page was assembled from the project's own notes, so it is accurate
+    but it is not yet in the builder's own words. It says "I" and it should not until that is fixed.
+  </p>
+
+  <header class="hero">
+    <div class="hero-body">
+      <p class="hero-eyebrow">The idea</p>
+      <h1 class="hero-title">I wanted something that would learn the market with me.</h1>
+      <p class="hero-lede">
+        Not a signal service, and not a bot that promises returns. Something that would read the
+        same things a careful person reads, make a call, and then be judged on it — publicly, over
+        months, without anyone quietly correcting it.
+      </p>
+    </div>
+    <app-logo class="hero-mark" [size]="200" [frameOpacity]="0.3" />
+  </header>
+
+  <div class="prose">
+    <h2>Where it started</h2>
+    <p>
+      I have wanted to build some kind of intelligence around trading for a long time. Not to get
+      rich from it — to understand it. The market is one of the few places where you can be
+      confidently, measurably wrong, and I wanted something that would be wrong in the open so I
+      could see how.
+    </p>
+    <p>
+      Then I found
+      <a href="https://github.com/TauricResearch/TradingAgents" rel="noopener">TradingAgents</a>, a
+      framework where several agents argue a stock out between them: a market analyst, a news
+      analyst, a sentiment analyst, a fundamentals analyst, a bull and a bear who debate, then a
+      trader and a risk team who decide. That was the shape I had been looking for. It was not a
+      black box giving me a number. It was a group of readers I could listen to.
+    </p>
+    <p>So I started building an app around it, on the hardware already sitting in my house.</p>
+
+    <h2>What it became</h2>
+    <p>
+      The first version helped me. It analysed a watchlist I chose, and I decided what to do about
+      it. That turned out to be the flaw. Every result was a mix of the model's judgement and mine,
+      and afterwards there was no way to separate them. If the book went up, I could not tell you
+      who was responsible.
+    </p>
+    <p>
+      So on 1 September 2026 I took myself out of it. Every manual control went: all twenty-three
+      Discord commands, every button that could add a ticker, start an analysis or place a trade.
+      The agent got an allowance of $10,000, a bill of $0.05 for every analysis it orders, and no
+      help at all.
+    </p>
+    <p>
+      That is the experiment.
+      <strong
+        >Not "can an AI make money" — that question is unanswerable at this sample size and anyone
+        claiming otherwise is selling something.</strong
+      >
+      The question is narrower and more interesting: given real data, a real cost for information,
+      and no human to lean on, what does a small model actually do?
+    </p>
+
+    <h2>The hardware</h2>
+    <p>It runs at home, on cards nobody would choose for this.</p>
+    <ul>
+      <li><strong>Seven AMD RX 6600s</strong>, 8 GiB each, one analysis per card</li>
+      <li><strong>32 GB of host RAM</strong>, which turned out to be the thing that mattered</li>
+      <li>ROCm with an override, because these chips are not officially supported</li>
+      <li>About 700 W across the pool while a sweep is running</li>
+    </ul>
+    <p>
+      Measured properly on 2 September: fourteen analyses at once take 42.8 minutes, and
+      <strong>the CPU is the bottleneck, not the GPUs.</strong> The cards sit around half busy while
+      the host CPU is pinned at 100%, because this model family keeps its per-layer embeddings in
+      host RAM. An eighth card would change nothing.
+    </p>
+
+    <h2>What I tried, and what did not work</h2>
+    <p>This is the half worth reading, and the half most projects leave out.</p>
+
+    <h3>Five models that confidently made things up</h3>
+    <p>
+      Small models are fast, and several of them cannot drive a tool-calling loop at all. They do
+      not fail loudly. They answer, fluently, having invented the data.
+      <code>llama3.2:3b</code> reported "no available market data for AAPL" and then issued a Buy
+      anyway. <code>phi4-mini</code> printed its tool call as text and made up 2023 prices for a
+      stock trading at $308.
+    </p>
+    <p>
+      The tell was not the writing, which was fine. It was the token count: they spent 42–45k prompt
+      tokens against a working model's 103k, because they never read the data there was to reason
+      over.
+    </p>
+    <p>
+      <code>lfm2.5:8b</code> broke that rule and taught me a better one. It is the fastest model
+      that has ever fit this hardware, it read 77–96k tokens, and it still invented every price —
+      from different years in different runs, which rules out a stale cache and leaves recall from
+      training. Its model card claims tool calling as a strength. Both things are true and neither
+      predicted anything here.
+    </p>
+
+    <h3>The cloud, which was faster and is still not what runs</h3>
+    <p>
+      Gemini Flash-Lite does an analysis in <strong>1.2 to 1.6 minutes</strong> against 7 to 10
+      locally. A nine-ticker sweep is eleven minutes of wall clock instead of eighty-five of GPU. It
+      is not close.
+    </p>
+    <p>
+      Two things stopped it. The whole history to date would have cost about
+      <strong>$7.49</strong> at list against <strong>$0.26</strong> of marginal electricity — but
+      that comparison only works because the server would be powered anyway, so it is not the honest
+      reason. The honest reason is the <strong>$10-a-month cap</strong> on the account, which a
+      daily full sweep exceeds. Speed was the argument for moving, and cost was never it.
+    </p>
+
+    <h3>Choosing a model that is twice as slow, on purpose</h3>
+    <p>
+      The model that runs is <code>gemma4-e4b-qat-128k</code> — a custom build of Gemma 4's 4B
+      effective model at its full 131,072-token context, entirely on the GPU in 3.7 GiB.
+    </p>
+    <p>
+      It is <strong>about twice as slow</strong> as the 2B model it replaced, and I switched to it
+      anyway. The smaller model would not use the candidate menu: shown a list of stocks it could
+      pay to research, it chose to research nothing in two runs out of four, and answered "no
+      research" three real mornings running. The bigger one picked four or five names with a stated
+      reason each, in four runs out of four.
+    </p>
+    <p>
+      Speed rules a model out. Behaviour rules it in. This agent's whole job is choosing what to
+      look at, and the faster model would not do the job.
+    </p>
+
+    <h3>The thing that still bothers me</h3>
+    <p>
+      The same ticker, on the same day, minutes apart, returns different decisions. Measured on 2
+      September across fourteen names run twice: <strong>two of twelve agreed.</strong> Three
+      flipped from bearish to bullish outright.
+    </p>
+    <p>
+      That is temperature 1, which is Gemma's own recommended setting, and it is not a defect. But
+      it means one analysis is one sample, and it puts a floor under what any prompt change can be
+      credited with. A change that moves one morning's decision has moved nothing you could detect.
+    </p>
+
+    <h2>Why it is all published</h2>
+    <p>
+      Every decision the agent makes is here, with the prompt it was given and the answer it
+      returned, word for word. So is every analysis, every graded outcome, and every change I have
+      made to it, dated and with the reason.
+    </p>
+    <p>
+      That last part is the one I would ask anyone building something like this to copy. Behaviour
+      is mostly prompt. A month of runs across three prompt revisions is three experiments with no
+      way to tell them apart, unless somebody wrote down when the question changed. So the rule here
+      is that a change goes in the journal <em>before</em> it goes in the code.
+    </p>
+    <p>
+      It is a small experiment on cheap hardware with a small model and a small sample. I would
+      rather it be honest about that than impressive.
+    </p>
+
+    <h2>Credit</h2>
+    <p>
+      This is built on other people's work.
+      <a href="https://github.com/TauricResearch/TradingAgents" rel="noopener">TradingAgents</a>
+      is the framework and the original idea. Webull provides the market data and the paper account.
+      Price history comes from yfinance, macro series from FRED, and social sentiment from Reddit's
+      public feeds. The model is Google's Gemma 4. The app itself was built with a great deal of
+      help from Claude Opus 5.
+    </p>
+    <p>
+      The code is at
+      <a href="https://github.com/nandyalu/trading-helper" rel="noopener">github.com/nandyalu</a>.
+      Take any of it.
+    </p>
+  </div>
+</section>

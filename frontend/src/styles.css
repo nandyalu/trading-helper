@@ -2100,3 +2100,85 @@ table {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* ==========================================================================
+   14. Long-form pages
+   --------------------------------------------------------------------------
+   The Idea, Method and Glossary are read rather than scanned, so they get the
+   one thing the data pages deliberately do not: a measure. This is the
+   exception the width rule allows for — a paragraph of several sentences at
+   180 characters a line is genuinely hard to follow, and a definition in a
+   card is not.
+   ========================================================================== */
+
+.prose {
+  max-width: var(--measure);
+  font-size: var(--t-base);
+  line-height: var(--lh-loose);
+  color: var(--text-muted);
+}
+
+.prose h2 {
+  margin: var(--sp-7) 0 var(--sp-4);
+  font-size: var(--t-xl);
+  color: var(--text);
+}
+
+.prose h2:first-child {
+  margin-top: 0;
+}
+
+.prose h3 {
+  margin: var(--sp-6) 0 var(--sp-3);
+  font-size: var(--t-md);
+  color: var(--text);
+}
+
+.prose p {
+  margin: 0 0 var(--sp-4);
+}
+
+.prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 var(--sp-4);
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.prose code {
+  padding: 0.1em 0.35em;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.875em;
+  color: var(--text);
+}
+
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Says plainly that a page is not finished. Warm rather than red: a draft is
+   a state, not a fault. */
+.draft-note {
+  margin: 0 0 var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--warn-soft);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+}
+
+.draft-note strong {
+  color: var(--warn);
+}
