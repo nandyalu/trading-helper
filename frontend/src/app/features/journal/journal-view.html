@@ -3,11 +3,53 @@
     <div>
       <h1>Journal</h1>
       <p class="subtitle">
-        The last ten days, written by the app about itself. Every sentence comes from a trade, a
-        charge, a decision pass or a graded signal, so it cannot drift from the book.
+        What happened, written by the app about itself. Every sentence comes from a trade, a charge,
+        a decision pass or a graded signal, so it cannot drift from the book. The other half — why
+        <em>we</em> changed something — is kept by hand, in the repository's
+        <code>JOURNEY.md</code>.
       </p>
     </div>
   </header>
+
+  @if (digest(); as d) {
+    <section class="card">
+      <div class="card-head">
+        <h2>The week to {{ d.week_start }}</h2>
+      </div>
+      <div class="card-body stack">
+        <dl class="scoreboard-facts">
+          <div>
+            <dt>New analyses</dt>
+            <dd>{{ d.new_signals.length }}</dd>
+          </div>
+          <div>
+            <dt>Graded</dt>
+            <dd>{{ d.resolved.length }}</dd>
+          </div>
+          <div>
+            <dt>Right, last 30 days</dt>
+            <dd>{{ rate(d.win_rate_30d[0], d.win_rate_30d[1]) }}</dd>
+          </div>
+          <div>
+            <dt>Right, all time</dt>
+            <dd>{{ rate(d.win_rate_all[0], d.win_rate_all[1]) }}</dd>
+          </div>
+          <div>
+            <dt>Alerts</dt>
+            <dd>{{ d.alerts.length }}</dd>
+          </div>
+        </dl>
+        @if (d.book_lines.length) {
+          <div>
+            <p class="muted-small">Holding at the end of the week</p>
+            @for (line of d.book_lines; track line) {
+              <p class="big-fact">{{ line }}</p>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
 
   @if (loading()) {
     <div class="skeleton" style="height: 8rem"></div>
