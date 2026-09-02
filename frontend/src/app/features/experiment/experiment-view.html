@@ -1,104 +1,211 @@
 <section class="page">
-  <!-- The premise, before any number. A visitor who reads only this should
-       still leave knowing what was being tried. -->
+  <!-- The premise, before any number. Someone who reads only this still leaves
+       knowing what was being tried. -->
   <header class="hero">
-    <p class="hero-eyebrow">A public experiment, running since 1 September 2026</p>
-    <!-- The figure comes from the book, not from the copy. Hardcoding it here
-         and reading it from the API twelve lines below is exactly how a
-         headline comes to contradict the number under it. -->
-    <h1 class="hero-title">
-      What does an autonomous AI agent do with
-      <span class="hero-figure">${{ money(book()?.budget ?? 10000) }}</span
-      >?
-    </h1>
-    <p class="hero-lede">
-      An AI agent has a simulated brokerage account, a fixed budget, and a bill for every piece of
-      research it orders. It decides what to study, what to buy, what to sell, and when to give up
-      on a name.
-    </p>
-    <p class="hero-lede hero-lede--strong">
-      Nobody helps it. There is no button on this site that adds a ticker, starts an analysis, or
-      places a trade — and there never was one in the version that is running. A control that lets a
-      person nudge the book puts a second decision-maker in the record, and afterwards nothing can
-      tell which one produced a result.
-    </p>
-    <p class="hero-foot">
-      No real money is involved. Every order goes to a sandbox, and the agent refuses to run at all
-      when the app holds live credentials.
-    </p>
+    <div class="hero-body">
+      <p class="hero-eyebrow">
+        A public experiment
+        @if (dayNumber()) {
+          · day {{ dayNumber() }}
+        }
+      </p>
+      <h1 class="hero-title">
+        What does an
+        <!-- The phrase and its footnote mark are one unit. A break between them
+             orphans the asterisk, which then reads as a stray character. -->
+        <span class="hero-subject"
+          >autonomous AI agent<a
+            class="fn-mark"
+            href="#guardrails"
+            aria-label="What the guardrails are"
+            >*</a
+          ></span
+        >
+        do with
+        <span class="hero-figure">${{ money(book()?.budget ?? 10000) }}</span
+        >?
+      </h1>
+      <p class="hero-lede">
+        An AI agent has a simulated brokerage account, a fixed budget, and a bill for every piece of
+        research it orders. It decides what to study, what to buy, what to sell, and when to give up
+        on a name.
+      </p>
+      <p class="hero-lede hero-lede--strong">
+        Nobody helps it. There is no button on this site that adds a ticker, starts an analysis, or
+        places a trade — and there never was one in the version that is running.
+      </p>
+    </div>
+
+    <app-logo class="hero-mark" [size]="240" [frameOpacity]="0.3" />
   </header>
 
+  <div class="guardrails-wrap" id="guardrails">
+    <div class="guardrails">
+      <p class="guardrails-label">* with guardrails to keep it in bounds</p>
+      <div class="guardrails-cols">
+        <div>
+          <p class="guardrails-head">It chooses</p>
+          <ul>
+            <li>Which tickers to study, and pays for each one every morning</li>
+            <li>What to buy and sell, and how much</li>
+            <li>Where to rest its stop and its target</li>
+            <li>Which names to stop watching</li>
+          </ul>
+        </div>
+        <div>
+          <p class="guardrails-head">It cannot</p>
+          <ul>
+            <li>Trade on margin, or short anything</li>
+            <li>Touch crypto, options or futures</li>
+            <li>Spend more cash than it holds</li>
+            <li>Reach a real account, ever</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="disclaimer">
+    <strong>No real money is involved.</strong> Every order goes to a sandbox account, and the agent
+    refuses to run at all without one. <strong>Nothing here is financial advice.</strong>
+  </p>
+
   @if (loading()) {
-    <div class="stat-grid" aria-hidden="true">
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
+    <div class="status">
+      <div class="status-main">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton" style="height: 17rem"></div>
+      </div>
+      <div class="skeleton" style="height: 24rem"></div>
+    </div>
+  } @else if (failed()) {
+    <div class="empty">
+      <span class="empty-icon" aria-hidden="true">⚠️</span>
+      <strong>The book could not be read</strong>
+      <span>The app is up but the API did not answer. Nothing is lost — try again shortly.</span>
     </div>
   } @else {
-    <!-- The money. -->
-    @if (book(); as b) {
-      <section class="scoreboard">
-        <div class="scoreboard-main">
-          <span class="scoreboard-label">The account today</span>
-          <span class="scoreboard-value">${{ money(b.equity) }}</span>
-          <span
-            class="scoreboard-delta"
-            [class.pass]="b.return_pct >= 0"
-            [class.fail]="b.return_pct < 0"
-          >
-            {{ signed(b.return_pct) }}% on the ${{ money(b.budget) }} it started with
-          </span>
-        </div>
-        <dl class="scoreboard-facts">
-          <div>
-            <dt>Cash</dt>
-            <dd>${{ money(b.cash) }}</dd>
+    <section class="status">
+      <div class="status-main">
+        @if (book(); as b) {
+          <div class="scoreboard">
+            <div class="scoreboard-main">
+              <span class="scoreboard-label">The account today</span>
+              <span class="scoreboard-value money">${{ money(b.equity, 2) }}</span>
+              <span
+                class="scoreboard-delta money"
+                [class.money--pos]="b.return_pct >= 0"
+                [class.money--neg]="b.return_pct < 0"
+              >
+                {{ signed(b.return_pct) }}% on the ${{ money(b.budget) }} it started with
+              </span>
+            </div>
+            <dl class="scoreboard-facts">
+              <div>
+                <dt>Cash</dt>
+                <dd class="money">${{ money(b.cash, 2) }}</dd>
+              </div>
+              <div>
+                <dt>In positions</dt>
+                <dd class="money">${{ money(b.market_value, 2) }}</dd>
+              </div>
+              <div>
+                <dt>Realized</dt>
+                <dd
+                  class="money"
+                  [class.money--pos]="b.realized_pnl >= 0"
+                  [class.money--neg]="b.realized_pnl < 0"
+                >
+                  {{ signedMoney(b.realized_pnl) }}
+                </dd>
+              </div>
+              <div>
+                <dt>Holding</dt>
+                <dd class="money">
+                  {{ b.holdings.length }} {{ b.holdings.length === 1 ? 'name' : 'names' }}
+                </dd>
+              </div>
+            </dl>
           </div>
-          <div>
-            <dt>In positions</dt>
-            <dd>${{ money(b.market_value) }}</dd>
-          </div>
-          <div>
-            <dt>Realized</dt>
-            <dd [class.pass]="b.realized_pnl >= 0" [class.fail]="b.realized_pnl < 0">
-              {{ b.realized_pnl >= 0 ? '+' : '−' }}${{
-                money(b.realized_pnl < 0 ? -b.realized_pnl : b.realized_pnl)
-              }}
-            </dd>
-          </div>
-          <div>
-            <dt>Holding</dt>
-            <dd>{{ b.holdings.length }} {{ b.holdings.length === 1 ? 'name' : 'names' }}</dd>
-          </div>
-        </dl>
-      </section>
+        }
 
-      @if (curvePoints().length > 1) {
+        @if (curvePoints().length > 1) {
+          <figure class="chart-figure">
+            <figcaption>
+              <span class="chart-title">Equity, day by day</span>
+              <span class="chart-note">
+                Against the ${{ money(book()?.budget ?? 10000) }} it began with — green above that
+                line, red below. Rebuilt from the trade ledger and closing prices, one point per
+                trading day since the first fill.
+              </span>
+            </figcaption>
+            <app-equity-chart [points]="curvePoints()" [baseline]="book()?.budget ?? 10000" />
+          </figure>
+        } @else {
+          <div class="empty">
+            <span class="empty-icon" aria-hidden="true">📈</span>
+            <strong>No curve yet</strong>
+            <span>The chart starts on the day the agent first buys something.</span>
+          </div>
+        }
+
         <section class="card">
           <div class="card-head">
-            <h2>Equity, day by day</h2>
-            <p class="hint">
-              Rebuilt from the trade ledger and closing prices, one point per trading day since the
-              first fill — {{ daysRunning() }} days so far.
-            </p>
+            <h2>What it holds</h2>
+            <a class="btn btn-ghost btn-sm" routerLink="/book">The book</a>
           </div>
-          <div class="card-body">
-            <app-line-chart [points]="curvePoints()" />
-          </div>
+          @if (!holdings().length) {
+            <div class="empty">
+              <span class="empty-icon" aria-hidden="true">📁</span>
+              <strong>Nothing held right now</strong>
+              <span>A position appears here the morning the agent buys one.</span>
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="data-table data-table--stack">
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th class="num">Shares</th>
+                    <th class="num">Avg cost</th>
+                    <th class="num">Invested</th>
+                    <th class="num">Price</th>
+                    <th class="num">P&amp;L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (h of holdings(); track h.ticker) {
+                    <tr>
+                      <td class="ticker-cell" data-label="">
+                        <a [routerLink]="['/research/ticker', h.ticker]">{{ h.ticker }}</a>
+                      </td>
+                      <td class="num money" data-label="Shares">{{ h.quantity }}</td>
+                      <td class="num money" data-label="Avg cost">${{ money(h.avg_cost, 2) }}</td>
+                      <td class="num money" data-label="Invested">${{ money(h.cost_basis, 2) }}</td>
+                      <td class="num money" data-label="Price">
+                        {{ h.price === null ? '—' : '$' + money(h.price, 2) }}
+                      </td>
+                      <td
+                        class="num money"
+                        data-label="P&L"
+                        [class.money--pos]="(h.unrealized_pnl ?? 0) >= 0"
+                        [class.money--neg]="(h.unrealized_pnl ?? 0) < 0"
+                      >
+                        @if (h.unrealized_pnl === null) {
+                          —
+                        } @else {
+                          {{ signedMoney(h.unrealized_pnl) }}
+                          <span class="muted">{{ pct(h.unrealized_pnl, h.cost_basis) }}</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         </section>
-      } @else {
-        <div class="empty">
-          <span class="empty-icon" aria-hidden="true">📈</span>
-          <strong>No curve yet</strong>
-          <span>The chart starts on the day the agent first buys something.</span>
-        </div>
-      }
-    }
 
-    <div class="grid-2">
-      <div class="stack">
-        <!-- What it did, in its own words. -->
         <section class="card">
           <div class="card-head">
             <h2>The last thing it decided</h2>
@@ -112,7 +219,9 @@
                   @for (o of e.orders; track $index) {
                     <li>
                       <span class="order-side order-side--{{ o.side }}">{{ o.side }}</span>
-                      <strong>{{ o.ticker }}</strong>
+                      @if (o.ticker) {
+                        <strong>{{ o.ticker }}</strong>
+                      }
                       @if (o.quantity) {
                         <span class="muted">×{{ o.quantity }}</span>
                       }
@@ -123,7 +232,10 @@
                   }
                 </ul>
               } @else {
-                <p class="muted">It made no trades that day. Doing nothing is a valid answer.</p>
+                <p class="muted">
+                  It made no trades that day. Doing nothing is a valid answer, and often the right
+                  one.
+                </p>
               }
               @if (e.reasoning) {
                 <blockquote class="quote">{{ e.reasoning }}</blockquote>
@@ -133,166 +245,113 @@
             <div class="empty">
               <span class="empty-icon" aria-hidden="true">🤖</span>
               <strong>No decision pass yet</strong>
-              <span>The agent decides once each weekday, five minutes after the US open.</span>
+              <span>
+                The agent decides once each weekday, five minutes after the US market opens.
+              </span>
             </div>
           }
         </section>
-
-        @if (holdings().length) {
-          <section class="card">
-            <div class="card-head">
-              <h2>What it holds</h2>
-              <a class="btn btn-ghost btn-sm" routerLink="/book">The book</a>
-            </div>
-            <div class="table-wrap">
-              <table class="data-table data-table--stack">
-                <thead>
-                  <tr>
-                    <th>Ticker</th>
-                    <th class="num">Shares</th>
-                    <th class="num">Value</th>
-                    <th class="num">P&amp;L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (h of holdings(); track h.ticker) {
-                    <tr>
-                      <td class="ticker-cell" data-label="">
-                        <a [routerLink]="['/research/ticker', h.ticker]">{{ h.ticker }}</a>
-                      </td>
-                      <td class="num" data-label="Shares">{{ h.quantity }}</td>
-                      <td class="num" data-label="Value">
-                        {{ h.market_value !== null ? '$' + money(h.market_value) : '—' }}
-                      </td>
-                      <td
-                        class="num"
-                        data-label="P&L"
-                        [class.pass]="(h.unrealized_pnl ?? 0) >= 0"
-                        [class.fail]="(h.unrealized_pnl ?? 0) < 0"
-                      >
-                        {{
-                          h.unrealized_pnl === null
-                            ? '—'
-                            : (h.unrealized_pnl >= 0 ? '+$' : '−$') +
-                              money(h.unrealized_pnl < 0 ? -h.unrealized_pnl : h.unrealized_pnl)
-                        }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </section>
-        }
       </div>
 
-      <div class="stack">
-        <!-- Whether it is any good. Deliberately cautious: a win rate on five
-             signals is noise, and saying so is more honest than a percentage. -->
-        <section class="card">
-          <div class="card-head">
-            <h2>Is it any good?</h2>
-            <a class="btn btn-ghost btn-sm" routerLink="/scorecard">Scorecard</a>
-          </div>
-          <div class="card-body stack">
-            @if (graded(); as g) {
-              @if (g.enough) {
-                <p class="big-fact">
-                  <strong>{{ g.passes }}/{{ g.resolved }}</strong> analyses were right,
-                  <strong>{{ g.vsBenchmark }}/{{ g.vsBenchmarkTotal }}</strong> beat SPY.
-                </p>
-                <p class="hint">
-                  The second number is the one that matters. A 70% win rate in a rising market can
-                  be worse than useless — holding SPY and doing nothing would have beaten it.
-                </p>
-              } @else {
-                <p class="big-fact">
-                  <strong>{{ g.resolved }}</strong>
-                  {{ g.resolved === 1 ? 'analysis has' : 'analyses have' }} been graded so far.
-                </p>
-                <p class="hint">
-                  Not enough to say anything yet. Below about twenty resolved signals a win rate is
-                  noise — three wins in four reads as 75% and means nothing. The count is shown
-                  instead of a percentage on purpose.
-                </p>
-              }
+      <!-- The rhythm: the last trading day, then this one. -->
+      <aside class="timeline" aria-label="What happened and what is next">
+        <h2 class="timeline-title">The rhythm</h2>
+
+        <p class="timeline-day">{{ previousLabel() }} · last trading day</p>
+        <ol class="timeline-list">
+          @for (e of previous(); track e.text) {
+            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+              <span class="tl-time">{{ clock(e.t) }}</span>
+              <span class="tl-text">{{ e.text }}</span>
+            </li>
+          }
+        </ol>
+
+        <p class="timeline-day">{{ todayLabel }} · today</p>
+        <ol class="timeline-list">
+          @for (e of today(); track e.text) {
+            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+              <span class="tl-time">{{ clock(e.t) }}</span>
+              <span class="tl-text">{{ e.text }}</span>
+            </li>
+          }
+        </ol>
+
+        <p class="timeline-foot">
+          Times are yours. The agent decides five minutes after the US market opens; the filled line
+          is what has already happened today.
+        </p>
+      </aside>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>Is it any good?</h2>
+          <a class="btn btn-ghost btn-sm" routerLink="/scorecard">Scorecard</a>
+        </div>
+        <div class="card-body stack">
+          @if (graded(); as g) {
+            @if (g.enough) {
+              <p class="big-fact">
+                <strong>{{ g.passes }}/{{ g.resolved }}</strong> analyses were right, and
+                <strong>{{ g.vsBenchmark }}/{{ g.vsBenchmarkTotal }}</strong> beat SPY.
+              </p>
+              <p class="hint">
+                The second number is the one that matters. A 70% win rate in a rising market can be
+                worse than useless — holding SPY and doing nothing would have beaten it.
+              </p>
             } @else {
-              <p class="muted">
-                Nothing has been graded yet. Each analysis is graded when its time horizon arrives —
-                14 days for a swing call.
+              <p class="big-fact">
+                <strong>{{ g.resolved }}</strong>
+                {{ g.resolved === 1 ? 'analysis has' : 'analyses have' }} been graded so far.
+              </p>
+              <p class="hint">
+                Not enough to say anything yet. Below about twenty resolved signals a win rate is
+                noise — three wins in four reads as 75% and means nothing. The count is shown
+                instead of a percentage on purpose.
               </p>
             }
-          </div>
-        </section>
-
-        <!-- The regime line: context the agent itself is given. -->
-        @if (regime(); as r) {
-          <section class="card">
-            <div class="card-head">
-              <h2>What the agent is told about the market</h2>
-            </div>
-            <div class="card-body stack">
-              <p class="big-fact">
-                <span aria-hidden="true">{{ r.emoji }}</span> {{ r.label }}
-              </p>
-              <dl class="scoreboard-facts">
-                @if (r.vix !== null) {
-                  <div>
-                    <dt>VIX</dt>
-                    <dd>{{ r.vix.toFixed(1) }}</dd>
-                  </div>
-                }
-                @if (r.spy_vs_ma_pct !== null) {
-                  <div>
-                    <dt>SPY vs 200-day</dt>
-                    <dd>{{ signed(r.spy_vs_ma_pct) }}%</dd>
-                  </div>
-                }
-                @if (r.curve_spread_pct !== null) {
-                  <div>
-                    <dt>10Y–3M</dt>
-                    <dd>{{ signed(r.curve_spread_pct, 2) }}%</dd>
-                  </div>
-                }
-              </dl>
-              <p class="hint">
-                This same sentence is the first line of every prompt the agent sees.
-              </p>
-            </div>
-          </section>
-        }
-
-        <section class="card">
-          <div class="card-head">
-            <h2>How it works</h2>
-          </div>
-          <div class="card-body stack">
-            <ol class="how-list">
-              <li>
-                <strong>11:00 UTC</strong> — every ticker on the watchlist is analysed by four
-                analysts, a bull-versus-bear debate, a trader and a risk team. The agent is charged
-                $0.05 for each.
-              </li>
-              <li>
-                <strong>13:35 UTC</strong> — the agent reads its book, its signals, its own track
-                record and the bill it is running up, and answers with orders.
-              </li>
-              <li>
-                <strong>21:30 UTC</strong> — matured analyses are graded against reality, against
-                SPY, and against their own price target.
-              </li>
-            </ol>
-            <p class="hint">
-              It chooses its own watchlist. To study a new name it pays for the research; to stop
-              paying it drops one. It cannot drop something it holds.
+          } @else {
+            <p class="muted">
+              Nothing has been graded yet. Each analysis is judged when its time horizon arrives —
+              14 days for a swing call.
             </p>
-            <div class="row">
-              <a class="btn btn-ghost btn-sm" routerLink="/research">What it studies</a>
-              <a class="btn btn-ghost btn-sm" routerLink="/journal">What we changed</a>
-            </div>
+          }
+        </div>
+      </section>
+
+      @if (regime(); as r) {
+        <section class="card">
+          <div class="card-head"><h2>What the agent is told about the market</h2></div>
+          <div class="card-body stack">
+            <p class="big-fact">
+              <span aria-hidden="true">{{ r.emoji }}</span> {{ r.label }}
+            </p>
+            <dl class="scoreboard-facts">
+              @if (r.vix !== null) {
+                <div>
+                  <dt>VIX</dt>
+                  <dd class="money">{{ r.vix.toFixed(1) }}</dd>
+                </div>
+              }
+              @if (r.spy_vs_ma_pct !== null) {
+                <div>
+                  <dt>SPY vs 200-day</dt>
+                  <dd class="money">{{ signed(r.spy_vs_ma_pct) }}%</dd>
+                </div>
+              }
+              @if (r.curve_spread_pct !== null) {
+                <div>
+                  <dt>10Y–3M</dt>
+                  <dd class="money">{{ signed(r.curve_spread_pct, 2) }}%</dd>
+                </div>
+              }
+            </dl>
+            <p class="hint">This same sentence is the first line of every prompt the agent sees.</p>
           </div>
         </section>
-      </div>
+      }
     </div>
   }
 </section>
