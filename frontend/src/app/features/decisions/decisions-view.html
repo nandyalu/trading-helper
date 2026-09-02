@@ -29,7 +29,12 @@
           </div>
           @if (event.cash !== null) {
             <span class="muted">
-              cash {{ event.cash | number: '1.2-2' }} · equity {{ event.equity | number: '1.2-2' }}
+              cash ${{ event.cash | number: '1.2-2' }} · equity ${{
+                event.equity | number: '1.2-2'
+              }}
+              @if (event.research_spent) {
+                · research ${{ event.research_spent | number: '1.2-2' }}
+              }
             </span>
           }
         </div>
@@ -61,6 +66,19 @@
                 </li>
               }
             </ul>
+            @if (event.refused.length) {
+              <!-- Worth explaining once per pass rather than assuming it reads
+                   as self-evident: a refusal is the most revealing thing on the
+                   page, and a reader who takes it for an error misses it. -->
+              <p class="hint">
+                A refusal is Python declining an order that cannot be executed as stated — more cash
+                than the agent holds, more shares than it owns, a stop that would trigger the moment
+                it was placed. <strong>The order is dropped, never resized.</strong> Shrinking it
+                would quietly turn the agent's decision into a different one, and the record would
+                then describe a strategy nobody chose. The agent is told what was refused and asked
+                once more.
+              </p>
+            }
           }
 
           @if (asked(event)) {

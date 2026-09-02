@@ -2,11 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Trading Helper</title>
+    <title>What does an AI agent do with $10,000?</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Signals, positions, and alerts for your watchlist." />
+    <meta
+      name="description"
+      content="A public experiment: one autonomous AI agent, a simulated $10,000, and a bill for every piece of research it orders. It picks what to study, what to buy and what to sell. Nobody helps it, and every decision is on the record."
+    />
+
+    <!-- What a shared link looks like. Without these a paste into Slack, Discord
+         or a group chat unfurls as a bare URL, which is the form most people
+         will first meet this in. og:title is deliberately the question rather
+         than the product name: the name means nothing to anyone yet. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What does an AI agent do with $10,000?" />
+    <meta
+      property="og:description"
+      content="One autonomous AI agent, a simulated $10,000, and a bill for every piece of research it orders. Nobody can nudge it — there is no button that adds a ticker or places a trade. Every decision is on the record."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="What does an AI agent do with $10,000?" />
+    <meta
+      name="twitter:description"
+      content="One autonomous AI agent, a simulated $10,000, and a bill for every piece of research it orders. Every decision is on the record."
+    />
+
+    <!-- The experiment is meant to be read, not indexed as a trading product.
+         Nothing here is advice and none of it is a signal service; a search
+         result promising either would misrepresent it to whoever clicked. -->
+    <meta name="robots" content="index, follow, max-snippet:-1" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -28,7 +53,7 @@
   <body>
     <app-root>
       <!-- Replaced when the app boots. Shown while the first bundle loads. -->
-      <div class="boot">Loading Trading Helper…</div>
+      <div class="boot">Loading the experiment…</div>
     </app-root>
   </body>
 </html>
