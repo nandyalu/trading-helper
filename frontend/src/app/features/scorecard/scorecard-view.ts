@@ -4,10 +4,11 @@ import { RouterLink } from '@angular/router';
 import { DecisionStats } from '../../core/models/api.models';
 import { ScorecardService } from '../../core/services/scorecard.service';
 import { DecisionBadge } from '../../shared/decision-badge';
+import { Term } from '../../shared/glossary/term';
 
 @Component({
   selector: 'app-scorecard-view',
-  imports: [RouterLink, DecisionBadge],
+  imports: [RouterLink, DecisionBadge, Term],
   templateUrl: './scorecard-view.html',
 })
 export class ScorecardView {

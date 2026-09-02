@@ -74,14 +74,14 @@
               }
               @for (order of event.refused; track $index) {
                 <li>
-                  <span class="side side--refused">refused</span>
+                  <span class="side side--refused"><app-term key="refused" /></span>
                   <strong>{{ order.ticker }}</strong>
                   <span class="muted">{{ order.why }}</span>
                 </li>
               }
               @for (order of failedIn(event); track $index) {
                 <li>
-                  <span class="side side--refused">broker said no</span>
+                  <span class="side side--refused"><app-term key="broker-said-no" /></span>
                   <strong>{{ order.ticker }}</strong>
                   <span class="muted">{{ order.why }}</span>
                 </li>

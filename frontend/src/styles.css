@@ -2269,6 +2269,103 @@ table {
 }
 
 /* ==========================================================================
+   13d. Terms and the glossary
+   ========================================================================== */
+
+/* A dotted underline, which is the long-standing convention for "there is a
+   definition here". Not a colour, and not an icon: the word has to stay
+   readable as a word. */
+.term {
+  display: inline;
+}
+
+.term-word {
+  display: inline;
+  list-style: none;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 0.2em;
+}
+
+.term-word::-webkit-details-marker,
+.term-word::marker {
+  display: none;
+  content: '';
+}
+
+.term[open] .term-word {
+  text-decoration-color: var(--accent);
+}
+
+/* Resets, not decoration. A term often sits inside a label that is uppercase
+   and letterspaced, and the definition must not inherit either — it is a
+   sentence, and the label's styling would shout it. */
+.term-def {
+  display: block;
+  margin: var(--sp-2) 0;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.term-more {
+  white-space: nowrap;
+}
+
+.glossary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.glossary-entry {
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 7rem;
+}
+
+.glossary-entry:last-child {
+  border-bottom: 0;
+}
+
+.glossary dt {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.glossary dd {
+  margin: 0;
+  max-width: var(--measure);
+  font-size: var(--t-base);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+}
+
+.glossary dd p {
+  margin: 0 0 var(--sp-3);
+}
+
+.glossary dd p:last-child {
+  margin-bottom: 0;
+}
+
+.glossary-more {
+  color: var(--text-faint);
+}
+
+/* ==========================================================================
    14. Long-form pages
    --------------------------------------------------------------------------
    The Idea, Method and Glossary are read rather than scanned, so they get the

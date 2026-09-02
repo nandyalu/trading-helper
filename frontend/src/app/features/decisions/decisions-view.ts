@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { AgentEvent, AgentEventOrder, AgentOrder } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
+import { Term } from '../../shared/glossary/term';
 
 /**
  * Every decision pass, with the prompt and the answer verbatim.
@@ -18,7 +19,7 @@ import { AgentService } from '../../core/services/agent.service';
 @Component({
   selector: 'app-decisions-view',
   standalone: true,
-  imports: [DatePipe, DecimalPipe],
+  imports: [DatePipe, DecimalPipe, Term],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './decisions-view.html',
 })

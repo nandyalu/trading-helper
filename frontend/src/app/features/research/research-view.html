@@ -110,7 +110,7 @@
               <th>Ticker</th>
               <th>Date</th>
               <th>Decision</th>
-              <th>Graded</th>
+              <th><app-term key="graded" /></th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +127,7 @@
                       {{ s.outcome }}
                     </span>
                   } @else {
-                    <span class="muted">still maturing</span>
+                    <span class="muted"><app-term key="maturing" /></span>
                   }
                 </td>
               </tr>

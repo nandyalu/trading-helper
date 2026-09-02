@@ -1,0 +1,26 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <h1>Glossary</h1>
+      <p class="subtitle">
+        <strong>Every word on this site that means something narrower than usual.</strong>
+        Most of these appear as a dotted underline you can tap; this is the whole list, for anyone
+        who would rather read it first.
+      </p>
+    </div>
+  </header>
+
+  <dl class="glossary">
+    @for (t of terms; track t.id) {
+      <div class="glossary-entry" [id]="t.id">
+        <dt>{{ t.label }}</dt>
+        <dd>
+          <p>{{ t.short }}</p>
+          @if (t.long) {
+            <p class="glossary-more">{{ t.long }}</p>
+          }
+        </dd>
+      </div>
+    }
+  </dl>
+</section>

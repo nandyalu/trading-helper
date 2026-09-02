@@ -32,7 +32,7 @@
         <span class="stat-note">{{ s.passes }}/{{ s.resolved }} correct</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Beat SPY</span>
+        <span class="stat-label"><app-term key="vs-spy" /></span>
         <span class="stat-value">{{ pct(s.vs_benchmark_passes, s.vs_benchmark_total) }}</span>
         <span class="stat-note"
           >{{ s.vs_benchmark_passes }}/{{ s.vs_benchmark_total }} signals</span
@@ -40,7 +40,7 @@
       </div>
       @if (s.avg_alpha_pct !== null) {
         <div class="stat">
-          <span class="stat-label">Average alpha</span>
+          <span class="stat-label">Average <app-term key="alpha" /></span>
           <span
             class="stat-value"
             [class.pass]="s.avg_alpha_pct >= 0"

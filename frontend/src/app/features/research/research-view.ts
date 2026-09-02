@@ -6,6 +6,7 @@ import { SignalsService } from '../../core/services/signals.service';
 import { TickersService } from '../../core/services/tickers.service';
 import { WatchlistService } from '../../core/services/watchlist.service';
 import { DecisionBadge } from '../../shared/decision-badge';
+import { Term } from '../../shared/glossary/term';
 
 type StatusFilter = '' | 'pending' | 'resolved';
 
@@ -24,7 +25,7 @@ type StatusFilter = '' | 'pending' | 'resolved';
  */
 @Component({
   selector: 'app-research-view',
-  imports: [RouterLink, DecisionBadge],
+  imports: [RouterLink, DecisionBadge, Term],
   templateUrl: './research-view.html',
 })
 export class ResearchView {
