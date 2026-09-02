@@ -8,6 +8,7 @@ Self-hosted docs · not financial advice
 nav = [
   { "Home" = "index.md" },
   { "Setup" = "setup.md" },
+  { "Running it yourself" = "deploying.md" },
   { "How it works" = "overview.md" },
   { "The site" = "dashboard.md" },
   { "What Discord posts" = "discord.md" },

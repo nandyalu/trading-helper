@@ -8,7 +8,7 @@ import { Term } from '../../shared/glossary/term';
 /**
  * Every decision pass, with the prompt and the answer verbatim.
  *
- * The Auto trader page shows what the agent holds. This shows how it decided,
+ * The book shows what the agent holds. This shows how it decided,
  * which is a different question and the one that is hard to reconstruct later:
  * behaviour here is mostly prompt, so a month of runs across three prompt
  * revisions cannot be told apart without the words each run actually saw.

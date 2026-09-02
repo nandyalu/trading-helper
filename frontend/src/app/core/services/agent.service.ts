@@ -52,7 +52,7 @@ export class AgentService {
   }
 
   /** Decision passes with their prompts. Its own call, not part of load():
-   * a prompt is tens of kilobytes and the Auto trader page never shows one. */
+   * a prompt is tens of kilobytes and only the Decisions page shows one. */
   async loadEvents(limit = 30): Promise<void> {
     this._events.set(
       await firstValueFrom(this.http.get<AgentEvent[]>(`/api/agent/events?limit=${limit}`)),

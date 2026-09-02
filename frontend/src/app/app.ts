@@ -100,7 +100,7 @@ export class App {
     if (url === '/') return 'Overview';
     const all = this.allNav();
     return (
-      all.find((item) => item.path !== '/' && url.startsWith(item.path))?.label ?? 'Trading Helper'
+      all.find((item) => item.path !== '/' && url.startsWith(item.path))?.label ?? 'The Allowance'
     );
   });
 

@@ -45,7 +45,7 @@ const COLORS = {
  * Candlesticks with the analysis drawn on top of them.
  *
  * The point of this component is that a price chart on its own answers almost
- * nothing useful — you can see that a stock fell, not whether the bot saw it
+ * nothing useful — you can see that a stock fell, not whether the agent saw it
  * coming, whether you were holding, or whether an alert fired. Overlaying the
  * signals, trades, and alerts onto the same time axis turns the chart into the
  * record of what actually happened.

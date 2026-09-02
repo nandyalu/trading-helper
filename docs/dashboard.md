@@ -43,6 +43,21 @@ That last card is deliberately cautious. Below about twenty resolved signals it 
 
 The headline figure comes from the book rather than the copy. Hardcoding it and reading it from the API in the same view is how a headline comes to contradict the number under it.
 
+## Refused, and "broker said no"
+
+**These are two different things and the Decisions page keeps them apart.** A reader who takes them for the same thing misses the more interesting half.
+
+| | What it means | What it says about the agent |
+|---|---|---|
+| **refused** | Python declined the order before it was ever sent | Its own arithmetic was wrong — more cash than it holds, more shares than it owns, a stop that would trigger on placement |
+| **broker said no** | The order was formed correctly and Webull would not take it | Nothing about the agent. Unsettled cash, a closed session, a symbol the broker will not trade |
+
+The distinction is load-bearing in two places.
+
+**A refused order is dropped, never resized.** Shrinking it would quietly turn the agent's decision into a different one, and the record would then describe a strategy nobody chose. The refusal is fed back once and the agent is asked again, which is how it learns it may sell to fund a buy.
+
+**A broker failure is carried into the next few prompts.** Only a count was stored until 2026-09-02, which made a failure invisible the next morning — the agent formed the same order, was refused again, and nothing in the record explained the repetition.
+
 ## What needs attention
 
 **Needs attention** is the only block on the page that is a call to action, so it is the only one with a colored border. It lists three things:
