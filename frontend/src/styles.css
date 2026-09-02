@@ -286,21 +286,17 @@ body {
 }
 
 /* Says what the site is to someone who arrived on a deep link and has never
-   seen the front page. Folded away once they are reading, where it is just
-   taking room. */
+   seen the front page. **It stays when the masthead collapses**: it is four
+   words, and hiding it took away the only thing on a scrolled page that says
+   what this is. */
 .brand-sub {
   font-size: var(--t-sm);
   color: var(--text-faint);
-  overflow: hidden;
-  max-height: 1.6em;
-  transition:
-    max-height 160ms ease,
-    opacity 160ms ease;
+  transition: font-size 160ms ease;
 }
 
 .masthead.scrolled .brand-sub {
-  max-height: 0;
-  opacity: 0;
+  font-size: var(--t-xs);
 }
 
 .topnav {
@@ -440,7 +436,20 @@ main {
 .foot-about {
   display: flex;
   flex-direction: column;
+  gap: var(--sp-4);
+  color: var(--text);
+}
+
+/* The same lockup as the masthead, at the same size. A footer that shrinks
+   the mark reads as an afterthought, and this is where a reader lands after
+   scrolling a whole page. */
+.foot-brand {
+  display: flex;
+  align-items: center;
   gap: var(--sp-3);
+}
+
+.foot-mark {
   color: var(--text);
 }
 

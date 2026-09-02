@@ -1118,25 +1118,29 @@ def _max_research_per_day() -> int:
 # not the total, the same way a daily spending limit does not stop a
 # subscription.
 #
-# The number comes from the sweep window. morning_sweep runs at 11:00 UTC and
-# earnings_check puts its own analyses on the same pool at 13:00, so there are
-# two hours. At three concurrent analyses and gemma4:e4b-it-qat's 17.4 minutes
-# — the paired figure, because analyses really do run together — that window
-# fits about 20 tickers with nothing going wrong. Twelve is four waves and
-# leaves the second hour for a slow run, a retry, or a morning when the live
-# deployment is contending for the same cards.
+# The number comes from the sweep window and a measurement. morning_sweep runs
+# at 11:00 UTC and earnings_check puts its own analyses on the same pool at
+# 13:00, so there are two hours.
+#
+# Measured 2026-09-02, fourteen tickers at seven concurrent, twice: 42.5 and
+# 43.4 minutes of wall clock, 28 of 28 succeeding. That is **about 3.05 minutes
+# of throughput per analysis**, which fits roughly 39 in the window. Thirty
+# leaves a quarter of it for a slow run, a retry, or a morning when something
+# is wrong.
+#
+# **Do not raise this to match the concurrency.** The two are unrelated: the
+# same measurement found fourteen concurrent takes the same wall clock as seven
+# and doubles each analysis's latency, because the CPU saturates before the
+# GPUs do. Throughput is what fills the window, and throughput did not move.
 #
 # Raise it only alongside the arithmetic: a faster model, more backends, or an
 # earlier sweep. Raising it because the agent keeps asking is how a sweep comes
 # to overrun the open.
 #
-# **Due for re-derivation when the pool splits 2/5 instead of 4/3**, which is
-# planned once the Gemini Flash-Lite comparison reports. Five concurrent
-# analyses is not 5/3 of three: gemma4's E-series keeps its per-layer
-# embeddings in host RAM, so the cards contend for memory bandwidth and the
-# per-analysis time rises with the count. Measure the paired figure again at
-# five before choosing the number rather than scaling this one.
-_MAX_WATCHLIST = 12
+# The previous value was 12, derived from three concurrent analyses at 17.4
+# minutes each — the figures for a pool shared with a second deployment that
+# ended on 2026-09-01. See JOURNEY.md, 2026-09-02.
+_MAX_WATCHLIST = 30
 
 
 def _max_watchlist() -> int:

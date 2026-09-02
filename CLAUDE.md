@@ -121,23 +121,30 @@ above just queues in the proxy.
 used to live here — a 4/3 split, then a planned 2/5 — is gone with the second
 deployment.
 
-**Fourteen concurrent — two per card — is measured and works.** See
-[concurrency-benchmark.md](concurrency-benchmark.md) for the full run. The
-headline: 26 of 28 analyses finished, throughput is 3.2 min per analysis against
-13.2 alone (4.1x), and **the CPU is the bottleneck, not the GPUs** — the cards
-averaged 36-61% busy while the host CPU sat at 99.8% median. VRAM peaked at 5.5
-GiB of 8.0, RAM at 20.7 GB of 31, the pool at 701 W and 97 °C junction.
+**Seven concurrent is the right setting, and fourteen buys nothing.** Both were
+measured on 2026-09-02 with the same fourteen tickers, twice each:
 
-So `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=14` is safe here, and
-**`_MAX_WATCHLIST` can go to about 30** against the 12 that ships — 120 minutes
-between the 11:00 sweep and `earnings_check` at 13:00, at 3.2 min each, is
-roughly 37, and 30 leaves room for the tail. Raise it, watch a week of real
-sweep durations, then decide.
+| | 14 at once | **7 at once** |
+|---|---|---|
+| Wall clock for 14 analyses | 42.8 min | **42.5 min** |
+| Median per analysis | 34.0 min | **18.6 min** |
+| Tokens per analysis | 129,844 | 129,251 |
+| CPU / mean GPU busy | 97% / 65% | 98% / 63% |
+| VRAM peak / pool power | 5.52 GiB / 701 W | 5.45 GiB / 700 W |
 
-**What is not known is whether 14 beats 7.** There is no seven-concurrent
-measurement, and since the CPU is already pinned at 14, seven may give most of
-the throughput at half the per-analysis latency. One round of seven is about 25
-minutes and is the obvious next measurement.
+**Identical throughput, half the latency, identical machine load.** The CPU
+saturates before the GPUs do — the cards idle around 37% of the time at either
+setting — because gemma4's E-series keeps its per-layer embeddings in host RAM.
+Stacking a second analysis onto a card that is already waiting on the CPU does
+not make that card produce more.
+
+So `TRADINGAGENTS_MAX_CONCURRENT_ANALYSES=7`, and `_MAX_WATCHLIST = 30` on the
+3.05 min/analysis throughput against the 120-minute window.
+
+**Two failures in 28, both at 14 concurrent, and neither was capacity.** The
+model asked for an indicator that does not exist — `macd_histogram`,
+`boll_upper` — and the vendor router raised rather than telling the model the
+valid names. Since 2026-09-02 the error goes back to the model instead.
 
 **Overshooting the sum costs latency, not failures, and an earlier note here
 was wrong about why.** It said `WAIT_TIMEOUT=600` is ten minutes against an
@@ -275,8 +282,11 @@ roughly 51 on e2b's 7 minutes. Six tickers is two waves and comfortable.
 
 **The watchlist ratchet this describes is solved, and only half of it.**
 Commissioning a ticker calls `db.add_to_watchlist` and for a while nothing
-could ever remove one. The `untrack` action and `_MAX_WATCHLIST = 12` landed on
-2026-08-27 and cap the growth.
+could ever remove one. The `untrack` action and a watchlist cap landed on
+2026-08-27 and cap the growth. **The cap is 30 from 2026-09-02**, measured
+rather than derived: fourteen tickers at seven concurrent took 42.5 and 43.4
+minutes, which is about 3.05 minutes of throughput each, and the two-hour
+window fits roughly 39.
 
 **What is still missing is an ageing rule** — nothing drops a name the agent has
 stopped holding and stopped asking about. At the cap the agent must trade one

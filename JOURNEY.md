@@ -37,6 +37,25 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-02 — the watchlist cap goes from 12 to 30, on a measurement.** The old number was derived rather than guessed, and the derivation rested on two figures that no longer hold.
+
+It assumed **three concurrent analyses** and **17.4 minutes each** — the numbers for a pool shared with a second deployment that ended on 2026-09-01. Twelve was four waves of three inside the two-hour window between the 11:00 sweep and `earnings_check` at 13:00.
+
+**Measured on 2026-09-02.** Fourteen tickers at seven concurrent, run twice:
+
+| | Result |
+|---|---|
+| Wall clock for 14 | 42.5 and 43.4 minutes |
+| Throughput | **about 3.05 minutes per analysis** |
+| Succeeded | 28 of 28 |
+| Tokens per analysis | 129,000, prompt share healthy at 16% |
+
+At 3.05 minutes the 120-minute window fits about **39 analyses**. Thirty leaves a quarter of the window for a slow run, a retry, or a morning when something is wrong.
+
+**Seven concurrent, not fourteen, and that is the more useful half.** Fourteen at once takes the same wall clock — 42.8 minutes — and doubles the latency of each analysis, from 18.6 minutes to 34.0. The CPU saturates before the GPUs do, because gemma4's E-series keeps its per-layer embeddings in host RAM; the cards sit around 63% busy either way. **Stacking a second analysis onto each card buys nothing.**
+
+**What this does not fix.** The watchlist still only grows. Nothing ages out a name the agent has stopped holding and stopped asking about, so at the cap it has to trade one name's coverage for another — a decision it can make and is never prompted to revisit. A higher cap postpones that; it does not remove it.
+
 **2026-09-02 — the agent can say what it needs, and it is told what went wrong.** Three changes, all about the same gap: the agent acts blind to its own failures and has no way to say so.
 
 **1. A `note` action.** The agent may include `{"side": "note", "reason": "..."}` in its answer. It buys nothing, sells nothing, costs nothing and is refused for nothing. It is the agent addressing whoever maintains it — asking for a tool it lacks, data it cannot see, or a rule it finds contradictory.
