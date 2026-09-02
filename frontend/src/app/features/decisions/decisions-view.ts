@@ -1,7 +1,7 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
-import { AgentEvent, AgentEventOrder } from '../../core/models/api.models';
+import { AgentEvent, AgentEventOrder, AgentOrder } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 
 /**
@@ -30,6 +30,16 @@ export class DecisionsView {
    * note has no ticker and no quantity. */
   notesIn(event: AgentEvent): string[] {
     return event.orders.filter((o) => o.side === 'note').map((o) => o.reason);
+  }
+
+  /** Orders the broker refused.
+   *
+   * Defaulted rather than read straight off the event: a browser holding a
+   * cached bundle can outlive the deployment it was served by, and a field
+   * added on one side is undefined on the other until both catch up. A page
+   * that throws in that window is worse than one missing a section. */
+  failedIn(event: AgentEvent): AgentOrder[] {
+    return event.failed ?? [];
   }
 
   /** Everything the pass did that was not a note. */

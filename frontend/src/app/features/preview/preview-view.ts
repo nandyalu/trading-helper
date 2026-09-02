@@ -1,6 +1,8 @@
 import { Component, signal } from '@angular/core';
 
 import { EquityChart, EquityPoint } from '../../shared/equity-chart';
+import { Logo } from '../../shared/logo';
+import { ClockTime, marketTime } from '../../shared/market-time';
 
 /**
  * The design system, on real content, before it is applied to eight pages.
@@ -17,7 +19,7 @@ import { EquityChart, EquityPoint } from '../../shared/equity-chart';
  */
 @Component({
   selector: 'app-preview-view',
-  imports: [EquityChart],
+  imports: [EquityChart, Logo],
   templateUrl: './preview-view.html',
 })
 export class PreviewView {
@@ -62,6 +64,73 @@ export class PreviewView {
       pnl: 22.11,
     },
   ];
+
+  /** The fixed daily schedule, rendered on both clocks.
+   *
+   * `done` is hardcoded here because this is a preview. On the real page it
+   * comes from whether the job has run, which is a fact the API reports rather
+   * than a comparison against the reader's clock — a reader in Tokyo must not
+   * see tomorrow's pass marked complete because it is already the next day
+   * where they are. */
+  private readonly yesterday = new Date(Date.UTC(2026, 7, 29));
+  private readonly today = new Date(Date.UTC(2026, 8, 1));
+
+  protected readonly friday = [
+    {
+      t: marketTime(11, 0, this.yesterday),
+      text: 'Analysed 12 tickers. Charged $0.60.',
+      done: true,
+      act: false,
+    },
+    {
+      t: marketTime(12, 45, this.yesterday),
+      text: 'Regime read risk-on. VIX 16.7.',
+      done: true,
+      act: false,
+    },
+    {
+      t: marketTime(13, 35, this.yesterday),
+      text: 'Bought 4 NVDA. Sold 2 AAPL. Dropped CRM.',
+      done: true,
+      act: true,
+    },
+    {
+      t: marketTime(21, 30, this.yesterday),
+      text: 'Graded 2 signals. One beat SPY.',
+      done: true,
+      act: false,
+    },
+  ];
+
+  protected readonly monday = [
+    {
+      t: marketTime(11, 0, this.today),
+      text: 'Analysed 12 tickers. Charged $0.60.',
+      done: true,
+      act: false,
+    },
+    { t: marketTime(12, 45, this.today), text: 'Regime check', done: false, act: false },
+    { t: marketTime(13, 0, this.today), text: 'Earnings check', done: false, act: false },
+    { t: marketTime(13, 35, this.today), text: 'It decides', done: false, act: true },
+    {
+      t: marketTime(21, 30, this.today),
+      text: 'Grading, then the journal',
+      done: false,
+      act: false,
+    },
+  ];
+
+  /** The market's clock. Always shown, because it is the one the experiment
+   * actually runs on. */
+  protected marketClock(t: ClockTime): string {
+    return `${t.et} ${t.etZone}`;
+  }
+
+  /** The reader's own, or empty when they are already on the market's clock —
+   * printing the same time twice is noise rather than help. */
+  protected readerClock(t: ClockTime): string {
+    return t.local ? `${t.local} ${t.localZone}` : '';
+  }
 
   protected readonly terms = [
     [

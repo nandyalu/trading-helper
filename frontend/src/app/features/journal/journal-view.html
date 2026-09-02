@@ -39,10 +39,10 @@
             <dd>{{ d.alerts.length }}</dd>
           </div>
         </dl>
-        @if (d.book_lines.length) {
+        @if (d.book_lines?.length) {
           <div>
             <p class="muted-small">Holding at the end of the week</p>
-            @for (line of d.book_lines; track line) {
+            @for (line of d.book_lines ?? []; track line) {
               <p class="big-fact">{{ line }}</p>
             }
           </div>

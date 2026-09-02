@@ -1,10 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Trading Helper">
-  <!-- Kept deliberately coarse: this is read at 16px in a browser tab, where
-       thin strokes and candlestick detail turn to mush. A single thick rising
-       line on a dark tile stays legible against both light and dark tab bars. -->
-  <rect width="64" height="64" rx="14" fill="#0f172a"/>
-  <polyline points="12,45 25,32 35,39 49,19"
-            fill="none" stroke="#22c55e" stroke-width="7"
-            stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M40 17 L53 15 L51 28 Z" fill="#22c55e"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Same mark as app-logo: a path that moves inside a frame it never crosses.
+       Colours are literal here because a favicon has no page to inherit from,
+       and both are legible on a light or a dark browser chrome. -->
+  <rect width="32" height="32" rx="7" fill="#17150f"/>
+  <g stroke="#faf9f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
+    <path d="M5.5 11.5V7.3A1.8 1.8 0 0 1 7.3 5.5H11.5" fill="none"/>
+    <path d="M20.5 5.5h4.2a1.8 1.8 0 0 1 1.8 1.8v4.2" fill="none"/>
+    <path d="M26.5 20.5v4.2a1.8 1.8 0 0 1-1.8 1.8h-4.2" fill="none"/>
+    <path d="M11.5 26.5H7.3a1.8 1.8 0 0 1-1.8-1.8v-4.2" fill="none"/>
+  </g>
+  <path d="M9 20.5 12 16.6l2.6 2.8 3-6.1 2.6 4.7 3.4-5.3"
+        fill="none" stroke="#6f9ee8" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

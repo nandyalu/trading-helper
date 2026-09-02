@@ -58,7 +58,7 @@
             </div>
           }
 
-          @if (tradesIn(event).length || event.refused.length || event.failed.length) {
+          @if (tradesIn(event).length || event.refused.length || failedIn(event).length) {
             <ul class="orders">
               @for (order of tradesIn(event); track $index) {
                 <li>
@@ -79,7 +79,7 @@
                   <span class="muted">{{ order.why }}</span>
                 </li>
               }
-              @for (order of event.failed; track $index) {
+              @for (order of failedIn(event); track $index) {
                 <li>
                   <span class="side side--refused">broker said no</span>
                   <strong>{{ order.ticker }}</strong>
@@ -87,7 +87,7 @@
                 </li>
               }
             </ul>
-            @if (event.failed.length) {
+            @if (failedIn(event).length) {
               <p class="hint">
                 <strong>"Broker said no" is not the same as "refused".</strong> A refusal is the
                 agent's own arithmetic being wrong. This is an order it formed correctly that the

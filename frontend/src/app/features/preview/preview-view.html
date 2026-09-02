@@ -6,27 +6,38 @@
 <section class="page">
   <!-- 1. The hero, with the working footnote. -->
   <header class="hero">
-    <p class="hero-eyebrow">A public experiment · day 14</p>
-    <h1 class="hero-title">
-      What does an autonomous AI agent<button
-        class="fn-mark"
-        type="button"
-        aria-label="What the guardrails are"
-      >
-        *
-      </button>
-      do with <span class="hero-figure">$10,000</span>?
-    </h1>
-    <p class="hero-lede">
-      An AI agent has a simulated brokerage account, a fixed budget, and a bill for every piece of
-      research it orders. It decides what to study, what to buy, what to sell, and when to give up
-      on a name.
-    </p>
-    <p class="hero-lede hero-lede--strong">
-      Nobody helps it. There is no button on this site that adds a ticker, starts an analysis, or
-      places a trade.
-    </p>
+    <div class="hero-body">
+      <p class="hero-eyebrow">A public experiment · day 14</p>
+      <h1 class="hero-title">
+        What does an
+        <!-- The phrase and its footnote mark are one unit. A line break between
+             them orphans the asterisk, which then reads as a stray character. -->
+        <span class="hero-subject"
+          >autonomous AI agent<button
+            class="fn-mark"
+            type="button"
+            aria-label="What the guardrails are"
+          >
+            *
+          </button></span
+        >
+        do with <span class="hero-figure">$10,000</span>?
+      </h1>
+      <p class="hero-lede">
+        An AI agent has a simulated brokerage account, a fixed budget, and a bill for every piece of
+        research it orders. It decides what to study, what to buy, what to sell, and when to give up
+        on a name.
+      </p>
+      <p class="hero-lede hero-lede--strong">
+        Nobody helps it. There is no button on this site that adds a ticker, starts an analysis, or
+        places a trade.
+      </p>
+    </div>
 
+    <app-logo class="hero-mark" [size]="260" />
+  </header>
+
+  <div class="guardrails-wrap">
     <div class="guardrails">
       <p class="guardrails-label">* with guardrails to keep it in bounds</p>
       <div class="guardrails-cols">
@@ -50,7 +61,7 @@
         </div>
       </div>
     </div>
-  </header>
+  </div>
 
   <!-- 2. The disclaimer, where it is seen rather than buried. -->
   <p class="disclaimer">
@@ -143,47 +154,37 @@
 
       <p class="timeline-day">Friday 29 August · last trading day</p>
       <ol class="timeline-list">
-        <li class="tl tl--done">
-          <span class="tl-time">11:00</span>
-          <span class="tl-text">Analysed 12 tickers. Charged $0.60.</span>
-        </li>
-        <li class="tl tl--done">
-          <span class="tl-time">12:45</span>
-          <span class="tl-text">Regime read risk-on. VIX 16.7.</span>
-        </li>
-        <li class="tl tl--done tl--act">
-          <span class="tl-time">13:35</span>
-          <span class="tl-text">Bought 4 NVDA. Sold 2 AAPL. Dropped CRM.</span>
-        </li>
-        <li class="tl tl--done">
-          <span class="tl-time">21:30</span>
-          <span class="tl-text">Graded 2 signals. One beat SPY.</span>
-        </li>
+        @for (e of friday; track e.text) {
+          <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+            <span class="tl-time">
+              <span>{{ marketClock(e.t) }}</span>
+              @if (readerClock(e.t)) {
+                <span class="tl-local">{{ readerClock(e.t) }}</span>
+              }
+            </span>
+            <span class="tl-text">{{ e.text }}</span>
+          </li>
+        }
       </ol>
 
       <p class="timeline-day">Monday 1 September · today</p>
       <ol class="timeline-list">
-        <li class="tl tl--done">
-          <span class="tl-time">11:00</span>
-          <span class="tl-text">Analysed 12 tickers. Charged $0.60.</span>
-        </li>
-        <li class="tl tl--now">
-          <span class="tl-time">12:45</span>
-          <span class="tl-text">Regime check</span>
-        </li>
-        <li class="tl">
-          <span class="tl-time">13:00</span>
-          <span class="tl-text">Earnings check</span>
-        </li>
-        <li class="tl tl--act">
-          <span class="tl-time">13:35</span>
-          <span class="tl-text">It decides</span>
-        </li>
-        <li class="tl">
-          <span class="tl-time">21:30</span>
-          <span class="tl-text">Grading, then the journal</span>
-        </li>
+        @for (e of monday; track e.text) {
+          <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+            <span class="tl-time">
+              <span>{{ marketClock(e.t) }}</span>
+              @if (readerClock(e.t)) {
+                <span class="tl-local">{{ readerClock(e.t) }}</span>
+              }
+            </span>
+            <span class="tl-text">{{ e.text }}</span>
+          </li>
+        }
       </ol>
+
+      <p class="timeline-foot">
+        Times on the market's clock, and yours. The filled line is what has already happened.
+      </p>
     </aside>
   </section>
 
