@@ -37,6 +37,33 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the analyst framework is rebased onto upstream v0.4.1, before a single analysis has run.** The vendored TradingAgents had been pinned since 18 July. Upstream shipped two releases in that time, and three of the fixes are data-correctness bugs in the prices the agent would reason over.
+
+**The timing is the point.** No analysis had run and no signal existed, so this changes nothing already in the record. A month from now the same rebase would have split the experiment in two, with no way to tell a change in the framework from a change in the market.
+
+The fixes worth naming:
+
+| Fix | Why it matters here |
+|---|---|
+| **The latest OHLCV bar was silently dropped** | A NaN close on the newest bar made the *previous* trading day look like the latest, so indicators ran on stale prices. This is the one that decided it. |
+| The FRED vintage is pinned to the as-of date | Wrong today only in backtests, but it makes any future replay honest |
+| A decision is not settled before its holding window trades | The memory log was resolving lessons early, teaching the agent from outcomes that had not happened |
+| The Trader is grounded in the technical market report | Overlaps with our own price-anchoring, and the two now stack |
+
+**Two of our nine cherry-picks were merged upstream and were dropped.** The REVIEW rating fix and the debate-opening fix both landed there, in more complete form than ours — upstream's opening fix covers the risk debaters too, which ours never did. Carrying our copies would have meant maintaining a worse duplicate forever.
+
+**Three things the rebase broke, which no merge could have resolved:**
+
+The trade horizon stopped reaching the checkpoint signature. Upstream moved that construction into two new methods, neither of which took a horizon, so both computed one for the default. **A swing run would have resumed a position run's checkpoint** — the exact thing the signature exists to prevent — and one of the methods referenced a name it did not take, which was a `NameError` waiting for the first checkpointed run.
+
+The trader raised on a state with no `market_report`. Upstream reads it with a subscript, and the key is absent rather than empty when the market analyst is not selected, which is the case its own comment describes.
+
+`yfinance_news` called a helper upstream had renamed.
+
+**Nothing of ours was lost.** The tool-call recovery, the candidate screener, the verified market snapshot in the trader, the `TraderProposal` with no price fields, and tool errors going to the model rather than the logs are all still there and still tested.
+
+**Where it leaves us:** 17 commits ahead of upstream, 0 behind, +1,839 / −176 lines of application code. 718 upstream tests pass, up from 663. All 600 of ours pass.
+
 **2026-09-02 — the experiment starts.** The container is deployed, the Webull paper account is reset, and the agent is switched on.
 
 **This is day one.** Not 2026-09-01, which is when the code was written: nothing was running that day — no container, no account, no book. The experiment starts when the agent can act.
