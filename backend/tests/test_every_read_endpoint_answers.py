@@ -41,6 +41,21 @@ READ_ENDPOINTS = [
     "/api/jobs/tasks",
 ]
 
+# Routes that take a path parameter, with a value to try. These were excluded
+# from the sweep below on the grounds that they were "tested elsewhere". They
+# were not, and `/api/tickers/{ticker}/events` returned 500 for two days: it
+# still read the real and paper books, which had been removed.
+#
+# An unknown ticker is the right probe. It exercises the same code path and
+# needs no fixture, and a 404 is a perfectly good answer — what is being
+# checked is that the route does not raise.
+PARAMETERIZED_ENDPOINTS = {
+    "/api/tickers/{ticker}": "/api/tickers/AAPL",
+    "/api/tickers/{ticker}/events": "/api/tickers/AAPL/events",
+    "/api/tickers/{ticker}/bars": "/api/tickers/AAPL/bars",
+    "/api/signals/{signal_id}": "/api/signals/1",
+}
+
 
 @pytest.fixture
 def client(monkeypatch):
@@ -64,6 +79,16 @@ def test_endpoint_answers(client, path):
     )
 
 
+@pytest.mark.parametrize("path", sorted(PARAMETERIZED_ENDPOINTS.values()))
+def test_parameterized_endpoint_does_not_raise(client, path):
+    """A 404 is fine. A 500 is the bug this catches."""
+    response = client.get(path)
+    assert response.status_code < 500, (
+        f"GET {path} returned {response.status_code}. "
+        f"{response.text[:300]}"
+    )
+
+
 def test_the_list_covers_every_get_route():
     """A route that is not in the list above is a route nothing smoke-tests.
 
@@ -75,10 +100,10 @@ def test_the_list_covers_every_get_route():
         for route in app.routes
         if "GET" in getattr(route, "methods", set())
         and route.path.startswith("/api/")
-        and "{" not in route.path  # path params need a real id; tested elsewhere
         and not route.path.startswith("/api/docs")
         and not route.path.startswith("/api/redoc")
         and route.path != "/api/openapi.json"
     }
-    missing = routed - set(READ_ENDPOINTS)
+    covered = set(READ_ENDPOINTS) | set(PARAMETERIZED_ENDPOINTS)
+    missing = routed - covered
     assert not missing, f"These GET routes are not smoke-tested: {sorted(missing)}"

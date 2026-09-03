@@ -176,7 +176,7 @@ class AgentPositionOut(OrmModel):
 
 
 class LotOut(OrmModel):
-    book: str  # "real" | "paper" | "agent"
+    book: str  # always "agent" — the other two books ended 2026-09-01
     quantity: float
     entry: float
     entry_at: date
@@ -192,11 +192,13 @@ class TickerDetailOut(Schema):
     ticker: str
     current_price: float | None
     price_updated_at: datetime | None
-    real_position: PortfolioPositionOut | None
-    paper_position: PaperPositionOut | None
     latest_signal: SignalOut | None
-    # The auto trader's position, kept apart from the two above because it is
-    # the only one with real orders resting under it.
+    # The agent's position. `real_position` and `paper_position` sat here until
+    # 2026-09-03, naming two classes deleted with their books on 2026-09-01.
+    # Pydantic cannot build a model whose annotation names a missing class, so
+    # every ticker detail request raised before it ran — the page was 500 for
+    # two days. The route had already stopped passing them and the frontend had
+    # already stopped reading them; only the annotations were left.
     agent_position: AgentPositionOut | None = None
     inactive: bool = False
     inactive_reason: str | None = None

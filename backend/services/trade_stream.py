@@ -83,9 +83,26 @@ def is_running() -> bool:
     return _thread is not None and _thread.is_alive()
 
 
-def _on_event(client, payload, response) -> None:
+def _on_event(event_type, subscribe_type, payload, response) -> None:
     """Something changed on the account. Go and look, using the path that is
-    known to read fills correctly."""
+    known to read fills correctly.
+
+    **The two callbacks in this SDK do not take the same arguments**, and
+    assuming they did cost this stream every event it ever received:
+
+    - ``on_connect(client, payload, response)`` — three
+    - ``on_events_message(eventType, subscribeType, payload, response)`` — four
+
+    A handler written to the first shape raises ``TypeError`` on the first real
+    event. The SDK re-raises, the stream drops, and the reconnect loop brings it
+    back to fail on the next one. It looked healthy in the logs: "stream
+    connected" appeared every time, because connecting was the only part that
+    worked.
+
+    Neither signature is documented; both were read out of the installed
+    package. ``backend/tests/test_trade_stream_signature.py`` pins them against
+    the real SDK so a version bump that changes either one fails here.
+    """
     # Logged verbatim: the payload shape has never been observed in this app,
     # and the first real one is worth having in the logs to read later.
     log.info("Trade event: %s", str(payload)[:500])

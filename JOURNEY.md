@@ -37,6 +37,26 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the first trading day, and three things it exposed.** The agent opened its book: five researches at 13:35, then a 29-share AVGO buy at 14:34 on the strongest of the returning signals. All of it recorded. Three defects turned up in the checking, none of which affected what was recorded, and all three had been live since the two-book removal on 2026-09-01.
+
+**The trade event stream had never delivered a single event.** The Webull SDK calls its two callbacks with different argument counts — `on_connect(client, payload, response)` and `on_events_message(eventType, subscribeType, payload, response)` — and neither signature is documented. The handler was written to the first shape, so every real event raised `TypeError`, the stream dropped, and the reconnect loop brought it back to fail on the next one.
+
+It looked healthy. "Trade event stream connected" appeared in the log every sixty seconds, because connecting was the only part that worked. Nothing downstream broke either: the 15-minute poll is the guarantee and the stream is only a latency improvement, so the AVGO fill was still recorded — twelve minutes late instead of within a second.
+
+**The existing tests confirmed the bug rather than catching it.** They called the handler with three arguments, the same wrong shape as the handler itself, so they exercised a signature the SDK never uses. `test_trade_stream_signature.py` now reads both arities out of the installed package and checks the handlers against them, so an SDK upgrade that changes either one fails here.
+
+**The ticker detail page had returned 500 for two days.** `lots_for` still read the real book and the hand-followed paper book, calling `db.get_transactions` and `db.get_paper_transactions` — both deleted with those books. And `TickerDetailOut` still declared `real_position: PortfolioPositionOut` and `paper_position: PaperPositionOut`, naming two classes that no longer exist. Pydantic cannot build a model whose annotation names a missing class, so the request raised before it ran.
+
+The route had already stopped passing those fields and the frontend had already stopped reading them. Only the annotations were left, which is the kind of leftover that a removal sweep sees as harmless.
+
+**Nothing caught either because the endpoint smoke test skipped every route with a path parameter**, on the written grounds that they were "tested elsewhere". They were not. That exclusion is gone: parameterized routes are probed with an unknown ticker and asserted not to return 5xx, and the coverage check now counts them. Adding it found the second bug immediately.
+
+That test was written after `/api/digest` returned 500 in production. It caught the class of bug it was built for and then missed two more of exactly the same class, because of one exclusion nobody revisited.
+
+**One design question this raised, left open.** The prompt tells the agent "you will see the analyst's answer tomorrow". That was not true today: the watchdog independently triggered analyses on four of the five freshly-watched tickers for unusual price and volume action, and the event-driven decision path then ran a second pass at 14:34. The agent commissioned AVGO and traded it an hour later, on an analysis it had been told would not arrive until tomorrow.
+
+Both halves are deliberate — an intraday move is worth nothing by the next morning, which is why the event path exists. But the prompt states a rule the system does not keep, and the agent reasons about research cost against a delay that may not apply. Recorded here rather than changed, because changing the prompt mid-experiment needs its own entry and its own decision.
+
 **2026-09-03 — times are shown on the reader's clock, and one of them was wrong.** The site printed UTC in several places. UTC is not a fact worth reading: "13:35 UTC" makes a reader do arithmetic before they know whether they missed anything.
 
 The pages now show each time on the reader's own clock with the zone named — "9:35 AM EDT", "7:05 PM IST" — which is unambiguous on its own. `market-time.ts` already did this for the timeline; the sweep line, the decision-pass line, the settings line and the glossary were still hardcoded.

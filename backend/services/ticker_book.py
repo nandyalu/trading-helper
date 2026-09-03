@@ -139,12 +139,20 @@ def _agent_fills(ticker: str) -> list[dict]:
 
 
 def lots_for(ticker: str) -> list[Lot]:
-    """Every lot in this ticker across all three books, newest entry first."""
+    """Every lot in this ticker, newest entry first.
+
+    **One book, since 2026-09-01.** This read the real book and the
+    hand-followed paper book too, and kept calling both after they were
+    removed — ``db.get_transactions`` and ``db.get_paper_transactions`` no
+    longer exist, so every request raised ``AttributeError`` and the ticker
+    detail page returned 500 from the day of the removal until 2026-09-03.
+
+    Nothing caught it because the endpoint smoke test skips routes with a path
+    parameter, on the stated grounds that they are "tested elsewhere". They
+    were not.
+    """
     ticker = ticker.upper().strip()
-    lots: list[Lot] = []
-    lots += match_lots("real", db.get_transactions(ticker))
-    lots += match_lots("paper", db.get_paper_transactions(ticker))
-    lots += match_lots("agent", _agent_fills(ticker))
+    lots = match_lots("agent", _agent_fills(ticker))
     lots.sort(key=lambda lot: lot.entry_at, reverse=True)
     return lots
 

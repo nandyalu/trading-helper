@@ -17,6 +17,21 @@ def not_started(monkeypatch):
     monkeypatch.setattr(trade_stream, "_loop", None)
 
 
+def _deliver(payload):
+    """Call the handler the way the SDK does.
+
+    The SDK passes four arguments to ``on_events_message`` and three to
+    ``on_connect``. These tests used to pass three to both, which is the same
+    mistake the handler itself had — so they exercised a signature the SDK
+    never uses and confirmed the bug rather than catching it. The stream had
+    never delivered an event.
+
+    ``test_trade_stream_signature.py`` checks this arity against the installed
+    SDK, so this helper cannot drift from it silently.
+    """
+    trade_stream._on_event("ORDER", "ORDER_STATUS", payload, None)
+
+
 def test_an_event_settles_through_the_verified_path(monkeypatch):
     """Parsing the payload would put the fill price on a code path never seen
     in production. The last unverified payload shape left every fill pending
@@ -26,7 +41,7 @@ def test_an_event_settles_through_the_verified_path(monkeypatch):
     called = []
     monkeypatch.setattr(agent, "settle_pending", lambda: called.append(1) or [])
 
-    trade_stream._on_event(None, "any payload at all", None)
+    _deliver("any payload at all")
 
     assert called == [1]
 
@@ -42,7 +57,7 @@ def test_a_filled_stop_is_announced(monkeypatch):
     )
     monkeypatch.setattr(trade_stream, "_notify_from_thread", lambda fill: posted.append(fill))
 
-    trade_stream._on_event(None, "payload", None)
+    _deliver("payload")
 
     assert posted and posted[0]["ticker"] == "ZBH"
 
@@ -59,7 +74,7 @@ def test_an_ordinary_fill_is_not_announced(monkeypatch):
     )
     monkeypatch.setattr(trade_stream, "_notify_from_thread", lambda fill: posted.append(fill))
 
-    trade_stream._on_event(None, "payload", None)
+    _deliver("payload")
 
     assert posted == []
 
@@ -74,7 +89,7 @@ def test_a_settle_failure_does_not_kill_the_stream(monkeypatch):
 
     monkeypatch.setattr(agent, "settle_pending", boom)
 
-    trade_stream._on_event(None, "payload", None)  # must not raise
+    _deliver("payload")  # must not raise
 
 
 def test_notifying_without_a_loop_is_a_no_op(monkeypatch):
