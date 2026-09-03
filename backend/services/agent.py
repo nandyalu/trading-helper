@@ -28,7 +28,9 @@ import time
 from dataclasses import dataclass, field
 
 from backend.database import db
-from backend.services import agent_book, analysis, candidates, quotes, research, sandbox_broker, watchdog
+from backend.services import (
+    agent_book, analysis, candidates, market_clock, quotes, research, sandbox_broker, watchdog,
+)
 from backend.services.positions import get_current_price
 from backend.services.sizing import get_atr, suggest_position
 from backend.notifications.embed import Color, Embed
@@ -178,6 +180,47 @@ _FAILURES_SHOWN = 5
 _FAILURE_LOOKBACK_RUNS = 3
 
 
+# How many past wakeups to report. Enough to show a pattern, few enough that
+# the agent does not spend its attention reading its own log.
+_WAKEUPS_SHOWN = 6
+
+
+def describe_recent_wakeups(wakeups: list[dict]) -> list[str]:
+    """What the agent's own chosen cadence has produced.
+
+    **A wakeup costs it nothing, so the obvious failure is asking for the
+    minimum every time** and spending the session on passes that do nothing.
+    Pricing a wakeup was rejected: the work is trivial and a charge would be an
+    invented cost dressed up as a rule, which is the mistake the research
+    timing deliberately avoids.
+
+    This is feedback instead of a limit. The agent is shown how its last
+    several wakeups turned out and left to draw the conclusion. Whether it
+    learns to space them is a result worth having, and a cap would have
+    answered that question before it was asked.
+    """
+    if not wakeups:
+        return []
+    recent = wakeups[-_WAKEUPS_SHOWN:]
+    idle = sum(1 for w in recent if not w.get("acted"))
+    lines = ["Your recent wakeups, and whether each one led to an action:"]
+    for w in recent:
+        at = w.get("at", "")
+        lines.append(f"- {at}: {'acted' if w.get('acted') else 'did nothing'}")
+    if idle == len(recent) and len(recent) >= 3:
+        lines.append(
+            f"All {idle} did nothing. Waking more often does not make the market move — "
+            "if there is nothing to react to, ask for a later time and spend the "
+            "attention when something has actually changed."
+        )
+    elif idle:
+        lines.append(
+            f"{idle} of the last {len(recent)} did nothing. Pick the next time for when "
+            "you expect something to have changed, not out of habit."
+        )
+    return lines
+
+
 def describe_recent_failures(failures: list[dict]) -> list[str]:
     """Orders the broker refused on earlier passes, for this pass's prompt.
 
@@ -277,6 +320,8 @@ def build_prompt(
     watchlist: list[str] | None = None,
     max_watchlist: int = 0,
     failures: list[dict] | None = None,
+    unsettled_cash: float = 0.0,
+    wakeups: list[dict] | None = None,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -296,6 +341,11 @@ def build_prompt(
     lines = [
         "You manage a small paper-trading account. Decide what to trade today.",
         "",
+        # First, because everything below is read against it and because the
+        # agent chooses its own next wakeup — a question about the time it
+        # could not answer while nothing in the prompt said what time it was.
+        market_clock.describe(),
+        "",
     ]
     if regime_line:
         lines += [regime_line, ""]
@@ -305,8 +355,19 @@ def build_prompt(
         f"Of it, ${book.cash:,.2f} is uninvested and available to spend right now.",
         f"Total equity: ${book.equity:,.2f} ({book.return_pct:+.1f}% against the account)",
         f"Realized profit so far: ${book.realized_pnl:,.2f}",
-        "",
     ]
+    # What a cash account actually restricts. The broker refuses a bracket
+    # against unsettled funds and the app quietly falls back to a plain order
+    # plus separately-armed exits — a rule the agent has been running into
+    # and was never told about. Silent at zero, which is the ordinary case.
+    if unsettled_cash:
+        lines += [
+            f"Of that cash, ${unsettled_cash:,.2f} came from sales that have not settled yet.",
+            "You can spend it, but a buy made with unsettled money cannot carry its stop and",
+            "take-profit in the same order — they get placed separately, and that second step",
+            "can fail and leave the position unprotected. Settled money is the safer purchase.",
+        ]
+    lines.append("")
 
     if book.holdings:
         lines.append("You currently hold:")
@@ -413,6 +474,10 @@ def build_prompt(
     recent_failures = describe_recent_failures(failures or [])
     if recent_failures:
         lines += ["", *recent_failures]
+
+    recent_wakeups = describe_recent_wakeups(wakeups or [])
+    if recent_wakeups:
+        lines += ["", *recent_wakeups]
 
     if rejected:
         lines += [
@@ -600,6 +665,14 @@ def build_prompt(
             else []
         ),
         "- Doing nothing is a valid answer, and often the right one.",
+        "- You decide when you are next asked. Put \"next_wakeup\" beside your orders:",
+        "  a number of minutes from now, or a clock time in Eastern like \"14:30\".",
+        "  A holding two dollars from its stop is worth another look soon; one that",
+        "  just opened is not. The minimum is 5 minutes and the maximum is 6 hours.",
+        "  A time past the close becomes the next open, and you are asked once more",
+        "  five minutes before the close whatever you choose, so nothing goes into",
+        "  the night unreviewed. Waking costs nothing, which is exactly why asking",
+        "  for the minimum every time wastes the day rather than saving it.",
         *(
             [
                 f"- These are meant to be {horizon_days}-day trades. A position held much",
@@ -622,7 +695,7 @@ def build_prompt(
         "including doing nothing.",
         "",
         "Reply with JSON only, in this exact shape:",
-        '{"reasoning": "one or two sentences", "orders": '
+        '{"reasoning": "one or two sentences", "next_wakeup": "45 minutes", "orders": '
         '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"},',
         ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"},',
         # The research example carries "when" so the field appears in the shape
@@ -671,6 +744,70 @@ def parse_decision(text: str) -> tuple[str, list[dict]]:
     if not isinstance(orders, list):
         orders = []
     return str(payload.get("reasoning") or ""), [o for o in orders if isinstance(o, dict)]
+
+
+def parse_wakeup(text: str, now: datetime.datetime | None = None) -> datetime.datetime | None:
+    """When the agent asked to be woken next, as a real instant.
+
+    Separate from ``parse_decision`` rather than a third element of its tuple:
+    every caller unpacks that pair, and widening it would break them all to
+    carry a value most of them do not want.
+
+    **Tolerant, like the rest of this model's output handling.** The prompt asks
+    for minutes or an Eastern clock time, and the model writes prose. All of
+    "45", "45 minutes", "45m", "14:30" and "2:30 PM" are read. Anything else
+    returns None, which the scheduler treats as "asked for nothing" — a
+    fallback, never a decision the agent gets credited with.
+
+    The value is not bounded here. ``market_clock.clamp_wakeup`` does that, so
+    what the agent asked for and what it got stay separately visible.
+    """
+    if not text:
+        return None
+    fenced = re.search(r"```(?:json)?\s*(.+?)```", text, re.S)
+    brace = re.search(r"\{.*\}", fenced.group(1) if fenced else text, re.S)
+    if not brace:
+        return None
+    try:
+        payload = json.loads(brace.group(0))
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("next_wakeup")
+    if raw is None:
+        return None
+
+    here = market_clock.now_et(now)
+    if isinstance(raw, (int, float)):
+        return here + datetime.timedelta(minutes=float(raw))
+    text_value = str(raw).strip().lower()
+    if not text_value:
+        return None
+
+    # A clock time — "14:30", "2:30 pm". Checked before the minutes form,
+    # because "1430" and "14:30" mean very different things and only the
+    # colon tells them apart.
+    clock = re.match(r"^(\d{1,2}):(\d{2})\s*(am|pm)?$", text_value)
+    if clock:
+        hour, minute = int(clock.group(1)), int(clock.group(2))
+        meridiem = clock.group(3)
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        elif meridiem == "am" and hour == 12:
+            hour = 0
+        if hour > 23 or minute > 59:
+            return None
+        return here.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    minutes = re.match(r"^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes)?$", text_value)
+    if minutes:
+        return here + datetime.timedelta(minutes=float(minutes.group(1)))
+    hours = re.match(r"^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)$", text_value)
+    if hours:
+        return here + datetime.timedelta(hours=float(hours.group(1)))
+    log.info("Could not read a wakeup time from %r", raw)
+    return None
 
 
 def screen(
@@ -929,6 +1066,95 @@ def _ask(prompt: str) -> str:
     return str(content)
 
 
+def wakeup_due(now: datetime.datetime | None = None) -> datetime.datetime | None:
+    """The wakeup the agent asked for, if it has arrived. None otherwise.
+
+    Read from the last stored run, so a wakeup survives a restart — the pass
+    that asked for it and the pass that answers it are different processes an
+    hour apart.
+
+    **Returns None when the last pass asked for nothing.** That is not the same
+    as asking for later: the agent gets woken at the next scheduled time
+    instead, and is never credited with having chosen it.
+
+    Also None once the wakeup has been served, which is what the run ordering
+    gives for free — the pass that runs on waking stores its own next time, so
+    the one just used is no longer the latest.
+    """
+    runs = db.get_agent_runs(limit=1)
+    if not runs:
+        return None
+    wanted = runs[0].next_wakeup
+    if wanted is None:
+        return None
+    if wanted.tzinfo is None:
+        wanted = wanted.replace(tzinfo=datetime.timezone.utc)
+    here = market_clock.now_et(now)
+    return wanted.astimezone(here.tzinfo) if wanted <= here else None
+
+
+def _unsettled_cash() -> float:
+    """Cash from sales that has not settled, as the broker sees it.
+
+    **This is the real constraint on a cash account**, and the one the agent
+    was never shown. Webull refuses a bracket order against unsettled funds, so
+    a buy made with it gets a plain order and separately-armed exits instead —
+    and that second step can fail and leave the position unprotected.
+
+    The pattern day trader rule is *not* the constraint here and was
+    deliberately not modelled: PDT governs margin accounts and this one is
+    INDIVIDUAL_CASH. Simulating a rule the account does not have would make the
+    record less faithful, not more.
+
+    Zero on any failure. A missing number must never read as a large unsettled
+    balance and talk the agent out of a purchase it could have made.
+    """
+    try:
+        balance = sandbox_broker.get_balance() or {}
+        assets = balance.get("account_currency_assets") or []
+        if not assets:
+            return 0.0
+        return float(assets[0].get("unsettled_cash") or 0.0)
+    except Exception:
+        log.exception("Could not read the unsettled cash balance")
+        return 0.0
+
+
+def _recent_wakeups() -> list[dict]:
+    """The last several passes, and whether each one did anything.
+
+    Read from the stored runs, not held in memory: a wakeup the agent asked for
+    at 10am is judged by a pass that runs in a different process an hour later.
+
+    "Acted" counts orders placed, exits adjusted, research commissioned and
+    names untracked. **A note does not count**, for the same reason it does not
+    count anywhere else — a pass that only said something is still an idle
+    pass, and letting it read as action would tell the agent its cadence is
+    earning more than it is.
+    """
+    out: list[dict] = []
+    for row in reversed(db.get_agent_runs(limit=_WAKEUPS_SHOWN)):
+        acted = bool((row.placed or 0) or (row.adjusted or 0))
+        # Research and untracks live in the orders JSON rather than in a count
+        # column, so a pass that only commissioned research would otherwise
+        # read as idle — which is exactly backwards, since choosing what to
+        # study is the only way anything new enters the account.
+        if not acted and row.orders:
+            try:
+                sides = {o.get("side") for o in json.loads(row.orders)}
+                acted = bool(sides & {"buy", "sell", "adjust", "research", "untrack"})
+            except (ValueError, AttributeError, TypeError):
+                pass
+        at = row.ran_at
+        if at is not None and at.tzinfo is None:
+            at = at.replace(tzinfo=datetime.timezone.utc)
+        out.append({
+            "at": market_clock.now_et(at).strftime("%-I:%M %p") if at else "",
+            "acted": acted,
+        })
+    return out
+
+
 def _recent_broker_failures() -> list[dict]:
     """Orders the broker refused on the last few passes.
 
@@ -976,6 +1202,15 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     # Orders the broker would not take on recent passes. Read once and given to
     # both attempts, so the retry sees the same history the first answer did.
     recent_failures = _recent_broker_failures()
+    # Read once and shared with the retry too. The retry is the same pass, so
+    # its cadence history has not changed.
+    recent_wakeups = _recent_wakeups()
+    # How much of the cash is unsettled, from the broker rather than the app's
+    # own budget arithmetic — the broker is what actually refuses a bracket
+    # against it. Clamped to the agent's cash, because the sandbox pot can be
+    # larger than the slice the app lets it spend and an unsettled figure above
+    # its own balance would be nonsense.
+    unsettled = min(_unsettled_cash(), book.cash) if book.cash > 0 else 0.0
     # The exact prompt, kept so the Events page can show what was asked. A
     # retry replaces it, because the retry is the prompt the accepted orders
     # were actually screened from.
@@ -984,7 +1219,7 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
         horizon_days=horizon_days, menu=menu, price=research.get_price(),
         max_research=_max_research_per_day(),
         watchlist=watchlist, max_watchlist=_max_watchlist(),
-        failures=recent_failures,
+        failures=recent_failures, unsettled_cash=unsettled, wakeups=recent_wakeups,
     )
     answer = _ask(shown)
     reasoning, proposed = parse_decision(answer)
@@ -997,7 +1232,8 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
                          regime_line=regime_line, horizon_days=horizon_days, menu=menu,
                          price=research.get_price(), max_research=_max_research_per_day(),
                          watchlist=watchlist, max_watchlist=_max_watchlist(),
-                         failures=recent_failures)
+                         failures=recent_failures, unsettled_cash=unsettled,
+                         wakeups=recent_wakeups)
     retry_answer = _ask(shown)
     retry_reasoning, retry_proposed = parse_decision(retry_answer)
     if not retry_proposed:
@@ -1053,6 +1289,12 @@ class AgentRun:
     # is minutes of async work, so this is the handoff to the scheduler, which
     # dispatches them and then asks the agent again when they land.
     research_now: list[str] = field(default_factory=list)
+    # When the agent asked to be woken, and when it actually will be. They
+    # differ when it aimed outside market hours. None means it asked for
+    # nothing — the scheduler falls back, and the agent is not credited with
+    # having chosen the fallback.
+    wakeup_asked: "datetime.datetime | None" = None
+    next_wakeup: "datetime.datetime | None" = None
     # Tickers it stopped watching. No money moves either way, but tomorrow's
     # sweep is smaller for it, so this is a decision and not housekeeping.
     untracked: list[str] = field(default_factory=list)
@@ -1622,6 +1864,12 @@ def run_once() -> AgentRun:
     run = AgentRun(reasoning=reasoning, rejected=rejected, book=book,
                    prompt=getattr(decision, "prompt", ""),
                    response=getattr(decision, "response", ""))
+    # What it asked for and what it got, kept apart. `next_wakeup` is the
+    # clamped, usable instant the scheduler acts on; `wakeup_asked` is the raw
+    # request. When they differ the agent aimed somewhere the market is shut,
+    # and that is worth being able to read afterwards.
+    run.wakeup_asked = parse_wakeup(getattr(decision, "response", ""))
+    run.next_wakeup = market_clock.clamp_wakeup(run.wakeup_asked)
     # **The newest signal per ticker, chosen explicitly.** These three used to
     # be dict comprehensions over the signal list, and a dict comprehension
     # keeps the *last* value it sees. The list arrives newest-first, so the
@@ -1875,6 +2123,13 @@ def _record_run(run: "AgentRun") -> None:
             equity=book.equity if book else None,
             cash=book.cash if book else None,
             research_spent=book.research_spent if book else None,
+            # Stored as UTC like every other timestamp here. The agent reasons
+            # in Eastern and the database does not.
+            next_wakeup=(
+                run.next_wakeup.astimezone(datetime.timezone.utc)
+                if run.next_wakeup
+                else None
+            ),
         )
     except Exception:
         log.exception("Could not record the agent run")

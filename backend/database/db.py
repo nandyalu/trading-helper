@@ -674,11 +674,13 @@ def record_agent_run(
     prompt: str | None = None,
     response: str | None = None,
     orders: str | None = None,
+    next_wakeup: datetime.datetime | None = None,
     *,
     _session: Session = None,
 ) -> int:
     row = AgentRun(
         ran_at=ran_at,
+        next_wakeup=next_wakeup,
         reasoning=(reasoning or "")[:4000],
         placed=placed,
         rejected=rejected,

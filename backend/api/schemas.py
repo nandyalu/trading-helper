@@ -428,6 +428,9 @@ class AgentEventOut(Schema):
 
     id: int
     ran_at: datetime
+    # When the agent asked to be woken next. Null means it asked for nothing —
+    # the scheduler's fallback is not a decision the agent gets credited with.
+    next_wakeup: datetime | None = None
     reasoning: str = ""
     skipped: str | None = None
     equity: float | None = None

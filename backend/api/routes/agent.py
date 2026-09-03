@@ -165,6 +165,7 @@ def get_events(limit: int = 30):
         events.append(AgentEventOut(
             id=row.id,
             ran_at=row.ran_at,
+            next_wakeup=row.next_wakeup,
             reasoning=row.reasoning or "",
             skipped=row.skipped,
             equity=row.equity,

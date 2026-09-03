@@ -35,6 +35,9 @@
           <div>
             <strong>{{ when(event.ran_at) }}</strong>
             <span class="muted"> — {{ did(event) }}</span>
+            @if (event.next_wakeup) {
+              <span class="muted"> · asked to be woken at {{ wokenAt(event.next_wakeup) }}</span>
+            }
           </div>
           @if (event.cash !== null) {
             <span class="muted">

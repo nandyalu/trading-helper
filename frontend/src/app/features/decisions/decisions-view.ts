@@ -4,7 +4,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { AgentEvent, AgentEventOrder, AgentOrder } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 import { Term } from '../../shared/glossary/term';
-import { marketTime, readerDateTime } from '../../shared/market-time';
+import { marketTime, readerDateTime, readerTime } from '../../shared/market-time';
 
 /**
  * Every decision pass, with the prompt and the answer verbatim.
@@ -31,6 +31,17 @@ export class DecisionsView {
   /** A pass's timestamp on the reader's clock, with the zone named. */
   when(instant: string): string {
     return readerDateTime(instant);
+  }
+
+  /** When it asked to be woken next — time only, since it is the same day.
+   *
+   * The agent sets its own cadence, so this is a decision it made and worth
+   * showing beside the orders. A pass that asked for nothing shows nothing:
+   * the scheduler's fallback is not something the agent chose.
+   */
+  wokenAt(instant: string): string {
+    const t = readerTime(instant);
+    return `${t.time} ${t.zone}`;
   }
 
   /** The agent's messages to whoever maintains it.

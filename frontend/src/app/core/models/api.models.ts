@@ -377,6 +377,8 @@ export interface AgentEventOrder {
 export interface AgentEvent {
   id: number;
   ran_at: string;
+  /** When the agent asked to be woken next. Null means it asked for nothing. */
+  next_wakeup: string | null;
   reasoning: string;
   skipped: string | null;
   equity: number | null;

@@ -37,6 +37,26 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the agent sets its own cadence, and can finally tell the time.** Four changes, one idea: it manages a book through the day instead of deciding once at the open and going quiet.
+
+**It says when to wake it.** Each pass answers with `next_wakeup` alongside its orders — a clock time or a number of minutes. The scheduler wakes it then. A stock two dollars from its stop deserves a look in thirty minutes; one that just opened does not. That is a trading decision and the agent has the inputs for it: its positions, their stops and targets, and the prices.
+
+**It is told what time it is.** Nothing in the prompt ever said. The agent could not have chosen a wakeup without it, and it had been reasoning about a trading day with no idea how much of one was left. The prompt now opens with the Eastern time, the date, and how long until the close.
+
+**Bounds, and one thing that had to move.** A wakeup clamps into market hours — a request for 3am becomes the next open. A final pass runs five minutes before the close whatever was asked for, so nothing goes into the night unreviewed. The watchdog stays as the safety net for moves the agent did not anticipate.
+
+The 30-minute cooldown had to change. It existed to stop the watchdog re-planning a book that had barely moved, and once the agent picks its own cadence that same rule fights it. **The agent's chosen time now wins; the cooldown still applies to the watchdog.**
+
+**It sees what its wakeups produced.** A wakeup costs nothing, so the obvious failure is asking for the minimum every time and burning the day on passes that do nothing. Pricing it was rejected — that is the invented cost the research-timing entry above warns about. Instead the prompt reports the last several wakeups and whether each led to an action. That is feedback rather than a limit, and letting the agent find its own cadence is the more interesting result.
+
+**It sees settled and unsettled cash.** This started as a proposal to add the pattern day trader rule — no day trades under $25,000 equity. **That rule does not apply here.** PDT governs margin accounts, and this is `INDIVIDUAL_CASH`. Simulating it would make the record less faithful, not more.
+
+What actually binds a cash account is settlement, and that constraint is already live and already invisible. Webull refuses a bracket order against unsettled funds, `_place` falls back to a market order plus separately-armed exits, and the agent has never been told any of it exists. It saw one cash number.
+
+So this is a missing tool, not a missing restriction — the distinction the intent entry above turns on. The prompt now separates the two and says what the difference does: money from today's sales is spendable, but a buy made with it cannot carry its stop and target in the same order.
+
+It barely mattered while the agent traded once a day and sold rarely. Under a self-chosen cadence it will.
+
 **2026-09-03 — the agent chooses when its research arrives, and is told why each analysis exists.** Two tools, built together because they answer the same complaint: the agent was deciding on information whose timing and origin it could neither control nor see.
 
 **Timing.** A `research` order takes `"when": "now"`. The analysis then runs straight after the pass, and the agent is asked again within the hour while the market is still open. Leave it out and the answer comes with tomorrow morning's sweep, as before.

@@ -27,6 +27,7 @@ from backend.services import (
     candidates,
     journey,
     listings,
+    market_clock,
     quotes,
     regime,
     watchdog,
@@ -179,16 +180,7 @@ async def _maybe_run_agent() -> None:
         log.info("Agent ran %s ago — inside the cooldown, skipping", now - _last_agent_run)
         return
     _last_agent_run = now
-    try:
-        run = await asyncio.to_thread(agent.run_once)
-    except Exception:
-        log.exception("Event-driven agent run failed")
-        return
-    # A note is worth posting even on a day it did nothing else: it is the
-    # agent saying it is short of something, which is the point of having it.
-    if run.acted or run.rejected or run.failed or run.notes:
-        await notify(embed=agent.format_run_embed(run))
-    await _dispatch_immediate_research(run)
+    await _run_agent_pass("Event-driven")
 
 
 async def _dispatch_immediate_research(run) -> None:
@@ -217,6 +209,72 @@ async def _dispatch_immediate_research(run) -> None:
         {ticker: "the agent asked to see this today" for ticker in run.research_now},
         trigger="commissioned",
     )
+
+
+# The last calendar date a final pass ran, so it happens once a session. Held in
+# memory rather than stored: a restart during the last five minutes of a day
+# re-running it costs one prompt, and the alternative is a column that exists
+# only to guard against that.
+_last_final_pass: datetime.date | None = None
+
+
+async def _run_agent_pass(label: str) -> None:
+    """One decision pass, and everything that follows from it.
+
+    Shared by every path that wakes the agent, so a pass behaves the same
+    however it was triggered — the notification, the immediate research
+    dispatch, and the failure handling are one implementation.
+    """
+    try:
+        run = await asyncio.to_thread(agent.run_once)
+    except Exception:
+        log.exception("%s agent run failed", label)
+        return
+    # A note is worth posting even on a day it did nothing else: it is the
+    # agent saying it is short of something, which is the point of having it.
+    if run.acted or run.rejected or run.failed or run.notes:
+        await notify(embed=agent.format_run_embed(run))
+    await _dispatch_immediate_research(run)
+
+
+async def _agent_wakeup_job() -> None:
+    """Wake the agent when it asked to be woken, and once before the close.
+
+    **Polled rather than scheduled.** quiv's tasks are fixed intervals, so a
+    per-run alarm has nowhere to live; a five-minute tick against a five-minute
+    minimum wakeup gives the agent the granularity it was promised.
+
+    The final pass is decided against the real Eastern close rather than a
+    fixed UTC time, so it does not drift by an hour twice a year the way the
+    other jobs here do.
+
+    **No cooldown on this path.** The cooldown exists to stop the watchdog
+    re-planning a book that has barely moved. The agent choosing its own time
+    is the opposite case: it named that moment, and overriding it would make
+    the tool a suggestion.
+    """
+    global _last_final_pass
+    if not agent.is_enabled() or not watchdog.is_us_market_hours():
+        return
+    now = market_clock.now_et()
+
+    # Five minutes before the close, whatever it asked for, so nothing goes
+    # into the night unreviewed.
+    if now.time() >= market_clock.FINAL_PASS and _last_final_pass != now.date():
+        _last_final_pass = now.date()
+        log.info("Final pass of the session")
+        await _run_agent_pass("Final")
+        return
+
+    due = agent.wakeup_due(now)
+    if due is None:
+        return
+    log.info("Agent asked to be woken at %s", due.strftime("%-I:%M %p"))
+    await _run_agent_pass("Wakeup")
+
+
+def agent_wakeup() -> None:
+    run_on_main(_agent_wakeup_job)
 
 
 async def _daily_signals_job() -> None:
@@ -455,7 +513,7 @@ def agent_run() -> None:
 
 
 def register_jobs() -> None:
-    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
+    """Registers all 8 scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
     across restarts."""
@@ -466,3 +524,6 @@ def register_jobs() -> None:
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
     scheduler.add_task(task_name="agent_run", func=agent_run, interval=86400, delay=_seconds_until(13, 35))
+    # Five minutes, matching market_clock.MIN_WAKEUP: the agent cannot ask for
+    # a shorter gap, so a finer tick would only add empty checks.
+    scheduler.add_task(task_name="agent_wakeup", func=agent_wakeup, interval=300)

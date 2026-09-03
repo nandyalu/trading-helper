@@ -296,3 +296,96 @@ def test_nothing_is_dispatched_when_nothing_was_asked_for(monkeypatch):
 
 async def _noop():
     return None
+
+
+# --- the agent's own cadence ---------------------------------------------------
+
+
+@pytest.fixture
+def wakeup_stub(monkeypatch):
+    """A pass that records it ran, with no LLM and no broker."""
+    passes = []
+
+    async def fake_pass(label):
+        passes.append(label)
+
+    monkeypatch.setattr(scheduler, "_run_agent_pass", fake_pass)
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+    monkeypatch.setattr(scheduler.watchdog, "is_us_market_hours", lambda: True)
+    scheduler._last_final_pass = None
+    return passes
+
+
+def _et(hour, minute):
+    from zoneinfo import ZoneInfo
+
+    return datetime.datetime(2026, 9, 3, hour, minute, tzinfo=ZoneInfo("America/New_York"))
+
+
+def test_the_agent_is_woken_when_it_asked_to_be(wakeup_stub, monkeypatch):
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(11, 0))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(11, 0))
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == ["Wakeup"]
+
+
+def test_nothing_happens_before_the_time_it_chose(wakeup_stub, monkeypatch):
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(11, 0))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == []
+
+
+def test_the_chosen_time_is_not_blocked_by_the_cooldown(wakeup_stub, monkeypatch):
+    """The cooldown stops the *watchdog* re-planning a book that has barely
+    moved. The agent naming a moment is the opposite case, and overriding it
+    would make the tool a suggestion."""
+    scheduler._last_agent_run = datetime.datetime.now(datetime.timezone.utc)
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(11, 0))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(11, 0))
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == ["Wakeup"]
+
+
+def test_a_final_pass_runs_before_the_close(wakeup_stub, monkeypatch):
+    """Whatever it asked for, so no position goes into the night unreviewed."""
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == ["Final"]
+
+
+def test_the_final_pass_runs_once_a_session(wakeup_stub, monkeypatch):
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+
+    asyncio.run(scheduler._agent_wakeup_job())
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == ["Final"]
+
+
+def test_nothing_wakes_while_the_market_is_shut(wakeup_stub, monkeypatch):
+    monkeypatch.setattr(scheduler.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(11, 0))
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == []
+
+
+def test_nothing_wakes_while_the_agent_is_off(wakeup_stub, monkeypatch):
+    monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: False)
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(11, 0))
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == []

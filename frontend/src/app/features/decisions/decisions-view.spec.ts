@@ -12,6 +12,7 @@ function event(over: Partial<AgentEvent> = {}): AgentEvent {
     // The API stamps the offset. Without it a browser reads the instant as
     // local time, which is the bug `readerDateTime` was written to fix.
     ran_at: '2026-09-01T13:35:00Z',
+    next_wakeup: null,
     reasoning: 'Reducing overhead as cash is negative.',
     skipped: null,
     equity: 9999.4,

@@ -16,6 +16,8 @@ The morning sweep analyses every ticker on the watchlist and charges the agent f
 
 Five minutes after the US open the agent reads its book, its signals, its own track record and the bill it is running up, and answers with orders.
 
+**It also says when to wake it next.** From there it sets its own cadence through the session, so it can take a profit, cut a loss, or commission research while the move it is reading is still happening. A final pass runs five minutes before the close whatever it asked for.
+
 The app records each decision with its price and time horizon, then grades it automatically once that horizon arrives — against reality, against SPY, and against the analysis's own price target.
 
 ## Nobody can nudge it

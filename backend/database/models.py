@@ -196,6 +196,10 @@ class AgentRun(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     ran_at: datetime.datetime = Field(index=True)
+    # When the agent asked to be woken next. NULL means it asked for nothing,
+    # which is different from asking for the default — the scheduler's fallback
+    # is a fact about the scheduler, not a decision the agent made.
+    next_wakeup: datetime.datetime | None = None
     reasoning: str = ""
     placed: int = 0
     rejected: int = 0

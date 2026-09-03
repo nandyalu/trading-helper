@@ -564,31 +564,40 @@ commit -m "..."` from the trading-helper root. `git status` at the root shows
 
 One prompt per decision pass, assembled by `agent.build_prompt()`. In order:
 
-1. **The regime line** when one is available — VIX, SPY against its 200-day
+1. **The clock** — the Eastern time, the date, and how long until the close.
+   First, because everything below is read against it and because the agent
+   chooses its own next wakeup, which is a question about the time.
+2. **The regime line** when one is available — VIX, SPY against its 200-day
    average, the yield curve, as one sentence.
-2. **The account**: total budget, uninvested cash, total equity with its return
-   against the budget, realized profit. The *broker's* balance is never shown.
+3. **The account**: total budget, uninvested cash, total equity with its return
+   against the budget, realized profit — plus how much of the cash is unsettled,
+   when any is. Unsettled money is spendable but a buy made with it cannot carry
+   its stop and target in the same order, which is the real restriction on a
+   cash account. The *broker's* balance is never shown.
    The simulated account holds $1,000,000 and the agent is given a small
    fraction of it; if that number reached the prompt the budget would be
    meaningless.
-3. **Holdings**, one line each: quantity, average cost, current price, market
+4. **Holdings**, one line each: quantity, average cost, current price, market
    value, unrealized profit, share of the account, days held, what is resting
    at the broker under it, and what selling all of it would raise. A holding
    with no resting exit says `NOTHING is resting to close it` — the agent
    cannot move an exit it cannot see, nor notice one that was never placed.
-4. **Recent analyst signals**, up to 12 from the last 3 days, filtered to the
+5. **Recent analyst signals**, up to 12 from the last 3 days, filtered to the
    model the app is configured to use. Each carries the decision, the current
    price, the suggested entry, stop and target, the model's own chance of
    working, the risk/reward and the expected value in R-multiples — plus, in
    plain words, how many whole shares the cash could buy. That last part is
    computed in Python, because the model proposed $1,944 of buys against
    $1,000 of cash on a live run when it was left to do the arithmetic.
-5. **Its own track record**: closed trades, how many were profitable, the net
+6. **Its own track record**: closed trades, how many were profitable, the net
    result, the average holding period, and the last six individually with what
    the analyst had said at entry. Once it has bought on a Hold signal twice, it
    is told how that worked out specifically — that being the pattern it
    actually falls into.
-6. **The rules** (below), then the JSON shape to answer in.
+7. **Its recent wakeups**, and whether each led to an action. Feedback rather
+   than a limit: waking costs nothing, so pricing it would be an invented cost,
+   and whether the agent learns to space them is a result worth having.
+8. **The rules** (below), then the JSON shape to answer in.
 
 ### The rules, verbatim
 
@@ -627,6 +636,10 @@ The rules block:
   it is a message and not a request.
 - A note is never a substitute for a decision. [...]
 - Doing nothing is a valid answer, and often the right one.
+- You decide when you are next asked. `next_wakeup` takes minutes or an Eastern
+  clock time, minimum 5 minutes and maximum 6 hours. A time past the close
+  becomes the next open, and a final pass runs five minutes before the close
+  whatever you choose.
 - Before answering, add up what your buys cost and check it against your cash.
 
 Three of those exist because of a specific failure and should not be trimmed as
