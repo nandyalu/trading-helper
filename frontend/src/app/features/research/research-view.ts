@@ -7,6 +7,7 @@ import { TickersService } from '../../core/services/tickers.service';
 import { WatchlistService } from '../../core/services/watchlist.service';
 import { DecisionBadge } from '../../shared/decision-badge';
 import { Term } from '../../shared/glossary/term';
+import { marketTime } from '../../shared/market-time';
 
 type StatusFilter = '' | 'pending' | 'resolved';
 
@@ -29,6 +30,9 @@ type StatusFilter = '' | 'pending' | 'resolved';
   templateUrl: './research-view.html',
 })
 export class ResearchView {
+  /** When the morning sweep runs, on the reader's clock. */
+  readonly sweepTime = marketTime(11, 0);
+
   private readonly tickersService = inject(TickersService);
   private readonly signalsService = inject(SignalsService);
   private readonly watchlistService = inject(WatchlistService);

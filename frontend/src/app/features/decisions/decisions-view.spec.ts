@@ -9,7 +9,9 @@ import { DecisionsView } from './decisions-view';
 function event(over: Partial<AgentEvent> = {}): AgentEvent {
   return {
     id: 1,
-    ran_at: '2026-09-01T13:35:00',
+    // The API stamps the offset. Without it a browser reads the instant as
+    // local time, which is the bug `readerDateTime` was written to fix.
+    ran_at: '2026-09-01T13:35:00Z',
     reasoning: 'Reducing overhead as cash is negative.',
     skipped: null,
     equity: 9999.4,
@@ -171,4 +173,38 @@ describe('DecisionsView', () => {
     expect(text).toContain('unsettled funds');
     expect(text).toContain('broker said no');
   });
+
+  /** UTC is not what anyone should read. The pass time is rendered on the
+   * reader's own clock with the zone named, so it is unambiguous without a
+   * second line — and the old fixed "UTC" label must not come back, because it
+   * was wrong for every reader not already on UTC. */
+  /** The pass time is rendered on the reader's own clock with that zone named.
+   *
+   * The assertion is that the time and its label agree, not that the label is
+   * any particular string — on a machine in UTC, "UTC" is the correct label.
+   * The old code failed exactly this: it formatted in local time and printed a
+   * fixed "UTC", so the two disagreed for every reader outside UTC. Run the
+   * suite under `TZ=Asia/Kolkata` to see the difference. */
+  it('shows the pass time on the reader clock, with that zone named', async () => {
+    service.events.set([event()]);
+    const el = await render();
+
+    const head = el.querySelector('.card-head strong')?.textContent ?? '';
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const instant = new Date('2026-09-01T13:35:00Z');
+
+    const time = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: zone,
+    }).format(instant);
+    const label =
+      new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
+        .formatToParts(instant)
+        .find((p) => p.type === 'timeZoneName')?.value ?? '';
+
+    expect(head).toContain(time);
+    expect(head).toContain(label);
+  });
+
 });

@@ -80,3 +80,39 @@ export function marketTime(utcHour: number, utcMinute: number, on: Date = new Da
   const zone = localZone();
   return { time: format(instant, zone), zone: zoneLabel(instant, zone), instant };
 }
+
+/**
+ * A recorded instant — a decision pass, a fill — on the reader's clock.
+ *
+ * Distinct from ``marketTime`` above, which renders a *scheduled* time that
+ * has no date of its own. This takes a real moment from the API.
+ *
+ * **The API must send an offset for this to be right.** A timestamp without
+ * one parses as local time, which moves the instant by the reader's own
+ * offset. That was the bug this function was written for: the page formatted
+ * in local time and printed a fixed "UTC" label, so the two errors cancelled
+ * and the number looked correct to anyone on UTC.
+ */
+export function readerTime(instant: Date | string): ClockTime {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  const zone = localZone();
+  return { time: format(d, zone), zone: zoneLabel(d, zone), instant: d };
+}
+
+/**
+ * The same instant with its date — "Thu 3 Sep, 9:35 AM EDT".
+ *
+ * The decisions feed needs the day as well as the time, because it lists
+ * passes going back weeks.
+ */
+export function readerDateTime(instant: Date | string): string {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  const zone = localZone();
+  const day = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: zone,
+  }).format(d);
+  return `${day}, ${format(d, zone)} ${zoneLabel(d, zone)}`;
+}

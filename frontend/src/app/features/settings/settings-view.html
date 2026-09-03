@@ -203,7 +203,7 @@
             [checked]="dailySweepEnabled()"
             (change)="onDailySweepChange($event)"
           />
-          Analyze the full watchlist every weekday at 21:30 UTC
+          Analyze the full watchlist every weekday at {{ dailySignalsTime.time }} {{ dailySignalsTime.zone }}
         </label>
       </div>
     </section>

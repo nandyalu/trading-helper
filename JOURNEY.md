@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — times are shown on the reader's clock, and one of them was wrong.** The site printed UTC in several places. UTC is not a fact worth reading: "13:35 UTC" makes a reader do arithmetic before they know whether they missed anything.
+
+The pages now show each time on the reader's own clock with the zone named — "9:35 AM EDT", "7:05 PM IST" — which is unambiguous on its own. `market-time.ts` already did this for the timeline; the sweep line, the decision-pass line, the settings line and the glossary were still hardcoded.
+
+**Fixing the label exposed a real bug underneath.** The decision-pass timestamp was not merely labelled UTC, it was *wrong* for everyone outside UTC, and the label is what hid it.
+
+SQLite has no timezone type. Every writer here calls `datetime.now(timezone.utc)`, but the value comes back naive and serialized as `2026-09-03T11:35:39` with no offset. **A browser parses that as local time.** The instant was therefore off by the reader's own offset — five and a half hours in India, eight on the US west coast.
+
+It stayed invisible because two errors cancelled. The page parsed as local and then formatted as local, so the number printed was the original UTC clock reading, and the fixed "UTC" label made it read as true. Correct on a UTC machine, and wrong everywhere else in a way no one on a UTC machine could see.
+
+So `Schema._stamp_utc` now marks every naive datetime as UTC at the API boundary. Plain `date` fields are deliberately left alone — a calendar date has no zone, and attaching one moves it across midnight for every reader west of UTC.
+
+**Two "time ago" displays were wrong for the same reason and are fixed by the same change**: the price age on a ticker page and the "3 days ago" label on the experiment page both subtract a parsed timestamp from the current time, so a mis-parsed instant went straight into the number.
+
+**The journal had the opposite failure.** Its date is a calendar date, and a date-only string parses as UTC midnight. Rendered on a local clock it showed the *previous* day for every reader west of UTC. It is formatted in UTC now, which is what a calendar date needs.
+
+Guarded in both halves: `backend/tests/test_timestamps_carry_their_timezone.py` checks the offset goes out, that an aware value is not converted twice, that a calendar date keeps no zone, and that no response model bypasses the base class — which is exactly how the decisions page missed it. The frontend spec asserts the time and its zone label agree rather than asserting a fixed string, so it is meaningful in any zone; the suite passes under UTC, Asia/Kolkata and America/Los_Angeles.
+
 **2026-09-03 — the simulated-account check was too narrow, and it stopped the agent.** After the Webull paper reset, the new cash account came back as `DEL546C9`. The guard required a `DEM` prefix, refused it, and the agent had no account to trade.
 
 **The guard was right to stop.** Its own comment says an account without the marker means "something is wrong enough to stop rather than trade", and refusing to trade is the correct failure for a check it cannot satisfy. What was wrong was the marker.

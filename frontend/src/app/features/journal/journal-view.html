@@ -78,7 +78,10 @@
     @for (entry of entries(); track entry.date) {
       <article class="card">
         <div class="card-head">
-          <strong>{{ entry.date | date: 'EEEE d MMMM' }}</strong>
+          <!-- Formatted in UTC on purpose. `date` is a calendar date, and a
+               date-only string parses as UTC midnight — rendered on a local clock
+               it shows the day before for every reader west of UTC. -->
+          <strong>{{ entry.date | date: 'EEEE d MMMM' : 'UTC' }}</strong>
         </div>
         <div class="card-body">
           <pre class="journey-body">{{ body(entry.markdown) }}</pre>

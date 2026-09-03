@@ -1,3 +1,15 @@
+import { marketTime } from '../market-time';
+
+/** A scheduled time written for the reader — "9:35 AM EDT".
+ *
+ * The jobs are configured in UTC and UTC is not what anyone should read here.
+ * Resolved once at load, like the timeline, so a definition and the schedule
+ * beside it never disagree. */
+function at(hour: number, minute: number): string {
+  const t = marketTime(hour, minute);
+  return `${t.time} ${t.zone}`;
+}
+
 /**
  * Every term the site uses that a reader would not already know.
  *
@@ -124,14 +136,12 @@ export const TERMS: Term[] = [
   {
     id: 'sweep',
     label: 'sweep',
-    short:
-      'The morning run that analyses every ticker on the watchlist, at 11:00 UTC, and charges the agent for each one.',
+    short: `The morning run that analyses every ticker on the watchlist, at ${at(11, 0)}, and charges the agent for each one.`,
   },
   {
     id: 'decision-pass',
     label: 'decision pass',
-    short:
-      'The one moment each weekday when the agent reads its book and answers with orders — 13:35 UTC, five minutes after the US market opens.',
+    short: `The one moment each weekday when the agent reads its book and answers with orders — ${at(13, 35)}, five minutes after the US market opens.`,
     long: 'Deliberately not chained to the sweep that produces the signals. The sweep runs the night before, and Webull rejects a market order in the evening outright, so an agent wired to trade straight after it would look healthy and never fill an order.',
   },
 ];

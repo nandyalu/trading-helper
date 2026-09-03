@@ -26,14 +26,14 @@
   } @else if (!events().length) {
     <div class="empty">
       <p>No decision passes recorded yet.</p>
-      <p class="hint">The agent runs at 13:35 UTC on a weekday, and each pass appears here.</p>
+      <p class="hint">The agent runs at {{ decisionTime.time }} {{ decisionTime.zone }} on a weekday, and each pass appears here.</p>
     </div>
   } @else {
     @for (event of events(); track event.id) {
       <article class="card">
         <div class="card-head">
           <div>
-            <strong>{{ event.ran_at | date: 'EEE d MMM, HH:mm' }} UTC</strong>
+            <strong>{{ when(event.ran_at) }}</strong>
             <span class="muted"> — {{ did(event) }}</span>
           </div>
           @if (event.cash !== null) {

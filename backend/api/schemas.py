@@ -6,12 +6,40 @@ directly off a dataclass/SQLModel instance (including dataclass
 ``@property`` values, which ``from_attributes`` reads via ``getattr`` same
 as a plain field) instead of hand-building dicts.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
 
 
-class OrmModel(BaseModel):
+class Schema(BaseModel):
+    @field_serializer("*", when_used="json")
+    def _stamp_utc(self, value):
+        """Mark every naive datetime as UTC on the way out.
+
+        Everything this app stores is UTC — every writer calls
+        ``datetime.now(timezone.utc)``. SQLite has no timezone type, so the
+        value comes back naive and serializes as ``2026-09-03T11:35:39`` with
+        no offset.
+
+        **A browser parses that as local time**, not UTC. The instant is then
+        wrong by the reader's own offset, which is invisible to anyone on UTC
+        and an hours-long error for everyone else. It stayed hidden because
+        the frontend also formatted in local time and printed a fixed "UTC"
+        label, so the two errors cancelled and the number looked right.
+
+        Stamping the offset here is what makes the instant true, and is the
+        precondition for rendering any timestamp in the reader's own zone.
+
+        Plain ``date`` fields are deliberately untouched. A calendar date has
+        no zone, and attaching one moves it across midnight for every reader
+        west of UTC — "graded 3 September" would read as the 2nd.
+        """
+        if type(value) is datetime and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class OrmModel(Schema):
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -110,7 +138,7 @@ class ScorecardOut(OrmModel):
     by_ticker: dict[str, tuple[int, int]]
 
 
-class TickerSummaryOut(BaseModel):
+class TickerSummaryOut(Schema):
     ticker: str
     current_price: float | None
     price_updated_at: datetime | None
@@ -160,7 +188,7 @@ class LotOut(OrmModel):
     signal_id: int | None
 
 
-class TickerDetailOut(BaseModel):
+class TickerDetailOut(Schema):
     ticker: str
     current_price: float | None
     price_updated_at: datetime | None
@@ -174,7 +202,7 @@ class TickerDetailOut(BaseModel):
     inactive_reason: str | None = None
 
 
-class TradeOut(BaseModel):
+class TradeOut(Schema):
     """One filled buy or sell by the agent, for the ticker timeline.
 
     Only filled orders appear. A pending or rejected order marks no point on a
@@ -187,7 +215,7 @@ class TradeOut(BaseModel):
     quantity: float
 
 
-class TickerEventsOut(BaseModel):
+class TickerEventsOut(Schema):
     """Everything that happened to one ticker, in one call.
 
     The chart overlays and the timeline below it are the same events drawn two
@@ -205,7 +233,7 @@ class TickerEventsOut(BaseModel):
     lots: list[LotOut] = []
 
 
-class ActionResultOut(BaseModel):
+class ActionResultOut(Schema):
     message: str
 
 
@@ -238,7 +266,7 @@ class RegimeOut(OrmModel):
     emoji: str
 
 
-class SettingsOut(BaseModel):
+class SettingsOut(Schema):
     horizon: str  # "swing" | "position"
     llm_model: str  # the LLM every analysis runs on
     # Everything the LLM endpoint currently serves. Empty when it couldn't be
@@ -266,7 +294,7 @@ class SettingsOut(BaseModel):
     # nothing about whether orders are simulated.
 
 
-class SettingsPatchIn(BaseModel):
+class SettingsPatchIn(Schema):
     horizon: str | None = None
     llm_model: str | None = None
     alert_move_pct: float | None = None
@@ -280,7 +308,7 @@ class SettingsPatchIn(BaseModel):
     agent_min_risk_reward: float | None = None
 
 
-class AgentHoldingOut(BaseModel):
+class AgentHoldingOut(Schema):
     ticker: str
     quantity: float
     avg_cost: float
@@ -290,7 +318,7 @@ class AgentHoldingOut(BaseModel):
     unrealized_pnl: float | None
 
 
-class AgentBookOut(BaseModel):
+class AgentBookOut(Schema):
     enabled: bool
     # False means the app is pointed at production credentials, where the agent
     # refuses to trade at all. The dashboard says so loudly rather than showing
@@ -350,7 +378,7 @@ class CalibrationOut(OrmModel):
     bands: list[CalibrationBandOut]
 
 
-class UnprotectedPositionOut(BaseModel):
+class UnprotectedPositionOut(Schema):
     """An auto-trader holding with no exit resting at the broker.
 
     Named as its own thing because it is an absence, and an absence is what
@@ -370,7 +398,7 @@ class AgentEquityPointOut(OrmModel):
     market_value: float
 
 
-class AgentOrderOut(BaseModel):
+class AgentOrderOut(Schema):
     ticker: str
     side: str
     quantity: float
@@ -378,14 +406,14 @@ class AgentOrderOut(BaseModel):
     why: str | None = None  # why it was rejected or failed, when it was
 
 
-class AgentEventOrderOut(BaseModel):
+class AgentEventOrderOut(Schema):
     side: str
     ticker: str
     quantity: float = 0
     reason: str = ""
 
 
-class AgentEventOut(BaseModel):
+class AgentEventOut(Schema):
     """One decision pass, with the words that produced it.
 
     ``prompt`` and ``response`` are what the page exists for: the counts and
@@ -412,7 +440,7 @@ class AgentEventOut(BaseModel):
     failed: list[AgentOrderOut] = []
 
 
-class JourneyEntryOut(BaseModel):
+class JourneyEntryOut(Schema):
     """One day of the generated journal, as markdown."""
 
     date: date
@@ -428,7 +456,7 @@ class StrategyOut(OrmModel):
     note: str
 
 
-class AgentComparisonOut(BaseModel):
+class AgentComparisonOut(Schema):
     """The agent against the two things it could be replaced by. The verdict is
     plain language on purpose — the point is being able to read "switch it off"
     without doing arithmetic."""

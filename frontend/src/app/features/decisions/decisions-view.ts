@@ -1,9 +1,10 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
 import { AgentEvent, AgentEventOrder, AgentOrder } from '../../core/models/api.models';
 import { AgentService } from '../../core/services/agent.service';
 import { Term } from '../../shared/glossary/term';
+import { marketTime, readerDateTime } from '../../shared/market-time';
 
 /**
  * Every decision pass, with the prompt and the answer verbatim.
@@ -19,11 +20,19 @@ import { Term } from '../../shared/glossary/term';
 @Component({
   selector: 'app-decisions-view',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, Term],
+  imports: [DecimalPipe, Term],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './decisions-view.html',
 })
 export class DecisionsView {
+  /** When the pass runs, on the reader's clock. */
+  readonly decisionTime = marketTime(13, 35);
+
+  /** A pass's timestamp on the reader's clock, with the zone named. */
+  when(instant: string): string {
+    return readerDateTime(instant);
+  }
+
   /** The agent's messages to whoever maintains it.
    *
    * They ride in `orders` because that is the record of everything one pass

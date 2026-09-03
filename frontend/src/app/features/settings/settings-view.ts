@@ -2,6 +2,7 @@ import { Component, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { SettingsService } from '../../core/services/settings.service';
+import { marketTime } from '../../shared/market-time';
 
 @Component({
   selector: 'app-settings-view',
@@ -9,6 +10,9 @@ import { SettingsService } from '../../core/services/settings.service';
   templateUrl: './settings-view.html',
 })
 export class SettingsView {
+  /** When the daily grading run happens, on the reader's clock. */
+  readonly dailySignalsTime = marketTime(21, 30);
+
   private readonly settingsService = inject(SettingsService);
   protected readonly settings = this.settingsService.settings;
 
