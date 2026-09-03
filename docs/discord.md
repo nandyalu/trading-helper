@@ -56,4 +56,8 @@ When it does, the position is live and unprotected. The alert says so, and the t
 
 ## Setting the channel
 
-`DISCORD_CHANNEL_ID` in the environment. There is no `/setchannel` command any more: a person who can move the channel by typing can move it without leaving a record of having done so.
+`DISCORD_WEBHOOK_URL` in the environment — a URL copied from the channel's own settings under **Edit Channel → Integrations → Webhooks**.
+
+**A webhook, not a bot.** The app only ever posts, so there is nothing to authenticate as: no application, no token, no OAuth scopes, no invite link, and no bot in your member list. Moving the posts to another channel means creating a webhook there and changing one variable.
+
+Leave it unset and the app runs with no notifications. Nothing else changes — every post has a page on the site holding the same information.

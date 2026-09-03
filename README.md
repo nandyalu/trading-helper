@@ -45,7 +45,7 @@ It answers with a list of actions, and Python refuses what cannot be executed as
 | Page | What's in it |
 |---|---|
 | [Running it yourself](docs/deploying.md) | **Start here to deploy it.** Prerequisites, every environment variable, and what goes wrong |
-| [Setup](docs/setup.md) | How to get each credential |
+| [Credentials](docs/setup.md) | How to get each one, and what happens if you skip it |
 | [How it works](docs/overview.md) | Architecture, the signal lifecycle, the daily schedule, data sources |
 | [The site](docs/dashboard.md) | What each page shows, and how to publish it |
 | [What Discord posts](docs/discord.md) | The scheduled posts and the alerts |
@@ -56,7 +56,7 @@ It answers with a list of actions, and Python refuses what cannot be executed as
 
 ## Quick start
 
-1. Copy these values into `.env`: `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, your Ollama settings, and `WEBULL_APP_KEY` / `WEBULL_APP_SECRET`. **Set `WEBULL_SANDBOX=1`.** The agent refuses to trade without it. See [Setup](docs/setup.md) for how to get each one.
+1. Copy these into `.env`: `WEBULL_APP_KEY`, `WEBULL_APP_SECRET`, **`WEBULL_SANDBOX=1`**, and your model settings. Optionally `DISCORD_WEBHOOK_URL` for notifications. The agent refuses to trade without the sandbox flag. See [Credentials](docs/setup.md).
 2. Build the image. In VSCode, press **Ctrl+Shift+B**. Or run `docker build -t trading-experiment:local .`
 3. Deploy it with a Docker Compose file. `dockge/trading-experiment.compose.yaml` is the working template, with every setting commented. The container applies its own database migrations at startup.
 4. Open the dashboard and switch the agent on in Settings. It starts with an empty watchlist and buys its first research at the next decision pass.

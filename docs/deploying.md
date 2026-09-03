@@ -9,7 +9,7 @@
 | **Docker** | The app ships as one image | No |
 | **Webull sandbox credentials** | The agent's account, and real-time quotes | **No.** The agent refuses to run without them |
 | **A model** | Either a local GPU pool or a hosted API key | No, but either works |
-| A Discord bot token | Notifications | Yes — the site is identical without it |
+| A Discord webhook URL | Notifications | Yes — the site is identical without it |
 | A FRED API key | Macro series | Yes, but the news analyst then infers rates from headlines and says so in its own report |
 
 **The hardest requirement is the model**, and the honest options are:
@@ -68,7 +68,7 @@ Both are only defaults for an unset setting — the settings page wins once anyo
 
 | Variable | What it does |
 |---|---|
-| `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID` | Notifications. Leave unset for a Discord-free deployment |
+| `DISCORD_WEBHOOK_URL` | Notifications. A webhook, not a bot — the app only posts. Leave unset for a Discord-free deployment |
 | `FRED_API_KEY` | Free from fred.stlouisfed.org. Without it the news analyst infers rates and the yield curve from headlines |
 | `LLM_TRACE_DIR` | Writes every LLM call to disk, about 0.4 MB an analysis. A dataset of past runs cannot be collected afterwards, which is why it is on before anyone has decided to train anything |
 | `PUBLIC_MODE` | See "Publishing it" below |
@@ -125,7 +125,7 @@ Mount the volume read-write for the public copy. SQLite writes its `-wal` and `-
 
 ## When something goes wrong
 
-**"pull access denied for trading-bot"** — the image tag has no registry prefix, so Docker resolves it to Docker Hub. Set `pull_policy: never`.
+**"pull access denied for trading-experiment"** — the image tag has no registry prefix, so Docker resolves it to Docker Hub. Set `pull_policy: never`.
 
 **Every analysis fails with "No available vendor"** — the model asked for an indicator that does not exist, three times, and tripped the vendor circuit breaker. Fixed in this repo: bad arguments no longer count as vendor ill-health. If you see it on an older checkout, that is the cause.
 

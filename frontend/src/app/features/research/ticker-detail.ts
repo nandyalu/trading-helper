@@ -55,8 +55,7 @@ export class TickerDetailPage {
   protected readonly bars = computed(() => this.events()?.bars ?? []);
   protected readonly lots = computed(() => this.events()?.lots ?? []);
 
-  /** The auto trader's position, if it holds any. Kept apart from the real and
-   * paper ones because it is the only book with orders resting at a broker. */
+  /** What the agent holds in this ticker, if anything. */
   protected readonly agentPosition = computed(() => this.detail()?.agent_position ?? null);
 
   /** The stop and target the broker will actually execute — not the signal's.
@@ -194,7 +193,7 @@ export class TickerDetailPage {
     return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
   }
 
-  /** Rest the missing exits under a position the auto trader already holds.
+  /** Rest the missing exits under a position the agent already holds.
    * The remediation for a bracket the broker refused — which used to need a
    * Python shell, while the position sat exposed. */
   protected async armExits(): Promise<void> {

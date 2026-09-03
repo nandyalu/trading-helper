@@ -28,8 +28,12 @@ Changes go in the journal first, with a date and a reason, and then get made by 
 
 ## Where to go
 
+**Running it yourself?** Start at **[Run it yourself](deploying.md)** — prerequisites, every environment variable, and what goes wrong.
+
 <div class="grid cards" markdown>
 
+- **[Run it yourself](deploying.md)** — deploy your own copy: what you need, what it costs, and troubleshooting.
+- **[Credentials](setup.md)** — how to get each one, and what happens if you skip it.
 - **[How it works](overview.md)** — architecture, the signal lifecycle, the daily schedule, and data sources.
 - **[The dashboard](dashboard.md)** — the web app: the overview, the chart with the analysis drawn on it, and the record of every decision pass.
 - **[What Discord posts](discord.md)** — the scheduled posts, the alerts, and the one alert that asks for a person.

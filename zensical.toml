@@ -7,13 +7,13 @@ Self-hosted docs · not financial advice
 
 nav = [
   { "Home" = "index.md" },
-  { "Setup" = "setup.md" },
-  { "Running it yourself" = "deploying.md" },
+  { "Run it yourself" = "deploying.md" },
+  { "Credentials" = "setup.md" },
   { "How it works" = "overview.md" },
   { "The site" = "dashboard.md" },
-  { "What Discord posts" = "discord.md" },
-  { "The daily workflow" = "trading-workflow.md" },
-  { "Finding your edge" = "finding-your-edge.md" },
+  { "Notifications" = "discord.md" },
+  { "Reading the experiment" = "trading-workflow.md" },
+  { "Reading the scorecard" = "finding-your-edge.md" },
   { "Making a small model work" = "model-training.md" },
 ]
 

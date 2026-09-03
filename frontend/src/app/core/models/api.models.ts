@@ -54,7 +54,7 @@ export interface Signal {
 
 export interface SignalDetail extends Signal {
   reports: Record<string, string>;
-  /** What the auto trader did with this call. Separate from the signal's own
+  /** What the agent did with this call. Separate from the signal's own
    * grade: one says whether the analysis was right over its horizon, the other
    * what the exit rules made of it. */
   agent_trades: AgentTradeRow[];
@@ -122,7 +122,7 @@ export interface RestingExit {
   quantity: number;
 }
 
-/** What the auto trader holds in one ticker. `exits` are the orders the broker
+/** What the agent holds in one ticker. `exits` are the orders the broker
  * will actually execute, which is a different claim from the signal's stop and
  * target shown beside them. */
 export interface AgentPosition {

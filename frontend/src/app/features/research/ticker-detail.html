@@ -29,9 +29,9 @@
 
     @if (agentPosition()?.unprotected) {
       <div class="notice notice-warn">
-        <span aria-hidden="true">⚠️</span> The auto trader holds this and nothing is resting at the
-        broker to close it. The stop and target below are what the analysis proposed, not orders
-        that will execute.
+        <span aria-hidden="true">⚠️</span> The agent holds this and nothing is resting at the broker
+        to close it. The stop and target below are what the analysis proposed, not orders that will
+        execute.
         @if (agentPosition()?.arm_queued) {
           <strong>Queued — the exits go on at the next open.</strong>
         } @else if (isPublic()) {
