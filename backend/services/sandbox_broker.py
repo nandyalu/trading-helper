@@ -11,8 +11,9 @@ Two further belts, because one flag is one typo away from being wrong:
 
 - The target account is resolved by ``account_class == INDIVIDUAL_CASH``, never
   hardcoded, and the resolver rejects any account whose number doesn't look
-  like a simulated one (``DEM…``). A production individual-cash account is
-  numbered 5NW31603; every sandbox account is DEM-prefixed.
+  like a simulated one (``DE…``). A production individual-cash account is
+  numbered 5NW31603; every sandbox account is DE-prefixed, in both the DEM and
+  DEL series.
 - Every order goes through ``_assert_sandbox()`` immediately before the call,
   not merely at module import, so flipping the environment mid-process cannot
   leave a live client armed.
@@ -42,16 +43,23 @@ log = logging.getLogger("trading-experiment.sandbox_broker")
 _EQUITY_ACCOUNT_CLASSES = ("INDIVIDUAL_CASH", "INDIVIDUAL_MARGIN")
 _DEFAULT_ACCOUNT_CLASS = "INDIVIDUAL_CASH"
 
-# Every simulated account number observed on the sandbox host is DEM-prefixed.
-# Treated as a required marker rather than a curiosity: if an account without
-# it ever appears while the sandbox flag is on, something is wrong enough to
-# stop rather than trade.
-
-# Every simulated account number observed on the sandbox host is DEM-prefixed.
-# Treated as a required marker rather than a curiosity: if an account without
-# it ever appears while the sandbox flag is on, something is wrong enough to
-# stop rather than trade.
-_SIMULATED_ACCOUNT_PREFIX = "DEM"
+# Every simulated account number on the sandbox host is DE-prefixed. Treated as
+# a required marker rather than a curiosity: if an account without it appears
+# while the sandbox flag is on, something is wrong enough to stop rather than
+# trade.
+#
+# **It was "DEM" until 2026-09-03, and that was an assumption from half the
+# data.** The host issues both DEM and DEL, across classes — FUTURES DEM272Y8,
+# EVENTS_CASH DEL84669, INDIVIDUAL_CASH DEL546C9, INDIVIDUAL_MARGIN DEM67245,
+# CRYPTO DEL744J6. DEM was simply what the two equity accounts happened to use
+# when this was written. A Webull paper reset handed the cash account a DEL
+# number, the check refused it, and the agent had no account to trade on the
+# first morning of the experiment.
+#
+# This is the weaker of the two guards and always was. The one that matters is
+# `_assert_sandbox()`: without WEBULL_SANDBOX=1 the app never reaches a trading
+# endpoint at all.
+_SIMULATED_ACCOUNT_PREFIX = "DE"
 
 _account_id: str | None = None
 

@@ -56,12 +56,12 @@ def test_the_guard_is_checked_per_call_not_at_import(monkeypatch, sandbox):
 
 def test_a_non_simulated_account_number_is_refused(sandbox, monkeypatch):
     """Belt to the flag's braces: an INDIVIDUAL_CASH account that isn't
-    DEM-numbered means the host isn't the sandbox, whatever the flag says."""
+    DE-numbered means the host isn't the sandbox, whatever the flag says."""
     monkeypatch.setattr(
         sandbox_broker, "_rows",
         lambda _: [{
             "account_id": "6DHMCFV5ND0UBHJ2S65D4UBM29",
-            "account_number": "5NW31603",  # the real account
+            "account_number": "5NW31603",  # a real, non-simulated number
             "account_class": "INDIVIDUAL_CASH",
         }],
     )
@@ -75,12 +75,16 @@ def test_a_non_simulated_account_number_is_refused(sandbox, monkeypatch):
     assert sandbox_broker.get_paper_account_id() is None
 
 
-def test_a_simulated_account_resolves(sandbox, monkeypatch):
+# The sandbox host issues both prefixes, and which one a given account class
+# gets is not stable across a paper reset. Requiring DEM specifically is what
+# stopped the agent on 2026-09-03, so both are pinned here.
+@pytest.mark.parametrize("number", ["DEM272X7", "DEL546C9"])
+def test_a_simulated_account_resolves(sandbox, monkeypatch, number):
     monkeypatch.setattr(
         sandbox_broker, "_rows",
         lambda _: [
-            {"account_id": "crypto", "account_number": "DEM47388", "account_class": "CRYPTO"},
-            {"account_id": "paper", "account_number": "DEM272X7", "account_class": "INDIVIDUAL_CASH"},
+            {"account_id": "crypto", "account_number": "DEL744J6", "account_class": "CRYPTO"},
+            {"account_id": "paper", "account_number": number, "account_class": "INDIVIDUAL_CASH"},
         ],
     )
     monkeypatch.setattr(sandbox_broker.quotes, "get_api_client", lambda: object())

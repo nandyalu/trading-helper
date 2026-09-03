@@ -47,7 +47,7 @@ At 1 round the local model takes about 8 minutes an analysis, against the 155 mi
 What separates is the *deployment*, which is what isolation actually requires:
 
 - its own container, volume, database and Discord channel
-- the sandbox's idle **margin** account, which the live agent does not touch — it uses the **cash** one. Both are simulated and `DEM`-prefixed; the identifiers are deliberately not written down here, because this repo is public. Read them from `get_account_list()`.
+- the sandbox's idle **margin** account, which the live agent does not touch — it uses the **cash** one. Both are simulated and `DE`-prefixed; the identifiers are deliberately not written down here, because this repo is public. Read them from `get_account_list()`.
 - an `AGENT_ONLY` mode that hides the real-book and paper-book pages
 
 Fork later if the experiment develops a reason to diverge. Fork because it diverged, not in anticipation.
@@ -58,7 +58,7 @@ The margin account has two consequences. It has **no T+1 settlement restriction*
 
 The prompt currently opens "You manage a small paper-trading account", and several rules and docs echo it. Those strings go.
 
-**The prompt may lie to the model. The code must never lie to itself.** `_assert_sandbox()`, the `DEM` account-number prefix check and the account-class check all stay exactly as they are. The day someone relaxes one of them *because the agent thinks it is real anyway* is the day this becomes dangerous.
+**The prompt may lie to the model. The code must never lie to itself.** `_assert_sandbox()`, the `DE` account-number prefix check and the account-class check all stay exactly as they are. Widening that prefix from `DEM` to `DE` on 2026-09-03 was a correction to a wrong observation, not a relaxation — see [JOURNEY.md](JOURNEY.md). The day someone relaxes one of them *because the agent thinks it is real anyway* is the day this becomes dangerous.
 
 ## What was rejected, and why
 

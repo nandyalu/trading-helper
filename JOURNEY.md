@@ -37,6 +37,28 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the simulated-account check was too narrow, and it stopped the agent.** After the Webull paper reset, the new cash account came back as `DEL546C9`. The guard required a `DEM` prefix, refused it, and the agent had no account to trade.
+
+**The guard was right to stop.** Its own comment says an account without the marker means "something is wrong enough to stop rather than trade", and refusing to trade is the correct failure for a check it cannot satisfy. What was wrong was the marker.
+
+Reading the whole account list settled it. This sandbox host issues **both** prefixes, and always has:
+
+| Account | Class |
+|---|---|
+| `DEM272Y8` | FUTURES |
+| `DEL84669` | EVENTS_CASH |
+| `DEL546C9` | INDIVIDUAL_CASH |
+| `DEM67245` | INDIVIDUAL_MARGIN |
+| `DEL744J6` | CRYPTO |
+
+`DEM` was never the rule. It was what the two equity accounts happened to use when the check was written, and nobody looked at the other three. The reset reshuffled which prefix the cash account got and exposed the assumption.
+
+The check now requires `DE`, which is what the evidence supports.
+
+**This does not weaken the real protection.** The guard that matters is `_assert_sandbox()`: without `WEBULL_SANDBOX=1` the app never reaches a trading endpoint at all. The prefix is a second, weaker check on top — and a check derived from five accounts is worth more than one derived from two.
+
+**The lesson is about the sample, not the check.** A marker observed on part of a set and then required of all of it will hold until the day the set changes, and it will fail at the worst moment — here, on the first morning of a fresh experiment.
+
 **2026-09-03 — Discord becomes a webhook, and the bot is deleted.** No change to what gets posted. A large change to what a person has to do to receive it.
 
 **The app only ever posts.** It reads nothing, responds to nothing, and has had no commands since 2026-09-01. A bot was how it started and the reason went with the commands.
