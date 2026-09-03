@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the prompt said research arrives tomorrow, and that is not what happens.** Two lines told the agent it would see an analyst's answer the next day. On the first trading day it commissioned AVGO at 13:35 and bought it at 14:34, on an analysis it had been told would not exist until the morning.
+
+Nothing malfunctioned. The watchdog analyses a tracked ticker on the spot when it makes an unusual price or volume move, and the event-driven decision path then runs a pass, because a move worth reading at 11:00 is worth nothing by the next morning. Four of the five names commissioned that day moved enough to qualify.
+
+So the delay was never a rule. It is what happens when nothing interrupts, and the prompt stated it as a guarantee.
+
+**Both lines now describe the real behaviour**: the answer usually comes with tomorrow morning's analyses, and a sharp move brings it sooner.
+
+**That is worth telling the agent for its own sake, not only for accuracy.** It changes what is worth researching. A volatile name reports back faster, so the same $0.05 buys a shorter wait — and the agent chooses what to study with no other information about how long it will wait.
+
+**A timing control was considered and rejected.** The idea was to let the agent say when it wanted each answer: immediately, tomorrow, mid-day. Three reasons not to:
+
+- **It has nothing to choose on.** Sooner is strictly better when it costs nothing, so the agent would ask for "immediately" every time. A choice with one rational answer is a field, not a decision.
+- **It would confound the record.** Arrival time is a property of the system today, so a bad outcome points at the thesis. Make it a per-ticker choice and a loss could be a bad thesis or a badly-timed look, with no way to separate them afterwards.
+- **The delay is a consequence, not a design.** It falls out of when the sweep runs. Turning it into a lever would dignify an accident and freeze it.
+
+**The real gap it pointed at is information, not control.** The agent cannot tell a routine morning analysis from an emergency one triggered by a 5% move. Those are different objects, and knowing which is which is material to how much weight a signal deserves. Recorded here; not built, because `Signal` has no column for why an analysis ran.
+
 **2026-09-03 — the first trading day, and three things it exposed.** The agent opened its book: five researches at 13:35, then a 29-share AVGO buy at 14:34 on the strongest of the returning signals. All of it recorded. Three defects turned up in the checking, none of which affected what was recorded, and all three had been live since the two-book removal on 2026-09-01.
 
 **The trade event stream had never delivered a single event.** The Webull SDK calls its two callbacks with different argument counts — `on_connect(client, payload, response)` and `on_events_message(eventType, subscribeType, payload, response)` — and neither signature is documented. The handler was written to the first shape, so every real event raised `TypeError`, the stream dropped, and the reconnect loop brought it back to fail on the next one.

@@ -37,7 +37,7 @@ It answers with a list of actions, and Python refuses what cannot be executed as
 
 - **buy** and **sell** — whole shares, long only, never more cash than it holds. A buy goes out as a bracket: the entry with a stop and a take-profit attached, so the shares are never held with nothing under them.
 - **adjust** — move the stop or target on something it already holds.
-- **research** — pay $0.05 to have a candidate analysed. The answer arrives tomorrow, which is the honest shape: an analyst does not hand over a report the moment you ask.
+- **research** — pay $0.05 to have a candidate analysed. The answer usually comes with the next morning's sweep, which is the honest shape: an analyst does not hand over a report the moment you ask. A stock that moves sharply while the market is open is analysed on the spot instead, so that one can come back the same day.
 - **untrack** — stop watching a name, and stop paying for it. It cannot untrack something it holds.
 
 ## Documentation

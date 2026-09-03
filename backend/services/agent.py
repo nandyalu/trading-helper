@@ -476,8 +476,9 @@ def build_prompt(
             f"study is a loss like any other. You may research at most {max_research} today.",
             "",
             "Nothing has been analysed on these yet — they are screened for being liquid and "
-            "actively traded, not for being good. Researching one buys you an analyst's "
-            "opinion tomorrow, not a position today:",
+            "actively traded, not for being good. Researching one buys an analyst's opinion, "
+            "not a position today. The answer usually comes with tomorrow morning's analyses, "
+            "and a sharp move while the market is open brings it sooner:",
         ]
         for candidate in menu:
             move = f", {candidate.change_pct:+.1f}% today" if candidate.change_pct is not None else ""
@@ -543,10 +544,12 @@ def build_prompt(
         *(
             [
                 "- To have something analysed, use side \"research\" with a ticker from the",
-                "  list above and no quantity. You will see the analyst's answer tomorrow and",
-                "  can decide then. Choosing what to study is the only way anything new ever",
-                "  enters this account, and paying to study something you then ignore is how",
-                "  the money leaves it.",
+                "  list above and no quantity. The answer usually comes with tomorrow",
+                "  morning's analyses. A stock that moves sharply while the market is open is",
+                "  analysed on the spot instead, so that one may come back the same day and",
+                "  you will be asked to decide again. Choosing what to study is the only way",
+                "  anything new ever enters this account, and paying to study something you",
+                "  then ignore is how the money leaves it.",
             ]
             if menu
             else []
@@ -1688,11 +1691,16 @@ def _commission_research(order: dict, run: "AgentRun") -> None:
     """Pay for an analysis and put the ticker where the sweep will find it.
 
     Tracking is how the analysis actually gets run: the morning sweep reads
-    the watchlist, so adding the ticker is the commission. The answer arrives
-    tomorrow, which is the honest shape — an analyst does not hand over a
-    report the instant you ask for one, and pretending otherwise would mean
-    the agent could research and act on the same breath with no cost to being
-    wrong about what was worth studying.
+    the watchlist, so adding the ticker is the commission. A commissioned name
+    normally waits for that sweep, which is the honest shape — an analyst does
+    not hand over a report the instant you ask for one.
+
+    **It is not a guarantee, and the prompt used to claim it was.** The
+    watchdog analyses a tracked ticker on the spot when it makes an unusual
+    price or volume move, and the event-driven pass then asks the agent again.
+    On 2026-09-03 four of five freshly-commissioned names came back within the
+    hour and one was bought the same afternoon. The prompt says "usually
+    tomorrow, sooner on a sharp move" since that day.
 
     **Nothing is charged here.** The charge belongs to the analysis and lands
     when the analysis runs, in propagate_ticker, which already bills every
