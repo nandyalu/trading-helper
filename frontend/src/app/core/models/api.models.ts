@@ -32,6 +32,10 @@ export interface Signal {
   price_target_hit: boolean | null;
   horizon: string | null; // "swing" | "position"
   model: string | null; // the LLM that produced it; null on rows predating the column
+  // Why this analysis ran. A signal produced because the stock just moved is
+  // the analyst reacting to a move already in the price; a scheduled one is
+  // not reacting to anything. Null on rows predating the column.
+  trigger: 'sweep' | 'commissioned' | 'move' | 'earnings' | 'manual' | null;
   // What the run cost. Null means it wasn't measured, never that it was free.
   duration_seconds: number | null;
   prompt_tokens: number | null;

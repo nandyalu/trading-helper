@@ -37,6 +37,40 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — the agent chooses when its research arrives, and is told why each analysis exists.** Two tools, built together because they answer the same complaint: the agent was deciding on information whose timing and origin it could neither control nor see.
+
+**Timing.** A `research` order takes `"when": "now"`. The analysis then runs straight after the pass, and the agent is asked again within the hour while the market is still open. Leave it out and the answer comes with tomorrow morning's sweep, as before.
+
+Both cost $0.05. The work is identical, so a price difference would be an invented cost dressed up as a rule. What differs is only how fresh the answer is, and the prompt names the trade-off: ask now when the move you are reading is happening today, wait when a night of news may change the answer.
+
+Several spellings are accepted — `now`, `immediately`, `today`, `asap`. The model writes prose, and one exact token would silently downgrade a real request to the overnight default. Anything unreadable falls back to overnight, so an unclear answer costs no unrequested GPU.
+
+The 30-minute cooldown on the event-driven path is what stops a pass that researches "now" from re-planning the book on a loop.
+
+**I argued against this earlier the same day and was wrong.** My reasoning was that a per-ticker timing choice would confound the record: a loss could be a bad thesis or a badly-timed look, with no way to separate them. That is the reasoning of an experiment about a fixed system, and this is not one. A stock can move enough in a day to be worth taking the profit or cutting the loss, and an agent that cannot ask to look until tomorrow cannot act on that. The timing is a tool. See the intent entry above, which was written because of this mistake.
+
+**Provenance.** `signal.trigger` records what caused each analysis — `sweep`, `commissioned`, `move`, `earnings`, `manual` — and the agent's prompt says it in plain words. The one that matters most reads: *"Run because the stock moved unusually, so this analyst was reacting to a move the price already holds."*
+
+That is a different object from a scheduled opinion, and the agent could not tell them apart. It saw a decision and a set of levels, with nothing to say whether the analyst was reacting to something already in the price. The signal detail page shows the same fact under "Why it ran".
+
+The column is nullable and nothing is backfilled. The reason used to go to the log and nowhere else, so a value invented now would be a guess sitting in the record as fact.
+
+**2026-09-03 — the experiment's intent, written down.** It had never been stated in one place, so arguments about what the agent may do kept getting settled on instinct — and at least one was settled wrongly, on this same day, by me.
+
+**Give the agent proper tools inside reasonable restrictions, and let it trade.**
+
+A tool is something it needs to decide well: research it chooses, exits it can move, a way to say what it lacks, timing it controls. A restriction keeps the experiment honest or the account solvent — no more cash than it holds, no shares it does not own, no shorting, no real money. When the two seem to conflict, the tie goes to the tool, because a restriction that exists only because nobody built the tool is a gap and not a rule.
+
+**The question is whether an AI agent can trade profitably given real tools.** Not whether it can trade well blindfolded. Withholding a capability does not produce a cleaner result; it produces an answer to a different question.
+
+Now in [CLAUDE.md](CLAUDE.md), because it decides most arguments about this codebase and a reader needs it before proposing a change to what the agent may do.
+
+**It is written now because I had just used the opposite reasoning.** Hours earlier I argued against letting the agent choose when its research arrives, on the grounds that it would confound the record. That is the reasoning of an experiment about a fixed system, and this is not one. A stock can move enough in a day to be worth taking profit or cutting a loss on, and an agent that cannot ask to look until tomorrow cannot act on that. The timing is a tool, and I had classified it as a confound.
+
+The note action exists for the same reason and should have told me: the agent saying "I cannot see X" is the experiment reporting a missing tool.
+
+**The one thing that is not a tool is a human hand.** No control lets a person nudge the book. The agent's autonomy and the operator's absence are one rule seen from two sides.
+
 **2026-09-03 — the prompt said research arrives tomorrow, and that is not what happens.** Two lines told the agent it would see an analyst's answer the next day. On the first trading day it commissioned AVGO at 13:35 and bought it at 14:34, on an analysis it had been told would not exist until the morning.
 
 Nothing malfunctioned. The watchdog analyses a tracked ticker on the spot when it makes an unusual price or volume move, and the event-driven decision path then runs a pass, because a move worth reading at 11:00 is worth nothing by the next morning. Four of the five names commissioned that day moved enough to qualify.

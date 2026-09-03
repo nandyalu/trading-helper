@@ -251,6 +251,18 @@ def describe_history(closed: list) -> list[str]:
     return lines
 
 
+# What each trigger means, in the agent's own reading. Plain words rather than
+# the stored key: "move" tells it nothing, "run because the stock moved
+# unusually" tells it the analyst was reacting to something already priced in.
+_TRIGGER_PHRASE = {
+    "sweep": " Run on the normal morning schedule.",
+    "commissioned": " Run today because you asked to see it today.",
+    "move": " Run because the stock moved unusually, so this analyst was reacting to a move the price already holds.",
+    "earnings": " Run because the company reports earnings soon.",
+    "manual": " Run by hand, outside the schedule.",
+}
+
+
 def build_prompt(
     book: agent_book.Book,
     signals: list,
@@ -378,9 +390,18 @@ def build_prompt(
                 )
             else:
                 afford_text = " No price, so it cannot be bought today."
+            # Why this analysis exists. A signal produced because the stock
+            # just moved sharply is the analyst reacting to a move already in
+            # the price; a scheduled one is not reacting to anything. Those
+            # deserve different weight and the agent could not tell them apart.
+            # Silent when NULL — rows written before this was recorded have no
+            # honest value, and inventing one would be a guess in the record.
+            # getattr, because several tests pass signal-shaped stand-ins
+            # rather than the model, the same way the Decision unpacking does.
+            because = _TRIGGER_PHRASE.get(getattr(s, "trigger", None) or "", "")
             lines.append(
                 f"- {s.ticker} on {s.signal_date}: {s.decision} — now {price_text}"
-                f"{entry}{stop}{target}{conviction}.{afford_text}"
+                f"{entry}{stop}{target}{conviction}.{because}{afford_text}"
             )
     else:
         lines.append("No new signals today.")
@@ -544,12 +565,19 @@ def build_prompt(
         *(
             [
                 "- To have something analysed, use side \"research\" with a ticker from the",
-                "  list above and no quantity. The answer usually comes with tomorrow",
-                "  morning's analyses. A stock that moves sharply while the market is open is",
-                "  analysed on the spot instead, so that one may come back the same day and",
-                "  you will be asked to decide again. Choosing what to study is the only way",
+                "  list above and no quantity. Choosing what to study is the only way",
                 "  anything new ever enters this account, and paying to study something you",
                 "  then ignore is how the money leaves it.",
+                "- You choose when you see the answer. Add \"when\": \"now\" and the analysis",
+                "  runs straight after this pass — you will be asked to decide again within",
+                "  the hour, while the market is still open. Leave it out, or say",
+                "  \"tomorrow\", and it comes with tomorrow morning's analyses instead.",
+                "  Both cost the same $0.05. Asking for it now is worth it when the move you",
+                "  are reading is happening today; waiting is worth it when it is not, and",
+                "  a night of news may change the answer.",
+                "- A stock that moves sharply while the market is open is analysed on the",
+                "  spot whether you asked for it or not, so a volatile name may come back",
+                "  the same day regardless.",
             ]
             if menu
             else []
@@ -597,6 +625,14 @@ def build_prompt(
         '{"reasoning": "one or two sentences", "orders": '
         '[{"ticker": "AAPL", "side": "buy", "quantity": 2, "reason": "why"},',
         ' {"ticker": "MSFT", "side": "adjust", "stop": 410.5, "reason": "why"},',
+        # The research example carries "when" so the field appears in the shape
+        # and not only in the rules — the shape is what the model copies.
+        # Shown only where there is a menu to research from.
+        *(
+            [' {"ticker": "INTC", "side": "research", "when": "now", "reason": "why"},']
+            if menu
+            else []
+        ),
         # The untrack example appears only where untracking is possible. The
         # live deployment has no cap and no such action, and an example of an
         # order it can only have refused would cost it a retry to learn that.
@@ -699,7 +735,15 @@ def screen(
 
         if str(order.get("side", "")).lower().strip() == "research":
             # Neither a buy nor a sell: it moves cash but no shares, and what
-            # it buys is an opinion tomorrow rather than a position today.
+            # it buys is an opinion rather than a position today.
+            #
+            # `when` is the agent's own call on how fresh it needs the answer.
+            # "now" runs the analysis straight after this pass; anything else
+            # waits for tomorrow's sweep. Both cost the same $0.05, because the
+            # work is identical — a price difference would be an invented cost
+            # dressed up as a rule.
+            when = str(order.get("when", "") or "").lower().strip()
+            when = "now" if when in ("now", "immediately", "today", "asap") else "tomorrow"
             why = None
             if menu is not None and ticker not in menu:
                 why = "not on today's candidate list"
@@ -726,7 +770,9 @@ def screen(
             cash -= research_price
             researched.append(ticker)
             watchlist.add(ticker)
-            accepted.append({**order, "ticker": ticker, "side": "research", "quantity": 0})
+            accepted.append(
+                {**order, "ticker": ticker, "side": "research", "quantity": 0, "when": when}
+            )
             continue
 
         if str(order.get("side", "")).lower().strip() == "untrack":
@@ -1002,6 +1048,11 @@ class AgentRun:
     # may not take is tomorrow's decision — but money left the account, so a
     # pass that only researched is not an idle pass.
     researched: list[str] = field(default_factory=list)
+    # Of ``researched``, the ones it asked to see today rather than tomorrow.
+    # The pass itself cannot run them: run_once is synchronous and an analysis
+    # is minutes of async work, so this is the handoff to the scheduler, which
+    # dispatches them and then asks the agent again when they land.
+    research_now: list[str] = field(default_factory=list)
     # Tickers it stopped watching. No money moves either way, but tomorrow's
     # sweep is smaller for it, so this is a decision and not housekeeping.
     untracked: list[str] = field(default_factory=list)
@@ -1722,7 +1773,13 @@ def _commission_research(order: dict, run: "AgentRun") -> None:
         run.failed.append((order, "could not be added to the watchlist"))
         return
     run.researched.append(ticker)
-    log.info("Agent commissioned research on %s", ticker)
+    if order.get("when") == "now":
+        run.research_now.append(ticker)
+    log.info(
+        "Agent commissioned research on %s (%s)",
+        ticker,
+        "now" if order.get("when") == "now" else "next sweep",
+    )
 
 
 def _untrack(order: dict, run: "AgentRun") -> None:

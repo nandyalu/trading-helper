@@ -474,7 +474,13 @@ def signal_price(ticker: str, today: datetime.date | None = None) -> float | Non
     return get_current_price(ticker)
 
 
-def record_signal(ticker: str, final_state: dict, decision: str, message_id: str | None = None) -> Signal | None:
+def record_signal(
+    ticker: str,
+    final_state: dict,
+    decision: str,
+    message_id: str | None = None,
+    trigger: str | None = None,
+) -> Signal | None:
     price = signal_price(ticker)
     if price is None:
         log.warning("Could not fetch a price for %s, skipping signal record", ticker)
@@ -526,6 +532,7 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
         win_probability=levels["win_probability"],
         risk_reward=levels["risk_reward"],
         expected_value_r=levels["expected_value_r"],
+        trigger=trigger,
     )
     reports = {
         key: final_state[key]
@@ -541,7 +548,7 @@ def record_signal(ticker: str, final_state: dict, decision: str, message_id: str
     return db.get_signal(signal_id)
 
 
-async def run_analysis_and_record(ticker: str) -> Signal | None:
+async def run_analysis_and_record(ticker: str, trigger: str | None = None) -> Signal | None:
     """Run the graph and store the signal. Nothing is posted to Discord.
 
     It used to post the whole analysis as an embed and seed a ✅ reaction that
@@ -556,11 +563,13 @@ async def run_analysis_and_record(ticker: str) -> Signal | None:
     """
     ticker = ticker.upper().strip()
     final_state, decision = await propagate_ticker(ticker)
-    return record_signal(ticker, final_state, decision)
+    return record_signal(ticker, final_state, decision, trigger=trigger)
 
 
 async def run_analyses(
-    tickers: list[str], on_failure: Callable[[str], Awaitable[None]] | None = None
+    tickers: list[str],
+    on_failure: Callable[[str], Awaitable[None]] | None = None,
+    trigger: str | None = None,
 ) -> list[Signal]:
     """Analyze several tickers at once, one failure never stopping the rest.
 
@@ -577,7 +586,7 @@ async def run_analyses(
 
     async def _one(ticker: str) -> Signal | None:
         try:
-            return await run_analysis_and_record(ticker)
+            return await run_analysis_and_record(ticker, trigger=trigger)
         except Exception:
             log.exception("Analysis failed for %s", ticker)
             if on_failure is not None:

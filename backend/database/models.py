@@ -82,6 +82,13 @@ class Signal(SQLModel, table=True):
     # training set: joining here lets a filter keep only the runs the
     # Scorecard eventually graded a pass. See docs/model-training.md.
     trace_id: str | None = Field(default=None, index=True)
+    # What caused this analysis: "sweep", "commissioned", "move", "earnings",
+    # "manual". A signal produced because the stock just moved sharply is the
+    # analyst reacting to a move already in the price; a scheduled one is not
+    # reacting to anything. The agent is shown this, because how much weight a
+    # signal deserves depends on it. NULL means the run predates the column —
+    # never that it had no cause.
+    trigger: str | None = None
     entry_price: float | None = None  # the level the trader proposed entering at
     stop_loss: float | None = None  # the level at which the thesis is wrong
     win_probability: float | None = None  # 0-100, the model's own estimate

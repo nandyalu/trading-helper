@@ -73,6 +73,9 @@ class SignalOut(OrmModel):
     price_target_hit: bool | None
     horizon: str | None
     model: str | None
+    # Why this analysis ran: "sweep", "commissioned", "move", "earnings",
+    # "manual". NULL on rows written before it was recorded.
+    trigger: str | None = None
     duration_seconds: float | None
     prompt_tokens: int | None
     completion_tokens: int | None

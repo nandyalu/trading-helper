@@ -230,6 +230,12 @@
                 <dd>{{ s.model }}</dd>
               </div>
             }
+            @if (s.trigger) {
+              <div>
+                <dt>Why it ran</dt>
+                <dd>{{ whyItRan(s.trigger) }}</dd>
+              </div>
+            }
             @if (s.duration_seconds !== null) {
               <div>
                 <dt>Time taken</dt>

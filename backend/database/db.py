@@ -92,6 +92,7 @@ def record_signal(
     win_probability: float | None = None,
     risk_reward: float | None = None,
     expected_value_r: float | None = None,
+    trigger: str | None = None,
     *,
     _session: Session = None,
 ) -> int:
@@ -118,6 +119,7 @@ def record_signal(
         win_probability=win_probability,
         risk_reward=risk_reward,
         expected_value_r=expected_value_r,
+        trigger=trigger,
     )
     _session.add(row)
     _session.commit()

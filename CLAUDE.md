@@ -7,6 +7,22 @@ analysis to a vendored multi-agent framework (`TradingAgents/`, a git submodule
 [docs/overview.md](docs/overview.md) for architecture — this file only covers
 what those don't.
 
+## What the experiment is for
+
+**Give the agent proper tools inside reasonable restrictions, and let it trade.**
+
+That sentence decides most arguments about this codebase, so read it before proposing a change to what the agent may do.
+
+- **A tool is something the agent needs to decide well.** Research it chooses. Exits it can move. A way to say what it is missing. Timing it controls. When the agent lacks one, the honest reading is that the experiment has not been set up properly yet — not that the agent should work around it.
+- **A restriction exists to keep the experiment honest or the account solvent**, and for no other reason. It never spends more cash than it has. It never sells shares it does not hold. No shorting, no options, no real money. Python refuses what cannot be executed as stated, and never resizes, because resizing turns the agent's decision into a different one.
+- **The two are not in tension, and the tie goes to the tool.** A restriction that exists only because nobody built the tool yet is a gap, not a rule.
+
+**The question being asked is whether an AI agent can trade profitably when it is given real tools.** Not whether it can trade well while blindfolded. Withholding a capability does not make the result cleaner — it makes it an answer to a question nobody asked.
+
+This is also why the note action exists. The agent saying "I cannot see X" is the experiment reporting a missing tool, and it is evidence, not noise.
+
+**The one thing that is not a tool is a human hand.** No control lets a person nudge the book, because that puts a second decision-maker in the record and afterwards nothing can tell which one produced a result. The agent's autonomy and the operator's absence are the same rule seen from two sides.
+
 **Since 2026-09-01 there are no manual controls anywhere.** No Discord slash
 commands, no button that adds a ticker, starts an analysis, or places a trade.
 The reason is the whole experiment: a control that lets a person nudge the book

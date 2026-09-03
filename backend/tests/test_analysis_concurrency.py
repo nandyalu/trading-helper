@@ -26,9 +26,11 @@ class _Tracker:
         self.active = 0
         self.peak = 0
         self.seen: list[str] = []
+        self.triggers: list[str | None] = []
 
-    async def __call__(self, ticker: str):
+    async def __call__(self, ticker: str, trigger: str | None = None):
         self.active += 1
+        self.triggers.append(trigger)
         self.peak = max(self.peak, self.active)
         self.seen.append(ticker)
         try:

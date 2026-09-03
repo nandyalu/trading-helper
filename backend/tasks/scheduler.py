@@ -106,8 +106,13 @@ async def _evaluate_pending_signals() -> None:
         await notify(_format_outcome_line(signal, evaluation, window.last_close))
 
 
-async def _run_triggered_analyses(reasons: dict[str, str]) -> None:
+async def _run_triggered_analyses(reasons: dict[str, str], trigger: str) -> None:
     """``reasons`` maps ticker to why it was triggered, for the log.
+
+    ``trigger`` is the machine-readable version of the same fact, stored on
+    every signal this produces and shown to the agent. Each call is one kind —
+    a whole batch of moves, or a whole batch of earnings — so one value covers
+    the batch.
 
     Runs them together — the shared semaphore is the backpressure, not this
     function, so several triggered tickers use several GPUs instead of queueing
@@ -119,6 +124,7 @@ async def _run_triggered_analyses(reasons: dict[str, str]) -> None:
     await analysis.run_analyses(
         list(reasons),
         on_failure=lambda ticker: notify(f"Triggered analysis failed for {ticker} — check the logs."),
+        trigger=trigger,
     )
     await _maybe_run_agent()
 
@@ -182,6 +188,35 @@ async def _maybe_run_agent() -> None:
     # agent saying it is short of something, which is the point of having it.
     if run.acted or run.rejected or run.failed or run.notes:
         await notify(embed=agent.format_run_embed(run))
+    await _dispatch_immediate_research(run)
+
+
+async def _dispatch_immediate_research(run) -> None:
+    """Run the analyses the agent asked to see today rather than tomorrow.
+
+    **Why the agent gets to choose this at all.** A stock can move enough in a
+    day to be worth taking the profit or cutting the loss, and an agent that
+    cannot ask to look until tomorrow morning cannot act on that. The timing is
+    a tool, not a lever on the experiment — see "What the experiment is for" in
+    CLAUDE.md.
+
+    The pass itself cannot do this. ``run_once`` is synchronous and an analysis
+    is minutes of async work, so the pass records what it wants and this
+    dispatches it.
+
+    ``_run_triggered_analyses`` already asks the agent again once the analyses
+    land, which is the point — the answers are worth nothing if nobody looks at
+    them until the morning. The 30-minute cooldown on that path is what stops a
+    pass that researches "now" from re-planning the book on a loop.
+    """
+    # getattr, because tests stand in for AgentRun with a small fake and a
+    # dispatch that crashes on one would take the whole pass with it.
+    if not getattr(run, "research_now", None):
+        return
+    await _run_triggered_analyses(
+        {ticker: "the agent asked to see this today" for ticker in run.research_now},
+        trigger="commissioned",
+    )
 
 
 async def _daily_signals_job() -> None:
@@ -252,6 +287,7 @@ async def _morning_sweep_job() -> None:
     await analysis.run_analyses(
         tickers,
         on_failure=lambda ticker: notify(f"Daily analysis failed for {ticker} — check the logs."),
+        trigger="sweep",
     )
 
     # Then the same tickers through a second model, when one is being
@@ -300,7 +336,8 @@ async def _alert_watchdog_job() -> None:
         await notify(alert.message)
     if to_analyze:
         await _run_triggered_analyses(
-            {ticker: "Unusual price/volume action" for ticker in to_analyze}
+            {ticker: "Unusual price/volume action" for ticker in to_analyze},
+            trigger="move",
         )
 
 
@@ -326,7 +363,8 @@ async def _earnings_check_job() -> None:
                     f"{'today' if earnings_date == datetime.date.today() else f'on {earnings_date}'}"
                 )
                 for ticker, earnings_date in upcoming
-            }
+            },
+            trigger="earnings",
         )
 
 
@@ -409,6 +447,7 @@ async def _agent_run_job() -> None:
     # agent saying it is short of something, which is the point of having it.
     if run.acted or run.rejected or run.failed or run.notes:
         await notify(embed=agent.format_run_embed(run))
+    await _dispatch_immediate_research(run)
 
 
 def agent_run() -> None:

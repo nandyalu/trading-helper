@@ -223,3 +223,76 @@ def test_a_filled_take_profit_is_announced_as_a_target_hit(monkeypatch):
 
     assert "Target reached" in posted[0]
     assert "at a profit" in posted[0]
+
+
+# --- research the agent asked to see today -------------------------------------
+
+
+def test_research_asked_for_now_is_analysed_now(monkeypatch):
+    """The whole point of letting the agent choose. A stock can move enough in
+    a day to be worth acting on, so "now" has to actually mean now — not a
+    field that is recorded and then waits for the morning like everything else.
+    """
+    dispatched = {}
+
+    async def fake_run_analyses(tickers, on_failure=None, trigger=None):
+        dispatched["tickers"] = list(tickers)
+        dispatched["trigger"] = trigger
+        return []
+
+    monkeypatch.setattr(scheduler.analysis, "run_analyses", fake_run_analyses)
+    monkeypatch.setattr(scheduler, "_maybe_run_agent", _noop)
+
+    class Run:
+        research_now = ["INTC", "PLTR"]
+
+    asyncio.run(scheduler._dispatch_immediate_research(Run()))
+
+    assert dispatched["tickers"] == ["INTC", "PLTR"]
+    # Stored on every signal it produces, so the next prompt can say the
+    # analysis exists because the agent asked for it today.
+    assert dispatched["trigger"] == "commissioned"
+
+
+def test_the_agent_is_asked_again_once_they_land(monkeypatch):
+    """An answer nobody looks at until tomorrow is the delay the agent was
+    trying to avoid, so the dispatch has to re-ask."""
+    asked = []
+
+    async def fake_run_analyses(tickers, on_failure=None, trigger=None):
+        return []
+
+    async def fake_maybe_run_agent():
+        asked.append(True)
+
+    monkeypatch.setattr(scheduler.analysis, "run_analyses", fake_run_analyses)
+    monkeypatch.setattr(scheduler, "_maybe_run_agent", fake_maybe_run_agent)
+
+    class Run:
+        research_now = ["INTC"]
+
+    asyncio.run(scheduler._dispatch_immediate_research(Run()))
+
+    assert asked == [True]
+
+
+def test_nothing_is_dispatched_when_nothing_was_asked_for(monkeypatch):
+    """The overnight default must cost no GPU at all."""
+    called = []
+
+    async def fake_run_analyses(tickers, on_failure=None, trigger=None):
+        called.append(tickers)
+        return []
+
+    monkeypatch.setattr(scheduler.analysis, "run_analyses", fake_run_analyses)
+
+    class Run:
+        research_now = []
+
+    asyncio.run(scheduler._dispatch_immediate_research(Run()))
+
+    assert called == []
+
+
+async def _noop():
+    return None
