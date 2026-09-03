@@ -11,7 +11,7 @@ the working category cached per ticker.
 import logging
 import os
 
-log = logging.getLogger("trading-bot.quotes")
+log = logging.getLogger("trading-experiment.quotes")
 
 _SANDBOX_ENDPOINT = "api.sandbox.webull.com"
 

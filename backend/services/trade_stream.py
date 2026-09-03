@@ -27,7 +27,7 @@ import threading
 
 from backend.services import quotes, sandbox_broker
 
-log = logging.getLogger("trading-bot.trade_stream")
+log = logging.getLogger("trading-experiment.trade_stream")
 
 # The events API has its own host and its own resolver, so the sandbox override
 # applied to the REST client (backend/services/quotes.py) does not reach it.
@@ -113,7 +113,7 @@ def _notify_from_thread(fill: dict) -> None:
     """
     if _loop is None or _loop.is_closed():
         return
-    from backend.discord_bot.notify import notify
+    from backend.notifications.notify import notify
     from backend.services import agent
 
     try:

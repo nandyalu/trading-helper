@@ -24,7 +24,7 @@ from backend.database import db
 from backend.services import listings
 from backend.services.positions import OhlcBar, drop_incomplete_bars
 
-log = logging.getLogger("trading-bot.bars")
+log = logging.getLogger("trading-experiment.bars")
 
 # How long to wait before asking yfinance again for a ticker whose cache
 # already looks current. Only matters on days when no new session closes —

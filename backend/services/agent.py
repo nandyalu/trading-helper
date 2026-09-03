@@ -31,8 +31,9 @@ from backend.database import db
 from backend.services import agent_book, analysis, candidates, quotes, research, sandbox_broker, watchdog
 from backend.services.positions import get_current_price
 from backend.services.sizing import get_atr, suggest_position
+from backend.notifications.embed import Color, Embed
 
-log = logging.getLogger("trading-bot.agent")
+log = logging.getLogger("trading-experiment.agent")
 
 _ENABLED_SETTING_KEY = "agent_enabled"
 
@@ -1022,21 +1023,19 @@ class AgentRun:
         return bool(self.placed or self.adjusted or self.researched or self.untracked)
 
 
-def format_run_embed(run: AgentRun) -> "discord.Embed":
+def format_run_embed(run: AgentRun) -> "Embed":
     """What the agent did, for Discord. Rejections are shown, not hidden — a
     decision the model made that could not be executed is the most useful
     thing on the page when the budget is the binding constraint."""
-    import discord
-
     if run.skipped:
-        return discord.Embed(
-            title="Paper agent — skipped", description=run.skipped, color=discord.Color.greyple()
+        return Embed(
+            title="The agent — skipped", description=run.skipped, color=Color.greyple()
         )
 
     book = run.book
-    color = discord.Color.blue() if run.acted else discord.Color.greyple()
-    embed = discord.Embed(
-        title="Paper agent" + (" — traded" if run.acted else " — no trades"),
+    color = Color.blue() if run.acted else Color.greyple()
+    embed = Embed(
+        title="The agent" + (" — traded" if run.acted else " — no trades"),
         description=run.reasoning[:_DESCRIPTION_MAX] or "(no reasoning given)",
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),

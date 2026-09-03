@@ -28,7 +28,7 @@ import uuid
 
 from backend.services import quotes
 
-log = logging.getLogger("trading-bot.sandbox_broker")
+log = logging.getLogger("trading-experiment.sandbox_broker")
 
 # Which simulated account this deployment trades. The sandbox exposes five —
 # Crypto, Futures, Events Cash, Individual Cash and Individual Margin — and

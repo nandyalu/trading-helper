@@ -7,10 +7,10 @@ backend/services/analysis.py splits logic from presentation.
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-import discord
 
 from backend.database import db
 from backend.database.models import Signal
+from backend.notifications.embed import Color, Embed
 
 # Display order for the by-decision breakdown; unknown decisions sort last.
 _DECISION_ORDER = ["Buy", "Overweight", "Hold", "Underweight", "Sell"]
@@ -103,14 +103,14 @@ def _rate(passes: int, total: int) -> str:
     return f"{passes}/{total} ({passes / total * 100:.0f}%)" if total else "n/a"
 
 
-def format_scorecard_embed(stats: ScorecardStats, ticker: str | None = None) -> discord.Embed:
+def format_scorecard_embed(stats: ScorecardStats, ticker: str | None = None) -> Embed:
     win_pct = stats.passes / stats.resolved * 100 if stats.resolved else 0.0
     color = (
-        discord.Color.green() if win_pct >= 60
-        else discord.Color.gold() if win_pct >= 40
-        else discord.Color.red()
+        Color.green() if win_pct >= 60
+        else Color.gold() if win_pct >= 40
+        else Color.red()
     )
-    embed = discord.Embed(
+    embed = Embed(
         title="Signal Scorecard" + (f" — {ticker}" if ticker else ""),
         color=color,
     )

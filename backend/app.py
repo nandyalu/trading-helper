@@ -25,11 +25,11 @@ from backend.api.routes import (
     tickers,
     watchlist,
 )
-from backend.discord_bot.client import start_discord, stop_discord
+from backend.notifications import notify as notifier
 from backend.services import publish, trade_stream
 from backend.tasks.scheduler import register_jobs, scheduler
 
-log = logging.getLogger("trading-bot.app")
+log = logging.getLogger("trading-experiment.app")
 
 # backend/app.py -> bot -> /app (repo root in the container, repo root locally)
 # — same convention the old docs_server.py used for `site/`.
@@ -63,13 +63,15 @@ async def lifespan(app: FastAPI):
 
     register_jobs()
     scheduler.start()
-    await start_discord()
+    if notifier.is_configured():
+        log.info("Discord notifications on, through a webhook")
+    else:
+        log.info("DISCORD_WEBHOOK_URL not set — running without notifications")
     # Best effort, and never fatal: without it a resting stop or take-profit
     # is noticed by the 15-minute poll instead of within a second.
     trade_stream.start()
     yield
     trade_stream.stop()
-    await stop_discord()
     scheduler.shutdown()  # mandatory per quiv's own docs — cancels jobs, deletes its temp DB
 
 

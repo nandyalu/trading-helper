@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from backend.database import db
 from backend.services import agent_book, research
 
-log = logging.getLogger("trading-bot.journey")
+log = logging.getLogger("trading-experiment.journey")
 
 # How far the book must fall from its best before the fall is worth naming.
 # Below this, ordinary daily movement would litter the story with "drawdown"

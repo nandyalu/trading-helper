@@ -23,7 +23,7 @@ import os
 
 # Beside trading.db, in the volume that already survives a rebuild.
 LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "logs")
-LOG_FILE = os.path.join(LOG_DIR, "trading-bot.log")
+LOG_FILE = os.path.join(LOG_DIR, "trading-experiment.log")
 
 # Ten files of 5 MB. At the volume this app produces — a few hundred lines a
 # day, plus a burst per analysis — that is comfortably more than a month, which
@@ -32,7 +32,7 @@ MAX_BYTES = 5 * 1024 * 1024
 BACKUP_COUNT = 10
 
 # Timestamp, level, logger, message. The logger name is what makes a line
-# searchable: every module here is named trading-bot.<something>.
+# searchable: every module here is named trading-experiment.<something>.
 FORMAT = "%(asctime)s %(levelname)-8s %(name)s %(message)s"
 
 
@@ -56,7 +56,7 @@ def configure(level: int = logging.INFO) -> str | None:
     except OSError:
         # Deliberately not raising. Losing the log is bad; refusing to start
         # because of it is worse.
-        logging.getLogger("trading-bot.logsetup").exception(
+        logging.getLogger("trading-experiment.logsetup").exception(
             "Could not open %s — logging to stdout only", LOG_FILE
         )
         return None

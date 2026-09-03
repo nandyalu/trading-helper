@@ -8,12 +8,12 @@ import datetime
 from collections import Counter
 from dataclasses import dataclass, field
 
-import discord
 
 from backend.database import db
 from backend.database.models import Alert, Signal
 from backend.services import ticker_book
 from backend.services.positions import get_current_price
+from backend.notifications.embed import Color, Embed
 
 _ALERT_WORDS = {"big_move": "move", "volume": "volume", "stop_loss": "stop", "target": "target"}
 
@@ -72,10 +72,10 @@ def _rate_text(passes: int, total: int) -> str:
     return f"{passes}/{total} ({passes / total * 100:.0f}%)" if total else "n/a"
 
 
-def format_digest_embed(data: DigestData) -> discord.Embed:
-    embed = discord.Embed(
+def format_digest_embed(data: DigestData) -> Embed:
+    embed = Embed(
         title=f"🗞️ Weekly Digest — week of {data.week_start}",
-        color=discord.Color.blurple(),
+        color=Color.blurple(),
     )
 
     if data.resolved:
@@ -126,6 +126,6 @@ def format_digest_embed(data: DigestData) -> discord.Embed:
     return embed
 
 
-def build_weekly_digest_embed() -> discord.Embed:
+def build_weekly_digest_embed() -> Embed:
     """Blocking — gather + format in one call for main.py."""
     return format_digest_embed(gather_digest())

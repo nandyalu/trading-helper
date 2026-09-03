@@ -36,7 +36,7 @@ import uuid
 
 from langchain_core.callbacks import BaseCallbackHandler
 
-log = logging.getLogger("trading-bot.llm_traces")
+log = logging.getLogger("trading-experiment.llm_traces")
 
 # Set to a writable path to record. Unset means record nothing.
 TRACE_DIR = os.environ.get("LLM_TRACE_DIR") or ""

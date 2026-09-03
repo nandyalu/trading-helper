@@ -36,10 +36,10 @@ a sentence that's been split across multiple source lines. Applies to every
 
 Two copies of the compose config exist and are **not synced automatically**:
 
-- `dockge/trading-bot.compose.yaml` — local-only working template
+- `dockge/trading-experiment.compose.yaml` — local-only working template
   (`dockge/` is gitignored, not tracked in this repo). Edit this one.
   `analyst-bot.compose.yaml` is deleted; that deployment ended 2026-09-01.
-- `/opt/stacks/trading-bot/compose.yaml` + `.env` — the actually-deployed
+- `/opt/stacks/trading-experiment/compose.yaml` + `.env` — the actually-deployed
   copy, managed via the Dockge UI. **Root-owned**, outside this repo, and
   already drifted from the template (Discord/Webull secrets are pasted in
   directly there instead of using `${VAR}` substitution). Applying a repo
@@ -48,7 +48,7 @@ Two copies of the compose config exist and are **not synced automatically**:
   block or you'll clobber the hardcoded secrets.
 
 **One deployment, `trading-experiment`, live since 2026-09-02.** The
-`trading-bot` and `analyst-bot` containers stopped on 2026-09-01; their volumes
+old `trading-bot` and `analyst-bot` containers stopped on 2026-09-01; their volumes
 are kept as a record of the two experiments that ended. The new container runs
 on its own `agent_data` volume, from an empty database and a freshly reset
 Webull paper account.
@@ -62,8 +62,8 @@ The dashboard runs on **8125**, not the 8080 the template defaults to — the
 deployed copy sets its own port, the same drift the `environment:` block has.
 `docker ps` is the authority. The container is named `trading-experiment`.
 
-To inspect the live container: `docker logs trading-bot`, `docker exec
-trading-bot env`. Don't sudo-edit `/opt/stacks/...` directly — hand the user
+To inspect the live container: `docker logs trading-experiment`, `docker exec
+trading-experiment env`. Don't sudo-edit `/opt/stacks/...` directly — hand the user
 the exact diff/snippet to paste into the Dockge UI instead (their stated
 preference).
 
@@ -208,7 +208,7 @@ small. Don't reason from it to a Llama of the same size.
 `TradingAgents/tradingagents/llm_clients/` is a full multi-provider
 abstraction (ollama, google, openai, anthropic, azure, bedrock, etc.) —
 switching providers is a config change, not a code change. Controlled via
-three vars threaded through `dockge/trading-bot.compose.yaml`'s
+three vars threaded through `dockge/trading-experiment.compose.yaml`'s
 `environment:` block into the stack `.env`:
 
 - `LLM_PROVIDER` (defaults to `ollama`)

@@ -24,10 +24,10 @@ Nothing else in the design cares which you pick.
 ```sh
 git clone --recurse-submodules https://github.com/nandyalu/trading-helper
 cd trading-helper
-docker build -t trading-bot:local .
+docker build -t trading-experiment:local .
 ```
 
-Then run it with a compose file. `dockge/trading-bot.compose.yaml` in the repo is the working template, with every setting commented.
+Then run it with a compose file. `dockge/trading-experiment.compose.yaml` in the repo is the working template, with every setting commented.
 
 The container applies its own database migrations at startup. There is nothing to run by hand.
 

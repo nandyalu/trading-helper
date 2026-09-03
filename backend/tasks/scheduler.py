@@ -32,11 +32,11 @@ from backend.services import (
     watchdog,
 )
 from backend.services.digest import build_weekly_digest_embed
-from backend.discord_bot.notify import notify
+from backend.notifications.notify import notify
 from backend.services.positions import PriceWindow, get_price_window
 from backend.services.signals import SignalEvaluation, evaluate_signal_window, horizon_params
 
-log = logging.getLogger("trading-bot.scheduler")
+log = logging.getLogger("trading-experiment.scheduler")
 
 scheduler = Quiv(pool_size=int(os.environ.get("QUIV_POOL_SIZE", "10")))
 

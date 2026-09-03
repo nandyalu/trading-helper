@@ -37,6 +37,22 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-03 — Discord becomes a webhook, and the bot is deleted.** No change to what gets posted. A large change to what a person has to do to receive it.
+
+**The app only ever posts.** It reads nothing, responds to nothing, and has had no commands since 2026-09-01. A bot was how it started and the reason went with the commands.
+
+What a bot cost, for a thing that only sends:
+
+- An application, a token, OAuth scopes, and an invite URL — five steps before the first message.
+- A live gateway connection held open for the life of the process, reconnecting on its own, and warning on every start that a privileged intent was missing.
+- The `discord.py` dependency, and its `asyncio` lifecycle threaded through the app's startup and shutdown.
+
+A webhook is a URL copied from a channel's settings, and one HTTP POST. **Embeds still work** — the webhook API takes the same shape — so the decision pass, the digest and the scorecard read exactly as before.
+
+`DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` are replaced by `DISCORD_WEBHOOK_URL`. Leaving it unset still disables notifications entirely, as before.
+
+**The one thing genuinely lost is the reaction.** A webhook cannot add one. Nothing has used reactions since the ✅ that opened a hand-followed paper trade was removed on 2026-09-01, so nothing regressed — but a future feature wanting a reaction would need the bot back, and that is worth knowing before someone proposes one.
+
 **2026-09-03 — the analyst framework is rebased onto upstream v0.4.1, before a single analysis has run.** The vendored TradingAgents had been pinned since 18 July. Upstream shipped two releases in that time, and three of the fixes are data-correctness bugs in the prices the agent would reason over.
 
 **The timing is the point.** No analysis had run and no signal existed, so this changes nothing already in the record. A month from now the same rebase would have split the experiment in two, with no way to tell a change in the framework from a change in the market.

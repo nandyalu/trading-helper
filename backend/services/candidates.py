@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from backend.database import db
 from backend.services import listings, quotes
 
-log = logging.getLogger("trading-bot.candidates")
+log = logging.getLogger("trading-experiment.candidates")
 
 # A share price low enough to be a lottery ticket rather than a position, and a
 # volume too thin to get out of. Both floors exist to keep the sub-dollar movers

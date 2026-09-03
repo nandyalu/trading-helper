@@ -4,8 +4,8 @@
         {
             "label": "Build trading-bot Docker image",
             "type": "shell",
-            // Same tag the dockge compose file deploys (image: trading-bot:local)
-            "command": "docker build -t trading-bot:local .",
+            // Same tag the dockge compose file deploys (image: trading-experiment:local)
+            "command": "docker build -t trading-experiment:local .",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

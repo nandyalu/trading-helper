@@ -98,6 +98,9 @@ def test_the_published_copy_runs_no_jobs(monkeypatch):
     decide twice at 13:35, placing two sets of orders against one ledger. None
     of that arrives as an HTTP request, so refusing writes would not stop any
     of it.
+
+    Discord is not in the list any more: it is a webhook posted to on demand
+    rather than a connection held open, so there is nothing to start.
     """
     import asyncio
 
@@ -106,11 +109,6 @@ def test_the_published_copy_runs_no_jobs(monkeypatch):
     monkeypatch.setattr("backend.app.register_jobs", lambda: started.append("jobs"))
     monkeypatch.setattr("backend.app.scheduler.start", lambda: started.append("scheduler"))
     monkeypatch.setattr("backend.app.trade_stream.start", lambda: started.append("stream"))
-
-    async def fake_discord():
-        started.append("discord")
-
-    monkeypatch.setattr("backend.app.start_discord", fake_discord)
 
     from backend.app import lifespan
 
@@ -133,15 +131,6 @@ def test_the_private_copy_starts_everything(monkeypatch):
     monkeypatch.setattr("backend.app.trade_stream.start", lambda: started.append("stream"))
     monkeypatch.setattr("backend.app.trade_stream.stop", lambda: None)
 
-    async def fake_start():
-        started.append("discord")
-
-    async def fake_stop():
-        pass
-
-    monkeypatch.setattr("backend.app.start_discord", fake_start)
-    monkeypatch.setattr("backend.app.stop_discord", fake_stop)
-
     from backend.app import lifespan
 
     async def run():
@@ -149,4 +138,4 @@ def test_the_private_copy_starts_everything(monkeypatch):
             pass
 
     asyncio.run(run())
-    assert set(started) == {"jobs", "scheduler", "stream", "discord"}
+    assert set(started) == {"jobs", "scheduler", "stream"}
