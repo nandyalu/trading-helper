@@ -37,17 +37,35 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the docs publish themselves, and the journal publishes with them.**
+
+The site builds on every push that touches `docs/`, this file or the site config, and lands at <https://nandyalu.github.io/the-allowance/>.
+
+**This file is now a page, and it did not move to become one.** `docs/journey.md` is a symlink to the repository root, which git stores as a symlink and the checkout follows. There is no copy step and no second copy to drift.
+
+Keeping the original at the root matters more than it sounds. The rule is that a change to the agent gets written down here *before* the code is touched, and a file a developer has to go looking for in a docs folder is one they write into afterwards, as a summary of what they already did. That is a different document.
+
+**The journal is the strongest evidence this experiment has, so it belongs where people read.** The claim is that nobody can nudge the book and every change carries a reason. A repository file supports that claim for anyone who thinks to clone; a page supports it for everyone else.
+
+It is not the same thing as the journal on the dashboard. That one is generated from the database — the facts of each day, detected rather than declared. This one is written by a person and says why. `journey.py`'s own docstring draws the line: "This produces the chronicle; a human writes the history."
+
+**Two sites, on purpose.** GitHub Pages carries the documentation, for anyone deploying their own copy. The dashboard is a separate app on its own host, for anyone watching this one. Different readers, different content, and neither is improved by being folded into the other.
+
+**Two details worth keeping.** The generator is pinned, because an unpinned one turns somebody else's release into a surprise change in a published page. And a queued deployment is never cancelled, because cancelling would leave the site on whichever build happened to finish rather than the newest commit.
+
+Six links here pointed at `CLAUDE.md` as a sibling file. That resolves at the repository root and not on the site, so they are absolute now and work from both.
+
 **2026-09-05 — the last two working notes are gone, and the roadmap's tail was the part worth keeping.**
 
 `ROADMAP.md` and `helpful-prs.md` are deleted. Both remain readable from history.
 
-**`helpful-prs.md` had one live line in twenty-five.** Eight of the nine pull requests it tracked are merged and cherry-picked, and [CLAUDE.md](CLAUDE.md) already lists every one. The ninth, TauricResearch#1076, is still open — and untouched since July 2026, so it is dormant rather than pending. It now sits in one paragraph beside the submodule notes, where somebody checking for upstream movement would look.
+**`helpful-prs.md` had one live line in twenty-five.** Eight of the nine pull requests it tracked are merged and cherry-picked, and [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md) already lists every one. The ninth, TauricResearch#1076, is still open — and untouched since July 2026, so it is dormant rather than pending. It now sits in one paragraph beside the submodule notes, where somebody checking for upstream movement would look.
 
 Its one useful finding was that the author's runs execute on a single-worker pool, which read as evidence that concurrent graph runs are not worth parallelising. `docs/gpu-concurrency.md` measured that directly on this hardware and answered it better.
 
 **`ROADMAP.md` was 412 lines of which the last 20 mattered.** Eleven phases, every one marked implemented, describing an app that mostly no longer exists — its own opening paragraph says so. This journal replaced it: a roadmap says what somebody meant to do, and when the two disagree the roadmap is wrong.
 
-The tail was different. It held two lists that are not history at all, and both moved to [CLAUDE.md](CLAUDE.md) under "What is not built, and what will never be".
+The tail was different. It held two lists that are not history at all, and both moved to [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md) under "What is not built, and what will never be".
 
 **The open list matters most for the item that is deliberately absent.** There is no position-size cap, and the agent has put 100% of the book into one name. Adding a cap changes what the agent may decide rather than correcting its arithmetic, so it needs its own entry and its own reasoning — never a quiet fix. Left only in a roadmap nobody reads, that distinction would have been rediscovered as a bug.
 
@@ -59,7 +77,7 @@ The roadmap also still said the watchlist cap was 12. It has been 30 since 2026-
 
 `plan.md` and `PLAN-autonomous-analyst.md` are gone from disk. Both are readable from history — `git show 201d9ee~1:plan.md` — so nothing is lost, only tidied.
 
-**`plan.md` held nothing that was not already elsewhere.** Its four standing rules are all in [CLAUDE.md](CLAUDE.md), and both its open questions have answers: the budget is $10,000 and the watchlist cap is 30.
+**`plan.md` held nothing that was not already elsewhere.** Its four standing rules are all in [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md), and both its open questions have answers: the budget is $10,000 and the watchlist cap is 30.
 
 **`PLAN-autonomous-analyst.md` held one paragraph that existed nowhere else**, and it was the most important sentence in the file:
 
@@ -67,7 +85,7 @@ The roadmap also still said the watchlist cap was 12. It has been 30 since 2026-
 
 It guards three live checks — `_assert_sandbox()`, the `DE` account-number prefix, and the account-class check — against being relaxed on the reasoning that the agent believes the money is real anyway. Deleting the file would have removed the only note explaining why not, two days after one of those three was widened.
 
-It is now a section of its own in [CLAUDE.md](CLAUDE.md), beside the rest of the trading contract, which is where a reader about to change one of those checks would actually look.
+It is now a section of its own in [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md), beside the rest of the trading contract, which is where a reader about to change one of those checks would actually look.
 
 **Checking that turned up a stale claim.** The Webull table said Order Management is "not used, deliberately" and that access is read-only. The agent places orders on every buy. What is true is narrower and worth stating exactly: orders go to the sandbox only, and every call passes `_assert_sandbox()` first. A safety note that overstates the safety is worse than none.
 
@@ -75,7 +93,7 @@ It is now a section of its own in [CLAUDE.md](CLAUDE.md), beside the rest of the
 
 **2026-09-05 — four working notes left the repository; three GPU write-ups joined the docs site.**
 
-**Removed, and each said so itself.** `ROADMAP.md` opens by admitting its phases describe an app that no longer exists. `plan.md` was a website rebuild that finished. `PLAN-autonomous-analyst.md` says "nothing here is built yet" about something that has been running since 2026-09-01. `helpful-prs.md` tracked eight upstream pull requests, all merged and cherry-picked, with the record now in [CLAUDE.md](CLAUDE.md).
+**Removed, and each said so itself.** `ROADMAP.md` opens by admitting its phases describe an app that no longer exists. `plan.md` was a website rebuild that finished. `PLAN-autonomous-analyst.md` says "nothing here is built yet" about something that has been running since 2026-09-01. `helpful-prs.md` tracked eight upstream pull requests, all merged and cherry-picked, with the record now in [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md).
 
 This journal replaced all four. A plan says what somebody intended; this says what changed and why. When the two disagree the plan is the one that is wrong, and leaving it published invites a reader to trust it.
 
@@ -274,7 +292,7 @@ A tool is something it needs to decide well: research it chooses, exits it can m
 
 **The question is whether an AI agent can trade profitably given real tools.** Not whether it can trade well blindfolded. Withholding a capability does not produce a cleaner result; it produces an answer to a different question.
 
-Now in [CLAUDE.md](CLAUDE.md), because it decides most arguments about this codebase and a reader needs it before proposing a change to what the agent may do.
+Now in [CLAUDE.md](https://github.com/nandyalu/the-allowance/blob/main/CLAUDE.md), because it decides most arguments about this codebase and a reader needs it before proposing a change to what the agent may do.
 
 **It is written now because I had just used the opposite reasoning.** Hours earlier I argued against letting the agent choose when its research arrives, on the grounds that it would confound the record. That is the reasoning of an experiment about a fixed system, and this is not one. A stock can move enough in a day to be worth taking profit or cutting a loss on, and an agent that cannot ask to look until tomorrow cannot act on that. The timing is a tool, and I had classified it as a confound.
 

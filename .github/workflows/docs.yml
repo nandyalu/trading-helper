@@ -1,0 +1,62 @@
+# Publish docs/ to GitHub Pages.
+#
+# The site is the self-hoster's half of this project: how to deploy it, what
+# each credential is for, what the GPU pool measured. The live experiment is a
+# separate Angular app, served from its own host.
+#
+# `docs/journey.md` is a symlink to the repository's JOURNEY.md, which stays at
+# the root because that is where a change to the agent gets written down before
+# the code is touched. Checkout follows the symlink, so the journal publishes
+# without a copy step or a second copy to drift.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - JOURNEY.md
+      - zensical.toml
+      - .github/workflows/docs.yml
+  # So a broken build can be fixed and re-run without an empty commit.
+  workflow_dispatch:
+
+# One deployment at a time. A queued run is not cancelled: it would leave the
+# published site on whichever build happened to finish, not the newest commit.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # The submodule is a whole vendored framework and no page reads it.
+        with:
+          submodules: false
+
+      - uses: astral-sh/setup-uv@v5
+
+      # Pinned. An unpinned generator turns an unrelated release into a
+      # surprise change in a published page.
+      - run: uvx zensical==0.0.59 build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

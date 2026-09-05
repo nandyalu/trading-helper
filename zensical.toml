@@ -1,5 +1,6 @@
 [project]
 site_name = "The Allowance"
+site_url = "https://nandyalu.github.io/the-allowance/"
 site_description = "An autonomous AI agent trading a simulated account with $10,000. It picks what to research, pays for it, and every decision it makes is on the record."
 copyright = """
 Self-hosted docs · not financial advice
@@ -7,6 +8,7 @@ Self-hosted docs · not financial advice
 
 nav = [
   { "Home" = "index.md" },
+  { "The journey" = "journey.md" },
   { "Run it yourself" = "deploying.md" },
   { "Credentials" = "setup.md" },
   { "How it works" = "overview.md" },
