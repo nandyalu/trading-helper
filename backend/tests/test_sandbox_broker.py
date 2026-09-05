@@ -60,8 +60,10 @@ def test_a_non_simulated_account_number_is_refused(sandbox, monkeypatch):
     monkeypatch.setattr(
         sandbox_broker, "_rows",
         lambda _: [{
-            "account_id": "6DHMCFV5ND0UBHJ2S65D4UBM29",
-            "account_number": "5NW31603",  # a real, non-simulated number
+            "account_id": "NOTASANDBOXACCOUNTID000000",
+            # Any number without the DE prefix stands for a production one. The
+            # real account's number used to sit here, and this repo is public.
+            "account_number": "9XX00000",
             "account_class": "INDIVIDUAL_CASH",
         }],
     )

@@ -11,9 +11,9 @@ Two further belts, because one flag is one typo away from being wrong:
 
 - The target account is resolved by ``account_class == INDIVIDUAL_CASH``, never
   hardcoded, and the resolver rejects any account whose number doesn't look
-  like a simulated one (``DE…``). A production individual-cash account is
-  numbered 5NW31603; every sandbox account is DE-prefixed, in both the DEM and
-  DEL series.
+  like a simulated one (``DE…``). Every sandbox account is DE-prefixed, in both
+  the DEM and DEL series; a production account carries no such prefix, which is
+  what makes the check worth having.
 - Every order goes through ``_assert_sandbox()`` immediately before the call,
   not merely at module import, so flipping the environment mid-process cannot
   leave a live client armed.

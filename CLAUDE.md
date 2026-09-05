@@ -1,4 +1,4 @@
-# trading-helper — Claude Code context
+# The Allowance — Claude Code context
 
 **One autonomous agent trading one simulated book with $10,000.** FastAPI +
 Angular dashboard and a notification-only Discord bot (`backend/`), delegating
@@ -534,7 +534,7 @@ Remotes (in a working copy that's had the above applied):
     in #1134's own diff, plus two test fixtures)
 
   Full upstream test suite (606 passed, 2 pre-existing skips) and
-  trading-helper's own `backend/tests/` (80 passed) were both green against this
+  this repo's own `backend/tests/` (80 passed) were both green against this
   branch before it was pushed.
 
 To check whether `fork/main` has moved (new commits merged upstream into the
@@ -545,13 +545,13 @@ for the original cherry-picks if `fork/main` and `trading-helper-custom`
 diverge further. Dependencies (including `tradingagents` itself, installed
 non-editable from `./TradingAgents` — see root `pyproject.toml`'s
 `[tool.uv.sources]`) are managed with `uv`: to pick up new commits made here
-in trading-helper's own venv, just `uv sync` — it re-resolves the local path
+in this repo's own venv, just `uv sync` — it re-resolves the local path
 dependency automatically, no manual reinstall needed.
 
 After committing inside `TradingAgents/` (new cherry-picks, a rebase onto a
 moved `fork/main`, etc.), the parent repo still points at the old commit
 until you also commit the updated gitlink here: `git add TradingAgents && git
-commit -m "..."` from the trading-helper root. `git status` at the root shows
+commit -m "..."` from this repo's root. `git status` at the root shows
 `TradingAgents` as dirty/ahead whenever the two are out of sync.
 
 ## The auto trader: what it is now

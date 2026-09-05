@@ -22,8 +22,8 @@ Nothing else in the design cares which you pick.
 ## The shortest path
 
 ```sh
-git clone --recurse-submodules https://github.com/nandyalu/trading-helper
-cd trading-helper
+git clone --recurse-submodules https://github.com/nandyalu/the-allowance
+cd the-allowance
 docker build -t trading-experiment:local .
 ```
 

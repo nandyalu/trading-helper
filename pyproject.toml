@@ -1,5 +1,5 @@
 [project]
-name = "trading-helper"
+name = "the-allowance"
 version = "0.1.0"
 description = "Discord bot + web dashboard delegating stock analysis to TradingAgents"
 requires-python = ">=3.14"

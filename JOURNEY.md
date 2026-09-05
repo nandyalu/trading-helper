@@ -37,6 +37,22 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the repository is `the-allowance`, and the real account number is out of the source.**
+
+**Renamed rather than restarted.** A fresh repository was considered and rejected. This site's central claim is that nobody can nudge the book and that every change is written down first with a reason, and this journal is the evidence for it. Cut the 184 commits that implement these entries and the journal becomes a story instead of a record — the code before and after each decision, and the tests that pin it, are what make it checkable.
+
+The experiment did change name and shape. The codebase did not restart; it grew into this, and the growing is part of what the record shows. The `v1-two-book-experiment` tag is the clearest case: it marks a real-money book and a hand-followed paper book that existed and were removed on purpose, to leave one decision-maker. That is a stronger thing to be able to show than never having had them.
+
+GitHub redirects the old URL, so nothing that points at `trading-helper` breaks.
+
+**The name is now the same in three places that disagreed.** The repository, the package and the docs said `trading-helper`; the site said The Allowance. `trading-helper-custom` stays as it is — that is a real branch in the TradingAgents submodule, and renaming it would break the pin for no gain.
+
+**The real Webull account number is redacted.** It sat in `sandbox_broker.py` and in a test, written deliberately: it showed what a production account looks like, so the reason for the DE-prefix check was obvious. The repository is public and has been from the start.
+
+It is an identifier and not a credential — nobody can trade with it — and the comment reads just as well without it. The account id beside it in the test went too.
+
+**The history keeps both, and rewriting it would cost more than it saves.** Rewriting 184 public commits changes every SHA and breaks every clone and link, to remove a number that grants no access. Recorded here so the next reader knows the decision was made rather than missed.
+
 **2026-09-05 — the home page is one column of content beside one column of timeline.** "Is it any good?" and "What the agent is told about the market" sat side by side in a row of their own under the main section. They are now stacked in the first column with the rest, and the second column carries nothing but the timeline.
 
 The timeline grew from five fixed rows a day to every pass the agent chose to make, which on Friday was eleven. It needs the height, and the content beside it needs the width.
