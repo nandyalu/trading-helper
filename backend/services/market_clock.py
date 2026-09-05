@@ -16,10 +16,14 @@ from backend.services.watchdog import US_MARKET_TZ, _MARKET_CLOSE, _MARKET_OPEN
 
 # How long a pass may ask to sleep. The floor is not a limit on judgment: below
 # it the book has not moved enough to be worth a fresh opinion, and the agent
-# would be reading the same numbers again. The ceiling exists so "later" can
-# never mean "after the close" by accident — the end-of-day pass covers that.
+# would be reading the same numbers again.
+#
+# **The ceiling was 6 hours and is now 4 days.** Six hours could not span a
+# night, so it silently prevented the one request the agent most obviously
+# needs to make: wake me before tomorrow's open. Four days covers a weekend
+# with a holiday on either side.
 MIN_WAKEUP = datetime.timedelta(minutes=5)
-MAX_WAKEUP = datetime.timedelta(hours=6)
+MAX_WAKEUP = datetime.timedelta(days=4)
 
 # The last pass of the day, five minutes before the close. It runs whatever the
 # agent asked for, so no position goes into the night unreviewed.
@@ -77,15 +81,22 @@ def describe(now: datetime.datetime | None = None) -> str:
 def clamp_wakeup(
     requested: datetime.datetime | None, now: datetime.datetime | None = None
 ) -> datetime.datetime | None:
-    """Pull a requested wakeup into a time the market is actually open.
+    """Hold a requested wakeup inside the floor and the ceiling. Nothing else.
 
     Returns None when the agent asked for nothing, which the scheduler treats
     differently from a bad request: no answer is not a decision, so it falls
     back rather than pretending the agent chose the fallback.
 
-    A time past today's close becomes the next open. **Not the end-of-day
-    pass** — that one runs regardless, and folding a request into it would
-    silently turn "look at this tomorrow" into "look at this at 3:55".
+    **This used to snap every request into market hours**, and that was the
+    schedule wearing a different hat. A time past the close became the next
+    open, a weekend became Monday, and anything before 9:30 was pushed forward
+    — so the agent could not ask to look at anything before the day started,
+    which is exactly when the morning analyses want commissioning.
+
+    Waking outside the session is now the agent's call. It is told the market
+    is shut, the broker refuses an order while it is, and that refusal reaches
+    the next prompt. A wasted pass on a Saturday costs one prompt and teaches
+    the agent something a rule would have hidden.
     """
     if requested is None:
         return None
@@ -98,8 +109,4 @@ def clamp_wakeup(
     latest = here + MAX_WAKEUP
     if wanted > latest:
         wanted = latest
-
-    close = close_today(now)
-    if wanted > close or here.weekday() >= 5 or wanted.time() < _MARKET_OPEN:
-        return next_open(now)
     return wanted

@@ -131,7 +131,33 @@ def test_the_rule_offers_the_choice():
     prompt = agent.build_prompt(_book(), [], {})
     assert "next_wakeup" in prompt
     assert "minimum is 5 minutes" in prompt
-    assert "five minutes before the close" in prompt
+
+
+def test_the_rule_says_any_hour_is_allowed():
+    """The agent schedules itself now, so the prompt has to say the session no
+    longer bounds it — and that orders still do not work when the market is
+    shut, which is a different fact."""
+    prompt = agent.build_prompt(_book(), [], {})
+    assert "before the open, after the close and" in prompt
+    assert "rejects one outright while the market is shut" in prompt
+
+
+def test_the_rule_names_the_fallback():
+    """Naming no time is not a plan, and the agent should know what silence
+    costs it."""
+    assert "asked at the following open" in agent.build_prompt(_book(), [], {})
+
+
+def test_the_prompt_says_how_long_an_analysis_takes():
+    prompt = agent.build_prompt(_book(), [], {}, analysis_minutes=[16.0, 18.0, 20.0])
+    assert "An analysis takes about 18 minutes" in prompt
+
+
+def test_the_prompt_names_what_is_running_now():
+    """So "wake me when SMCI lands" is a request the agent can actually make."""
+    started = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=6)
+    prompt = agent.build_prompt(_book(), [], {}, running_analyses={"SMCI": started})
+    assert "Being analysed right now: SMCI (6 min so far)" in prompt
 
 
 # --- the wakeup surviving a restart --------------------------------------------
@@ -171,16 +197,39 @@ def test_a_naive_stored_time_is_read_as_utc(monkeypatch):
     assert agent.wakeup_due(at(11, 30)) is not None
 
 
-def test_no_request_is_not_a_wakeup(monkeypatch):
-    monkeypatch.setattr(agent.db, "get_agent_runs", lambda limit: [_Run(next_wakeup=None)])
+def test_a_pass_that_asked_for_nothing_falls_back_to_the_next_open(monkeypatch):
+    """**Without this the experiment can stop in silence.** There is no other
+    clock since the fixed 13:35 pass was removed, so a run with no readable
+    wakeup would mean the agent never runs again — no error, no alert, just an
+    agent that looks like it chose to sit still.
 
-    assert agent.wakeup_due(at(15, 0)) is None
+    Not hypothetical: on 2026-09-04 the last pass asked for "3:58 PM ET" and
+    the parser dropped the zone label."""
+    monkeypatch.setattr(
+        agent.db, "get_agent_runs",
+        lambda limit: [_Run(next_wakeup=None, ran_at=datetime.datetime(2026, 9, 4, 20, 0))],
+    )
+
+    # The next open after Friday evening is Monday, so by Monday morning it is due.
+    assert agent.wakeup_due(datetime.datetime(2026, 9, 7, 10, 0, tzinfo=ET)) is not None
 
 
-def test_no_runs_at_all_is_not_a_wakeup(monkeypatch):
+def test_the_fallback_does_not_fire_early(monkeypatch):
+    """It is a safety net, not a second schedule. Before the next open it must
+    stay quiet, or it becomes the fixed pass under another name."""
+    monkeypatch.setattr(
+        agent.db, "get_agent_runs",
+        lambda limit: [_Run(next_wakeup=None, ran_at=datetime.datetime(2026, 9, 4, 20, 0))],
+    )
+
+    assert agent.wakeup_due(datetime.datetime(2026, 9, 4, 17, 0, tzinfo=ET)) is None
+
+
+def test_a_first_ever_run_is_scheduled_for_the_next_open(monkeypatch):
+    """An empty database must not mean an agent that never starts."""
     monkeypatch.setattr(agent.db, "get_agent_runs", lambda limit: [])
 
-    assert agent.wakeup_due(at(15, 0)) is None
+    assert agent.wakeup_due(at(15, 0)) is not None
 
 
 # --- what counts as having acted -----------------------------------------------

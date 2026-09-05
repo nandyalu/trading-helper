@@ -185,6 +185,43 @@ _FAILURE_LOOKBACK_RUNS = 3
 _WAKEUPS_SHOWN = 6
 
 
+def describe_analysis_timing(
+    durations: list[float], running: dict, now: datetime.datetime | None = None
+) -> list[str]:
+    """How long an analysis takes, and what is running right now.
+
+    **The agent picks its own next wakeup and cannot plan one around research
+    it ordered without this.** An analysis takes about eighteen minutes, so
+    asking to be woken in five after commissioning one spends a pass on an
+    answer that is not there yet.
+
+    The numbers come from its own recent runs, not from a constant. Analysis
+    time moves with the model, the hardware and how many run at once, and a
+    figure typed into the prompt would be wrong the first time any of those
+    changed.
+    """
+    lines: list[str] = []
+    if durations:
+        ordered = sorted(durations)
+        median = ordered[len(ordered) // 2]
+        lines.append(
+            f"An analysis takes about {median:.0f} minutes — recently between "
+            f"{ordered[0]:.0f} and {ordered[-1]:.0f}. Research you order now will not "
+            "be ready before then, so do not ask to be woken sooner expecting it."
+        )
+    if running:
+        here = (now or datetime.datetime.now(datetime.timezone.utc))
+        if here.tzinfo is None:
+            here = here.replace(tzinfo=datetime.timezone.utc)
+        parts = []
+        for ticker, started in sorted(running.items()):
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=datetime.timezone.utc)
+            parts.append(f"{ticker} ({(here - started).total_seconds() / 60:.0f} min so far)")
+        lines.append("Being analysed right now: " + ", ".join(parts) + ".")
+    return lines
+
+
 def describe_recent_wakeups(wakeups: list[dict]) -> list[str]:
     """What the agent's own chosen cadence has produced.
 
@@ -329,6 +366,8 @@ def build_prompt(
     failures: list[dict] | None = None,
     unsettled_cash: float = 0.0,
     wakeups: list[dict] | None = None,
+    analysis_minutes: list[float] | None = None,
+    running_analyses: dict | None = None,
 ) -> str:
     """Everything the model gets. Written as plain figures rather than a table
     of jargon, because the numbers are the whole input and a misread one is a
@@ -481,6 +520,10 @@ def build_prompt(
     recent_failures = describe_recent_failures(failures or [])
     if recent_failures:
         lines += ["", *recent_failures]
+
+    timing = describe_analysis_timing(analysis_minutes or [], running_analyses or {})
+    if timing:
+        lines += ["", *timing]
 
     recent_wakeups = describe_recent_wakeups(wakeups or [])
     if recent_wakeups:
@@ -672,14 +715,20 @@ def build_prompt(
             else []
         ),
         "- Doing nothing is a valid answer, and often the right one.",
-        "- You decide when you are next asked. Put \"next_wakeup\" beside your orders:",
-        "  a number of minutes from now, or a clock time in Eastern like \"14:30\".",
-        "  A holding two dollars from its stop is worth another look soon; one that",
-        "  just opened is not. The minimum is 5 minutes and the maximum is 6 hours.",
-        "  A time past the close becomes the next open, and you are asked once more",
-        "  five minutes before the close whatever you choose, so nothing goes into",
-        "  the night unreviewed. Waking costs nothing, which is exactly why asking",
-        "  for the minimum every time wastes the day rather than saving it.",
+        "- You decide when you are next asked, and nothing else does. Put",
+        "  \"next_wakeup\" beside your orders: a number of minutes from now, or a",
+        "  clock time in Eastern like \"14:30\". The minimum is 5 minutes and the",
+        "  maximum is 4 days.",
+        "- You may ask for any time, including before the open, after the close and",
+        "  at the weekend. Research and planning work at any hour. Orders do not —",
+        "  the broker rejects one outright while the market is shut, and you will",
+        "  see that rejection here next time. Waking early to commission the",
+        "  analyses you want ready for the open is a good use of this; sending an",
+        "  order at midnight is not.",
+        "- **If you name no time, you will next be asked at the following open.**",
+        "  That is a fallback, not a plan. Name the time you actually want.",
+        "  Waking costs nothing, which is exactly why asking for the minimum every",
+        "  time wastes the day rather than saving it.",
         *(
             [
                 f"- These are meant to be {horizon_days}-day trades. A position held much",
@@ -791,14 +840,21 @@ def parse_wakeup(text: str, now: datetime.datetime | None = None) -> datetime.da
     text_value = str(raw).strip().lower()
     if not text_value:
         return None
+    # **A trailing zone label used to cost the whole answer.** On 2026-09-04 the
+    # last pass of the day asked for "3:58 PM ET"; the pattern matched "3:58 pm"
+    # and refused the " et", so the run stored no wakeup. Nothing else was
+    # scheduled to notice. Every time here is Eastern already, so the label adds
+    # nothing and is dropped before anything else is read.
+    text_value = re.sub(r"\s*\b(et|est|edt|eastern|us/eastern|america/new_york)\b\.?$", "", text_value)
+    text_value = text_value.strip().rstrip(".")
 
     # A clock time — "14:30", "2:30 pm". Checked before the minutes form,
     # because "1430" and "14:30" mean very different things and only the
     # colon tells them apart.
-    clock = re.match(r"^(\d{1,2}):(\d{2})\s*(am|pm)?$", text_value)
+    clock = re.match(r"^(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?$", text_value)
     if clock:
         hour, minute = int(clock.group(1)), int(clock.group(2))
-        meridiem = clock.group(3)
+        meridiem = (clock.group(3) or "").replace(".", "") or None
         if meridiem == "pm" and hour < 12:
             hour += 12
         elif meridiem == "am" and hour == 12:
@@ -1080,23 +1136,35 @@ def wakeup_due(now: datetime.datetime | None = None) -> datetime.datetime | None
     that asked for it and the pass that answers it are different processes an
     hour apart.
 
-    **Returns None when the last pass asked for nothing.** That is not the same
-    as asking for later: the agent gets woken at the next scheduled time
-    instead, and is never credited with having chosen it.
+    Also None once the wakeup has been served, which the run ordering gives for
+    free: the pass that runs on waking stores its own next time, so the one
+    just used is no longer the latest.
 
-    Also None once the wakeup has been served, which is what the run ordering
-    gives for free — the pass that runs on waking stores its own next time, so
-    the one just used is no longer the latest.
+    **A pass that asked for nothing falls back to the next open.** Since the
+    fixed decision pass was removed there is no other clock, so a run with no
+    readable wakeup would end the experiment in silence — no error, no alert,
+    just an agent that never runs again and looks like one choosing to sit
+    still. That is not hypothetical: on 2026-09-04 the last pass of the day
+    asked for "3:58 PM ET" and the parser dropped the zone label.
+
+    The fallback is not a schedule anybody chose. It is what happens when the
+    agent's answer cannot be read, and it makes a bad parse cost one pass
+    rather than the experiment.
     """
     runs = db.get_agent_runs(limit=1)
     if not runs:
-        return None
+        # Nothing has ever run. The next open is the first sensible moment.
+        return market_clock.next_open(now)
+    here = market_clock.now_et(now)
     wanted = runs[0].next_wakeup
     if wanted is None:
-        return None
+        ran_at = runs[0].ran_at
+        if ran_at is not None and ran_at.tzinfo is None:
+            ran_at = ran_at.replace(tzinfo=datetime.timezone.utc)
+        fallback = market_clock.next_open(ran_at)
+        return fallback if fallback <= here else None
     if wanted.tzinfo is None:
         wanted = wanted.replace(tzinfo=datetime.timezone.utc)
-    here = market_clock.now_et(now)
     return wanted.astimezone(here.tzinfo) if wanted <= here else None
 
 
@@ -1212,6 +1280,10 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
     # Read once and shared with the retry too. The retry is the same pass, so
     # its cadence history has not changed.
     recent_wakeups = _recent_wakeups()
+    # What an analysis costs in time, and what is in flight. The agent needs
+    # both to choose a wakeup that lands after the answer it is waiting for.
+    analysis_minutes = analysis.recent_durations()
+    running_analyses = analysis.in_flight()
     # How much of the cash is unsettled, from the broker rather than the app's
     # own budget arithmetic — the broker is what actually refuses a bracket
     # against it. Clamped to the agent's cash, because the sandbox pot can be
@@ -1227,6 +1299,7 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
         max_research=_max_research_per_day(),
         watchlist=watchlist, max_watchlist=_max_watchlist(),
         failures=recent_failures, unsettled_cash=unsettled, wakeups=recent_wakeups,
+        analysis_minutes=analysis_minutes, running_analyses=running_analyses,
     )
     answer = _ask(shown)
     reasoning, proposed = parse_decision(answer)
@@ -1240,7 +1313,8 @@ def _decide(book, signals, prices, closed=None, regime_line=None, horizon_days=N
                          price=research.get_price(), max_research=_max_research_per_day(),
                          watchlist=watchlist, max_watchlist=_max_watchlist(),
                          failures=recent_failures, unsettled_cash=unsettled,
-                         wakeups=recent_wakeups)
+                         wakeups=recent_wakeups, analysis_minutes=analysis_minutes,
+                         running_analyses=running_analyses)
     retry_answer = _ask(shown)
     retry_reasoning, retry_proposed = parse_decision(retry_answer)
     if not retry_proposed:

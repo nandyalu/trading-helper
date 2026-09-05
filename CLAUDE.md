@@ -594,10 +594,13 @@ One prompt per decision pass, assembled by `agent.build_prompt()`. In order:
    the analyst had said at entry. Once it has bought on a Hold signal twice, it
    is told how that worked out specifically — that being the pattern it
    actually falls into.
-7. **Its recent wakeups**, and whether each led to an action. Feedback rather
+7. **How long an analysis takes**, from its own recent runs, and what is being
+   analysed right now with how long it has been running. It cannot plan a
+   wakeup around research it ordered without both.
+8. **Its recent wakeups**, and whether each led to an action. Feedback rather
    than a limit: waking costs nothing, so pricing it would be an invented cost,
    and whether the agent learns to space them is a result worth having.
-8. **The rules** (below), then the JSON shape to answer in.
+9. **The rules** (below), then the JSON shape to answer in.
 
 ### The rules, verbatim
 
@@ -636,10 +639,12 @@ The rules block:
   it is a message and not a request.
 - A note is never a substitute for a decision. [...]
 - Doing nothing is a valid answer, and often the right one.
-- You decide when you are next asked. `next_wakeup` takes minutes or an Eastern
-  clock time, minimum 5 minutes and maximum 6 hours. A time past the close
-  becomes the next open, and a final pass runs five minutes before the close
-  whatever you choose.
+- You decide when you are next asked, and nothing else does. `next_wakeup`
+  takes minutes or an Eastern clock time, minimum 5 minutes and maximum 4 days.
+  Any hour is allowed, including before the open, after the close and at the
+  weekend — research works then, orders do not.
+- If you name no time, you are next asked at the following open. That is a
+  fallback, not a plan.
 - Before answering, add up what your buys cost and check it against your cash.
 
 Three of those exist because of a specific failure and should not be trimmed as

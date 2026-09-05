@@ -60,24 +60,42 @@ def test_too_soon_is_pushed_to_the_floor():
 
 
 def test_too_far_is_pulled_to_the_ceiling():
-    assert mc.clamp_wakeup(at(23, 0), at(10, 0)) == at(10, 0) + mc.MAX_WAKEUP
+    """Four days, which covers a weekend with a holiday on either side."""
+    assert mc.clamp_wakeup(at(10, 0) + datetime.timedelta(days=30), at(10, 0)) == (
+        at(10, 0) + mc.MAX_WAKEUP
+    )
 
 
-def test_past_the_close_becomes_the_next_open():
-    """Deliberately not the final pass. That one runs anyway, and folding a
-    request into it would turn "look tomorrow" into "look at 3:55"."""
-    got = mc.clamp_wakeup(at(17, 0), at(15, 0))
-    assert got == at(9, 30, day=4)
+def test_a_time_after_the_close_is_honored():
+    """**This used to snap to the next open, and that was the schedule wearing
+    a different hat.** The agent may want to read after the session — the
+    broker refuses an order then, and that refusal reaches the next prompt."""
+    assert mc.clamp_wakeup(at(17, 0), at(15, 0)) == at(17, 0)
 
 
-def test_a_friday_afternoon_request_skips_the_weekend():
+def test_a_time_before_the_open_is_honored():
+    """The reason the gate had to go. Morning analyses take about eighteen
+    minutes, so commissioning them has to happen before the day starts."""
+    assert mc.clamp_wakeup(at(7, 0, day=4), at(15, 0)) == at(7, 0, day=4)
+
+
+def test_a_weekend_request_is_honored():
+    """A wasted pass on a Saturday costs one prompt. A rule that forbids it
+    hides whatever the agent wanted to check."""
+    saturday = datetime.datetime(2026, 9, 5, 11, 0, tzinfo=ET)
     friday = datetime.datetime(2026, 9, 4, 15, 30, tzinfo=ET)
-    got = mc.clamp_wakeup(friday + datetime.timedelta(hours=3), friday)
-    assert got.weekday() == 0  # Monday
-    assert got.time() == datetime.time(9, 30)
+    assert mc.clamp_wakeup(saturday, friday) == saturday
 
 
-@pytest.mark.parametrize("minutes", [5, 30, 120, 360])
+def test_an_overnight_gap_survives():
+    """The ceiling was 6 hours, which could not span a night — so it silently
+    blocked the request the agent most obviously needs to make."""
+    friday = datetime.datetime(2026, 9, 4, 16, 0, tzinfo=ET)
+    monday_open = datetime.datetime(2026, 9, 7, 9, 30, tzinfo=ET)
+    assert mc.clamp_wakeup(monday_open, friday) == monday_open
+
+
+@pytest.mark.parametrize("minutes", [5, 30, 120, 360, 1440])
 def test_every_allowed_gap_survives_the_clamp(minutes):
     now = at(10, 0)
     wanted = now + datetime.timedelta(minutes=minutes)

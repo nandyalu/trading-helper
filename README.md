@@ -25,9 +25,8 @@ When something needs correcting, the route is deliberate: write down what change
 | 11:00 | The morning sweep analyses every ticker on the watchlist and charges the agent for each one |
 | 12:45 | The market regime line — VIX, SPY against its 200-day average, the yield curve |
 | 13:00 | Earnings check, which analyses anything reporting soon |
-| 13:35 | **The first decision pass.** The agent reads its book, answers with orders, and says when to wake it next |
-| when it asked | It wakes, decides again, and picks the next time. Minimum 5 minutes, maximum 6 hours |
-| 20:55 | A final pass 5 minutes before the close, whatever it asked for |
+| **whenever it asked** | **The agent sets every one of its own passes.** It reads its book, answers with orders, and names the next time. Minimum 5 minutes, maximum 4 days, any hour |
+| 20:55 | A last pass before the close, if it has not just had one |
 | every 15 min | The watchdog: big moves, volume spikes, breached stops, reached targets |
 | 21:30 | Grading, then the journal is rewritten |
 
@@ -41,7 +40,7 @@ It answers with a list of actions, and Python refuses what cannot be executed as
 - **adjust** — move the stop or target on something it already holds.
 - **research** — pay $0.05 to have a candidate analysed. The answer usually comes with the next morning's sweep, which is the honest shape: an analyst does not hand over a report the moment you ask. A stock that moves sharply while the market is open is analysed on the spot instead, so that one can come back the same day.
 - **untrack** — stop watching a name, and stop paying for it. It cannot untrack something it holds.
-- **next_wakeup** — say when to be asked again. A holding two dollars from its stop is worth another look soon; one that just opened is not. Waking costs nothing, so the agent is shown what its recent wakeups produced rather than charged for them.
+- **next_wakeup** — say when to be asked again. **This is the only thing that schedules the agent.** It may name any hour, including before the open, so it can have the morning's analyses ready. Waking costs nothing, so the agent is shown what its recent wakeups produced rather than charged for them.
 
 ## Documentation
 

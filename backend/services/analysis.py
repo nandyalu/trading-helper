@@ -45,6 +45,40 @@ log = logging.getLogger("trading-experiment.analysis")
 # Bounds how many analyses (graph.propagate() calls) run at once, regardless
 # of how many callers ask for one concurrently — matches the Ollama pool's
 # real GPU count (2 today; bump this env var, no code change, once more
+# What is being analysed right now, and when each one started.
+#
+# **The agent chooses its own next wakeup, and cannot plan one around research
+# it commissioned without knowing when the answer lands.** An analysis takes
+# about eighteen minutes, so "wake me in five" after ordering one wastes the
+# pass. This is what lets the prompt say "SMCI has been running for six
+# minutes" instead of leaving the agent to guess.
+#
+# In memory on purpose. A run that a restart interrupted is not in flight any
+# more, and a stored row would claim it still was.
+_in_flight: dict[str, "datetime.datetime"] = {}
+
+
+def in_flight() -> dict[str, "datetime.datetime"]:
+    """Tickers being analysed now, mapped to when each started."""
+    return dict(_in_flight)
+
+
+def recent_durations(limit: int = 20) -> list[float]:
+    """How long the last few analyses took, in minutes, newest first.
+
+    Read from the agent's own history rather than a constant. The number moves
+    with the model, the hardware and how many run at once, and a figure written
+    into the prompt by hand would be wrong the first time any of those changed.
+    """
+    from backend.database import db
+
+    return [
+        s.duration_seconds / 60
+        for s in db.get_recent_signals(limit=limit)
+        if s.duration_seconds
+    ]
+
+
 # backends exist). propagate_ticker() acquires it internally so every caller
 # (API routes, Discord /analyze, the daily sweep, analyze-all) is bounded
 # uniformly.
@@ -295,9 +329,13 @@ async def propagate_ticker(
             _build_graph, model, tracker, provider, recorder
         )
         started = time.monotonic()
-        final_state, decision = await asyncio.to_thread(
-            graph.propagate, ticker, trade_date, horizon=horizon
-        )
+        _in_flight[ticker] = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            final_state, decision = await asyncio.to_thread(
+                graph.propagate, ticker, trade_date, horizon=horizon
+            )
+        finally:
+            _in_flight.pop(ticker, None)
         final_state["llm_model"] = model
         final_state["llm_usage"] = tracker.finish(time.monotonic() - started)
         # Carried out with the usage for the same reason: record_signal is the

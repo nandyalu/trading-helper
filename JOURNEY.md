@@ -37,6 +37,25 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the agent owns its own schedule, day and night.** The fixed decision pass at 13:35 UTC is gone. The agent is woken when it asked to be woken, and at no other time.
+
+Friday earned this. Across eight self-chosen wakeups it asked for gaps of 15 to 83 minutes and never once asked for the 5-minute minimum. It also asked for the next open when there was nothing left in the day. A schedule chosen by a person was doing no work that the agent was not already doing better.
+
+**Wakeups are no longer confined to market hours.** The morning sweep exists because analyses have to be ready before the open, and that is a timing decision the agent can make for itself — it can wake at 7am, see what is stale, and commission what it needs. It can also wake on a Saturday. The clock line tells it the market is shut, the broker refuses an order when it is, and a refusal already reaches the next prompt. That is the tool reading of the rule rather than the restriction reading.
+
+**The agent could have gone silent on Friday, and nothing would have said so.** Its last pass asked for `"3:58 PM ET"`. The parser accepted `3:58 PM` and rejected the trailing zone label, so the run stored no wakeup at all. With the scheduled pass removed, nothing would have woken it again — not that evening, not Monday, not ever. The experiment would have stopped and looked like an agent choosing to do nothing.
+
+Two changes, because one is not enough:
+
+- **The parser now ignores trailing text.** It read 10 of Friday's 11 answers; the one it dropped was the only one that carried a zone label.
+- **A pass that asks for nothing falls back to the next open.** That is not a schedule anybody chose. It is what happens when the agent's answer cannot be read, and it is the difference between a bad parse costing one pass and costing the experiment.
+
+**The final pass before the close is now a fallback too.** It used to run whatever the agent asked, which on Friday meant two passes eleven minutes apart. It now runs only if no pass has run in the half hour before the close.
+
+**The agent is told how long an analysis takes.** It cannot plan a wakeup around research it commissioned without knowing when the answer arrives. Its own history is the source: 15 analyses so far, a median of 17.5 minutes and a range of 15.4 to 20.1. It is also told what is being analysed right now and how long that has been running, so "wake me when SMCI lands" is a request it can actually make.
+
+**The watchlist sweep stays on the clock for now.** Handing that over is the obvious next step, but it is a different change: the sweep is what charges the agent every morning and what analyses the positions it holds, and the prompt promises that a holding is analysed daily whether it asks or not. That promise has to be rewritten before the sweep can move, and it deserves its own entry.
+
 **2026-09-05 — the wakeup checker ran every five minutes, so a chosen time could be four minutes late.** Friday's passes show it: the agent asked for 16:02:04 and was woken at 16:06:12. Four of the eight self-scheduled wakeups waited more than four minutes.
 
 There is no alarm clock behind `next_wakeup`. A job asks "has the requested time passed?" on a fixed grid, so a request that misses one tick waits for the next.

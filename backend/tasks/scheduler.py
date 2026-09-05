@@ -254,23 +254,59 @@ async def _agent_wakeup_job() -> None:
     the tool a suggestion.
     """
     global _last_final_pass
-    if not agent.is_enabled() or not watchdog.is_us_market_hours():
+    if not agent.is_enabled():
         return
     now = market_clock.now_et()
 
-    # Five minutes before the close, whatever it asked for, so nothing goes
-    # into the night unreviewed.
-    if now.time() >= market_clock.FINAL_PASS and _last_final_pass != now.date():
+    # **The market-hours gate is gone.** The agent sets its own times now, and
+    # the fixed 13:35 pass that used to be the only entry point is removed.
+    #
+    # That job's docstring carried a fact worth keeping: Webull rejects a
+    # market order outside the session outright
+    # (``CAN_NOT_TRADING_FOR_FIXGW_NOT_READY_NIGHT``). An agent woken at
+    # 3am can still read, research and plan; an order it sends then comes back
+    # as a broker failure, which the next prompt shows it.
+    #
+    # The morning analyses have to be
+    # commissioned before the day starts, and that is a timing decision the
+    # agent can make for itself. It is told the market is shut, the broker
+    # refuses an order while it is, and that refusal reaches the next prompt.
+    due = agent.wakeup_due(now)
+    if due is not None:
+        log.info("Agent asked to be woken at %s", due.strftime("%a %-I:%M %p"))
+        await _run_agent_pass("Wakeup")
+        return
+
+    # A last look before the close, but only if the agent has not just had
+    # one. It used to run whatever the agent asked, which on 2026-09-04 meant
+    # two passes eleven minutes apart.
+    if (
+        watchdog.is_us_market_hours()
+        and now.time() >= market_clock.FINAL_PASS
+        and _last_final_pass != now.date()
+        and not _ran_recently(now)
+    ):
         _last_final_pass = now.date()
         log.info("Final pass of the session")
         await _run_agent_pass("Final")
-        return
 
-    due = agent.wakeup_due(now)
-    if due is None:
-        return
-    log.info("Agent asked to be woken at %s", due.strftime("%-I:%M %p"))
-    await _run_agent_pass("Wakeup")
+
+def _ran_recently(now: datetime.datetime, within=datetime.timedelta(minutes=30)) -> bool:
+    """True when a pass has already run in the last half hour.
+
+    Guards the end-of-day pass. An agent that asked to be woken at 3:45 has
+    reviewed the day; waking it again at 3:55 spends a prompt to be told the
+    same thing.
+    """
+    runs = agent.db.get_agent_runs(limit=1)
+    if not runs:
+        return False
+    ran_at = runs[0].ran_at
+    if ran_at is None:
+        return False
+    if ran_at.tzinfo is None:
+        ran_at = ran_at.replace(tzinfo=datetime.timezone.utc)
+    return (now - ran_at.astimezone(now.tzinfo)) < within
 
 
 def agent_wakeup() -> None:
@@ -472,48 +508,10 @@ def weekly_digest() -> None:
     run_on_main(_weekly_digest_job)
 
 
-async def _agent_run_job() -> None:
-    """13:35 UTC — 09:35 ET, five minutes after the open.
-
-    Deliberately *not* chained to the 21:30 sweep that produces the signals.
-    21:30 UTC is 17:30 ET, ninety minutes after the close, and Webull rejects
-    a market order then outright (``CAN_NOT_TRADING_FOR_FIXGW_NOT_READY_NIGHT``).
-    An agent wired to run after the sweep would look healthy and never fill a
-    single order. So the sweep decides overnight and the agent acts at the next
-    open, which is also how the trade would really be placed.
-
-    The five-minute delay past 09:30 lets the opening auction settle, so the
-    price the agent is shown is a traded price rather than the first print.
-    """
-    global _last_agent_run
-    if datetime.datetime.now(datetime.timezone.utc).weekday() >= 5:
-        return
-    if not agent.is_enabled():
-        return
-    # Shares the cooldown clock with the event-driven path, so a trigger firing
-    # minutes after the batch doesn't re-plan a book that just moved.
-    _last_agent_run = datetime.datetime.now(datetime.timezone.utc)
-    try:
-        run = await asyncio.to_thread(agent.run_once)
-    except Exception:
-        log.exception("Agent decision pass failed")
-        return
-    # A quiet day is the common case and posting it every morning would train
-    # you to ignore the channel. Rejections and broker failures are worth
-    # hearing about even when nothing was placed.
-    # A note is worth posting even on a day it did nothing else: it is the
-    # agent saying it is short of something, which is the point of having it.
-    if run.acted or run.rejected or run.failed or run.notes:
-        await notify(embed=agent.format_run_embed(run))
-    await _dispatch_immediate_research(run)
-
-
-def agent_run() -> None:
-    run_on_main(_agent_run_job)
 
 
 def register_jobs() -> None:
-    """Registers all 8 scheduled jobs on the shared `scheduler`. Called once
+    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
     across restarts."""
@@ -523,7 +521,6 @@ def register_jobs() -> None:
     scheduler.add_task(task_name="earnings_check", func=earnings_check, interval=86400, delay=_seconds_until(13, 0))
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
-    scheduler.add_task(task_name="agent_run", func=agent_run, interval=86400, delay=_seconds_until(13, 35))
     # Every minute, so a chosen time is honoured to within a minute.
     #
     # **This was five minutes and that was wrong.** The reasoning was that the

@@ -113,19 +113,6 @@ def test_a_failing_run_does_not_escape_the_trigger_path(agent_stub, monkeypatch)
     asyncio.run(scheduler._maybe_run_agent())  # must not raise
 
 
-def test_the_batch_job_arms_the_same_cooldown(agent_stub, monkeypatch):
-    """Otherwise a trigger minutes after the 13:35 batch re-plans a book that
-    has just moved."""
-    _open(monkeypatch)
-    _weekday(monkeypatch)
-    monkeypatch.setattr(scheduler, "notify", lambda *a, **kw: asyncio.sleep(0))
-    asyncio.run(scheduler._agent_run_job())
-
-    before = len(agent_stub)
-    asyncio.run(scheduler._maybe_run_agent())
-    assert len(agent_stub) == before, "the batch should have armed the cooldown"
-
-
 # --- noticing a stop that fired ------------------------------------------------
 
 
@@ -354,9 +341,10 @@ def test_the_chosen_time_is_not_blocked_by_the_cooldown(wakeup_stub, monkeypatch
 
 
 def test_a_final_pass_runs_before_the_close(wakeup_stub, monkeypatch):
-    """Whatever it asked for, so no position goes into the night unreviewed."""
+    """So no position goes into the night unreviewed."""
     monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
     monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+    monkeypatch.setattr(scheduler, "_ran_recently", lambda now, **k: False)
 
     asyncio.run(scheduler._agent_wakeup_job())
 
@@ -366,6 +354,7 @@ def test_a_final_pass_runs_before_the_close(wakeup_stub, monkeypatch):
 def test_the_final_pass_runs_once_a_session(wakeup_stub, monkeypatch):
     monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
     monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+    monkeypatch.setattr(scheduler, "_ran_recently", lambda now, **k: False)
 
     asyncio.run(scheduler._agent_wakeup_job())
     asyncio.run(scheduler._agent_wakeup_job())
@@ -373,9 +362,37 @@ def test_the_final_pass_runs_once_a_session(wakeup_stub, monkeypatch):
     assert wakeup_stub == ["Final"]
 
 
-def test_nothing_wakes_while_the_market_is_shut(wakeup_stub, monkeypatch):
+def test_the_final_pass_is_skipped_after_a_recent_pass(wakeup_stub, monkeypatch):
+    """The agent asked to be woken at 3:45 on 2026-09-04 and was woken again at
+    3:56. Two passes eleven minutes apart said the same thing."""
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
+    monkeypatch.setattr(scheduler, "_ran_recently", lambda now, **k: True)
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == []
+
+
+def test_the_agent_is_woken_outside_market_hours_when_it_asked(wakeup_stub, monkeypatch):
+    """**The market-hours gate is gone.** Morning analyses take about eighteen
+    minutes, so commissioning them has to happen before the day starts, and
+    that timing is the agent's decision."""
     monkeypatch.setattr(scheduler.watchdog, "is_us_market_hours", lambda: False)
-    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(11, 0))
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(7, 0))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: _et(7, 0))
+
+    asyncio.run(scheduler._agent_wakeup_job())
+
+    assert wakeup_stub == ["Wakeup"]
+
+
+def test_no_final_pass_while_the_market_is_shut(wakeup_stub, monkeypatch):
+    """The end-of-day pass belongs to a session. Outside one there is no close
+    to run before."""
+    monkeypatch.setattr(scheduler.watchdog, "is_us_market_hours", lambda: False)
+    monkeypatch.setattr(scheduler.market_clock, "now_et", lambda *a: _et(15, 56))
+    monkeypatch.setattr(scheduler.agent, "wakeup_due", lambda now: None)
 
     asyncio.run(scheduler._agent_wakeup_job())
 
