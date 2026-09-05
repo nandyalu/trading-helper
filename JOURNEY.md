@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the last two working notes are gone, and the roadmap's tail was the part worth keeping.**
+
+`ROADMAP.md` and `helpful-prs.md` are deleted. Both remain readable from history.
+
+**`helpful-prs.md` had one live line in twenty-five.** Eight of the nine pull requests it tracked are merged and cherry-picked, and [CLAUDE.md](CLAUDE.md) already lists every one. The ninth, TauricResearch#1076, is still open — and untouched since July 2026, so it is dormant rather than pending. It now sits in one paragraph beside the submodule notes, where somebody checking for upstream movement would look.
+
+Its one useful finding was that the author's runs execute on a single-worker pool, which read as evidence that concurrent graph runs are not worth parallelising. `docs/gpu-concurrency.md` measured that directly on this hardware and answered it better.
+
+**`ROADMAP.md` was 412 lines of which the last 20 mattered.** Eleven phases, every one marked implemented, describing an app that mostly no longer exists — its own opening paragraph says so. This journal replaced it: a roadmap says what somebody meant to do, and when the two disagree the roadmap is wrong.
+
+The tail was different. It held two lists that are not history at all, and both moved to [CLAUDE.md](CLAUDE.md) under "What is not built, and what will never be".
+
+**The open list matters most for the item that is deliberately absent.** There is no position-size cap, and the agent has put 100% of the book into one name. Adding a cap changes what the agent may decide rather than correcting its arithmetic, so it needs its own entry and its own reasoning — never a quiet fix. Left only in a roadmap nobody reads, that distinction would have been rediscovered as a bug.
+
+**The non-goals matter for what they prevent.** Three were already scattered through CLAUDE.md; the fourth was not written anywhere else — intraday LLM analysis stays out because an analysis takes about eighteen minutes, so a model in that loop cannot keep up. A rejected idea with no record of the rejection gets proposed again.
+
+The roadmap also still said the watchlist cap was 12. It has been 30 since 2026-09-02. Corrected on the way across.
+
 **2026-09-05 — two plan files deleted, and one paragraph rescued from them first.**
 
 `plan.md` and `PLAN-autonomous-analyst.md` are gone from disk. Both are readable from history — `git show 201d9ee~1:plan.md` — so nothing is lost, only tidied.

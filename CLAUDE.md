@@ -537,6 +537,13 @@ Remotes (in a working copy that's had the above applied):
   this repo's own `backend/tests/` (80 passed) were both green against this
   branch before it was pushed.
 
+**One upstream PR is still worth watching: TauricResearch#1076** — engine host
+and streaming APIs behind a FastAPI/SSE backend. Open since July 2026 and
+untouched since, so treat it as dormant rather than pending. Its one useful
+finding is already superseded here: its runs execute on a single-worker pool,
+and `docs/gpu-concurrency.md` measures what concurrency is actually worth on
+this hardware.
+
 To check whether `fork/main` has moved (new commits merged upstream into the
 fork) before assuming a bug needs a local fix: `cd TradingAgents && git fetch
 fork && git log HEAD..fork/main --oneline`. Check `git log --stat` on any new
@@ -715,6 +722,24 @@ When the stated stop is unusable, one is derived from 2×ATR(14) at the moment
 of purchase. When a combo is refused — which happens routinely, because a cash
 account will not accept one against unsettled funds — it falls back to a market
 order plus separately-armed exits.
+
+### What is not built, and what will never be
+
+**Read this before proposing work.** Two of these were considered and rejected on purpose, and a proposal to add one arrives about once a month.
+
+Open, and worth building:
+
+- **Replay** — re-run a past decision pass against a changed prompt, so a prompt change can be told apart from a market change. Behaviour here is mostly prompt, which makes this the missing measurement rather than a nice-to-have.
+- **Backtester** — grade the strategy over history rather than only forward.
+- **A watchlist ageing rule.** The cap of 30 stops the list growing without limit, but nothing drops a name the agent has stopped holding and stopped asking about. At the cap it must trade one name's coverage for another, which it may do but is never prompted to revisit.
+- **A position-size cap** — *deliberately absent, not forgotten.* The agent has put 100% of the book into one name. A cap changes what the agent may decide rather than correcting its arithmetic, so it needs its own journal entry and its own reasoning, not a quiet fix. See the 2026-08-30 entry in [JOURNEY.md](JOURNEY.md).
+
+Permanent non-goals:
+
+- **Real order execution.** Every order goes to Webull's sandbox and the agent refuses to run without `WEBULL_SANDBOX=1`. This is a boundary, not a phase that has not arrived.
+- **Manual controls of any kind.** Corrections go through the journal and then by hand.
+- **Shorting.** A sell closes a long. Enforced in `sandbox_broker` rather than inherited from the account type, because a margin account will short where a cash account refuses.
+- **Intraday LLM analysis.** The local model is the bottleneck — an analysis takes about eighteen minutes — so alerts stay rule-based. Adding one would put a model in a loop it cannot keep up with.
 
 ### The changelog lives in JOURNEY.md
 
