@@ -110,6 +110,14 @@ export class ExperimentView {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(d);
   }
 
+  private isTradingDay(d: Date): boolean {
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: 'America/New_York',
+    }).format(d);
+    return weekday !== 'Sat' && weekday !== 'Sun';
+  }
+
   /** The jobs the app runs on a clock, whatever the agent decides.
    *
    * **"It decides" used to sit here at 13:35 and no longer does.** That pass
@@ -117,6 +125,10 @@ export class ExperimentView {
    * so its passes are read from the record below rather than predicted here.
    */
   private fixedBeats(on: Date): Beat[] {
+    // **Every one of these returns early at the weekend**, so listing them on a
+    // Saturday promises four things that will not happen. That is the same
+    // fault as the 13:35 row this replaced, in a quieter form.
+    if (!this.isTradingDay(on)) return [];
     const rows: [number, number, string][] = [
       [11, 0, 'The morning sweep analyses the watchlist'],
       [12, 45, 'The market regime is read'],
@@ -204,7 +216,34 @@ export class ExperimentView {
     );
   }
 
-  protected readonly today = computed(() => this.beats(this.now));
+  /** The day the second column describes.
+   *
+   * Today while the market trades, or while the agent has run — it may wake at
+   * a weekend now, and a pass it chose to make is worth showing whenever it
+   * happened.
+   *
+   * Otherwise the next trading day. **A closed Saturday holds nothing**: no
+   * fixed job runs, and the wakeup the agent has asked for falls on Monday, so
+   * a column headed "today" would be empty while the one line that says the
+   * experiment is still running sat on a day nobody could see.
+   */
+  private focusDay(): Date {
+    if (this.isTradingDay(this.now)) return this.now;
+    if (this.agentBeats(this.marketDay(this.now)).length) return this.now;
+    const d = new Date(this.now);
+    do {
+      d.setUTCDate(d.getUTCDate() + 1);
+    } while (!this.isTradingDay(d));
+    return d;
+  }
+
+  protected readonly today = computed(() => this.beats(this.focusDay()));
+
+  /** What the second column is: the day in progress, or the one being waited
+   * for. The heading has to say which, or a Monday's rows read as today's. */
+  protected readonly todayIsNow = computed(() =>
+    this.marketDay(this.focusDay()) === this.marketDay(this.now),
+  );
 
   /** The previous weekday. Monday looks back to Friday: a timeline whose first
    * half is a closed market says nothing about the experiment. */
@@ -232,7 +271,7 @@ export class ExperimentView {
 
   protected readonly previousLabel = computed(() => this.dayLabel(this.previousWeekday()));
 
-  protected readonly todayLabel = this.dayLabel(this.now);
+  protected readonly todayLabel = computed(() => this.dayLabel(this.focusDay()));
 
   constructor() {
     void this.load();

@@ -47,6 +47,12 @@ The fixed jobs stay, because they are still fixed: the sweep at 11:00, the regim
 
 **Rows are grouped by the New York day, not by UTC.** The agent picks its own times now and may wake in the evening, and a pass at 8pm in New York is past midnight UTC. Grouping by UTC would file it under the next trading day, beside a morning sweep that had not happened when it ran. The day headings moved to New York with them, because labelling a day in one zone and filling it from another puts rows under the wrong heading.
 
+**A weekend showed four jobs that never run.** The sweep, the regime read, the earnings check and grading all return early on a Saturday, so listing them there promised four things that would not happen — the same fault as the removed 13:35 row, more quietly. A day the market is shut now carries no fixed rows at all.
+
+**And that emptied the page at the worst moment.** With no fixed rows and no passes, a Saturday column had nothing in it, while the wakeup the agent had asked for sat on Monday, a day the two-column view never rendered. The one line that says the experiment is still running would have been invisible for the whole weekend.
+
+So the second column looks ahead: today while the market trades, or while the agent has run — it may wake at a weekend now, and a pass it chose to make is worth showing whenever it happened — and otherwise the next trading day. The heading says which, because a Monday's rows read as today's without it.
+
 **Two smaller things this turned up.**
 
 The rows were tracked by their text. Two passes that both did nothing carry identical words, and Angular collapsed them into one row. They are tracked by the run id now.

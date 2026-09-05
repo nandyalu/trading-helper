@@ -265,7 +265,7 @@
           }
         </ol>
 
-        <p class="timeline-day">{{ todayLabel }} · today</p>
+        <p class="timeline-day">{{ todayLabel() }} · {{ todayIsNow() ? 'today' : 'next trading day' }}</p>
         <ol class="timeline-list">
           @for (e of today(); track e.key) {
             <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act"

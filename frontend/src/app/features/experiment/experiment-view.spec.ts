@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 
@@ -140,5 +141,75 @@ describe('ExperimentView timeline', () => {
     expect(view().summarise(event({ skipped: 'the market was closed' }))).toBe(
       'the market was closed',
     );
+  });
+});
+
+describe('ExperimentView timeline at the weekend', () => {
+  let agent: AgentServiceStub;
+
+  beforeEach(async () => {
+    agent = new AgentServiceStub();
+    await TestBed.configureTestingModule({
+      imports: [ExperimentView],
+      providers: [
+        { provide: AgentService, useValue: agent },
+        { provide: RegimeService, useValue: new RegimeServiceStub() },
+        { provide: ScorecardService, useValue: new ScorecardServiceStub() },
+      ],
+    }).compileComponents();
+  });
+
+  /** Saturday 5 September 2026, mid-morning in New York. */
+  function onSaturday(): any {
+    vi.setSystemTime(new Date('2026-09-05T14:00:00Z'));
+    return TestBed.createComponent(ExperimentView).componentInstance as any;
+  }
+
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+  afterEach(() => vi.useRealTimers());
+
+  it('promises no clock-driven job on a day none of them run', () => {
+    // The sweep, the regime read, the earnings check and grading all return
+    // early at the weekend. Listing them promises four things that will not
+    // happen — the same fault as the removed 13:35 row, more quietly.
+    const saturday = onSaturday();
+
+    expect(saturday.fixedBeats(new Date('2026-09-05T14:00:00Z'))).toEqual([]);
+  });
+
+  it('looks ahead to the next trading day when today is closed', () => {
+    const saturday = onSaturday();
+
+    expect(saturday.todayIsNow()).toBe(false);
+    expect(saturday.todayLabel()).toContain('Monday');
+  });
+
+  it('shows the wakeup the agent asked for, even though it falls on Monday', () => {
+    // Without the look-ahead this row lands on a day the page never renders,
+    // and the one line saying the experiment is still running disappears for
+    // the whole weekend.
+    agent.events.set([
+      event({ id: 20, ran_at: '2026-09-04T19:57:00Z', next_wakeup: '2026-09-07T13:30:00Z' }),
+    ]);
+    const rows = onSaturday().today();
+
+    expect(rows.some((r: any) => r.text === 'It asked to be woken')).toBe(true);
+  });
+
+  it('lists Monday’s clock-driven jobs as still to come', () => {
+    const texts = onSaturday()
+      .today()
+      .map((r: any) => r.text);
+
+    expect(texts).toContain('The morning sweep analyses the watchlist');
+    expect(onSaturday().today().every((r: any) => !r.done)).toBe(true);
+  });
+
+  it('stays on today when the agent ran at the weekend', () => {
+    // It may wake on a Saturday now. A pass it chose to make is worth showing
+    // whenever it happened, so the look-ahead must not hide it.
+    agent.events.set([event({ id: 21, ran_at: '2026-09-05T13:00:00Z' })]);
+
+    expect(onSaturday().todayIsNow()).toBe(true);
   });
 });
