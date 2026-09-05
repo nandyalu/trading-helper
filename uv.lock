@@ -1641,15 +1641,15 @@ wheels = [
 
 [[package]]
 name = "quiv"
-version = "0.6.0"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "sqlmodel" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/72/b5/6c092668b0d659c737e315f48db788456e19221e8054e7aca055f76d8862/quiv-0.6.0.tar.gz", hash = "sha256:73536e52bdfceb6e601220f07b186c0f0d3fd97f31d5ceab1ce18c92bd7edeca", size = 29914, upload-time = "2026-08-05T04:07:12.283Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/06/18/43de2010ef3cd6fbd2a1f41d9aa5494bf1bff93a153edcd3db346b3ae234/quiv-0.8.0.tar.gz", hash = "sha256:daed59c762008e95677e7b5d39760221d0fc2390e4ebb19c87588e01479a7589", size = 32582, upload-time = "2026-08-21T04:27:28.028Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4a/d3/5216443aeaa64775b143c5b028041d5f4d5a11fd16336a26ccd97fb76352/quiv-0.6.0-py3-none-any.whl", hash = "sha256:c25ddf6209c3191bcb03e4369f9ae9950e54d3469707a39f3f1e91757f0a301c", size = 33937, upload-time = "2026-08-05T04:07:11.27Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/e0/c5e5d23cb27fe7534e58a826ae09d6ce543a3daf0600865d822c9c370414/quiv-0.8.0-py3-none-any.whl", hash = "sha256:5e3a170c60c529691e523abd3837bc0c64cd80f225147355b9253198dec4aed0", size = 36574, upload-time = "2026-08-21T04:27:26.966Z" },
 ]
 
 [[package]]
@@ -1937,7 +1937,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "quiv", specifier = ">=0.5.0" },
+    { name = "quiv", specifier = ">=0.8.0" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
     { name = "tradingagents", directory = "TradingAgents" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },

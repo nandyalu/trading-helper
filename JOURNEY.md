@@ -37,6 +37,22 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — quiv upgraded from 0.6.0 to 0.8.0.** The pin said `>=0.5.0` and the lock held 0.6.0, so two releases of fixes had been sitting unused.
+
+**One of them is a bug this app was exposed to.** Before 0.8.0, fixed-interval scheduling could set the next run to a time that was not in the future, when a job finished within clock resolution of its start. The task then dispatched again at once. The wakeup tick is exactly that shape — it reads one row and usually returns immediately — so it was the task most likely to hit it.
+
+0.7.0 brought lock-free reads, which matters less here but costs nothing.
+
+**Three options arrived that this app has a use for and does not yet use:**
+
+- `timeout` — a time limit per job, enforced through the same stop event as a cancel.
+- `max_retries` with `retry_backoff` — a failed job runs again after an exponential wait.
+- `jitter` — a random offset on a recurring task, for when many share an interval boundary.
+
+None are adopted here. A timeout on an analysis and a retry on a failed one are both worth having, and both change what happens when the model misbehaves, so each belongs in its own entry rather than riding along with a version bump.
+
+Nothing broke. The release notes promise the `add_task` signature is unchanged and the four new options are keyword-only, and the 721 tests agree. The alarm fires 10ms after its deadline on 0.8.0 against 40ms on 0.6.0, and still deletes itself.
+
 **2026-09-05 — the wakeup is a real alarm now, not a search for one.** The agent's chosen time goes to quiv as a `run_once` task, so a pass starts at the second it asked for instead of up to a minute later.
 
 **quiv can do this and an earlier note here said it could not.** `add_task(..., run_once=True, delay=n)` fires once and deletes its own row. Nothing needs cancelling after it fires, and tasks are independent, so a second alarm does not disturb a first.
