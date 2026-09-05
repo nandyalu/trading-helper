@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the agent could not sell anything it had bought.** On Friday it judged MARA a bad holding, asked to sell all four shares, and the broker refused: `OPENAPI_ORDER_NOT_SUPPORT_REVERSE_OPTION` — "This order cannot be entered because it will reverse an existing position. You may need to close an open position, or cancel an open order, before you can submit this order."
+
+The cause is the order of two steps. A buy goes out as a bracket, so a filled position carries two resting sell orders: a stop and a target, each for the whole quantity. Four shares held therefore have eight shares of sells resting against them. To the broker a third sell reads as going short, so it refuses.
+
+The app does cancel those exits. It cancelled them **after** the sell, and the sell never reached that line — it raised, the loop caught the exception, and `continue` skipped the cancel.
+
+So a bracketed position could only ever close through its own stop or target. **The agent could open a position and could not choose to leave one.** Every voluntary exit since brackets shipped would have failed this way. MARA is the first because Friday is the first time the agent asked to sell.
+
+**The correct order was already written down, one function away.** The reset path cancels and then sells, one holding at a time, and its own comment says why: cancelling everything first would leave every other position unprotected if the first sell failed. The agent's sell path had the same two steps reversed.
+
+The sell path now cancels first. **If the sell then fails, the exits go back.** Cancelling leaves the shares unprotected until the sell lands, and a failure that left them bare would trade one defect for a worse one.
+
+The restore uses the levels that were resting, not the levels from the original signal. The agent moves its stops and targets during the day — it moved AVGO's twice on Friday — so the signal's numbers are stale by the time any of this runs.
+
+**The second failure in that pass followed from the first.** The agent listed the MARA sell before an SMCI buy, which is what the prompt tells it to do when it needs the cash. The sell failed, the cash never arrived, and the buy failed with `OPENAPI_DAY_BUYING_POWER_INSUFFICIENT_M_NEW`.
+
+That message carries a rule the app did not know: Webull wants buying power **2% above** the estimated cost of a market order during regular hours. The prompt tells the agent how many whole shares its cash can buy, and that division had no such margin, so the top of its range was never really affordable. The count now divides by 1.02. It costs the agent about 2% of its buying power and removes an order that could only fail.
+
 **2026-09-03 — the agent sets its own cadence, and can finally tell the time.** Four changes, one idea: it manages a book through the day instead of deciding once at the open and going quiet.
 
 **It says when to wake it.** Each pass answers with `next_wakeup` alongside its orders — a clock time or a number of minutes. The scheduler wakes it then. A stock two dollars from its stop deserves a look in thirty minutes; one that just opened does not. That is a trading decision and the agent has the inputs for it: its positions, their stops and targets, and the prices.

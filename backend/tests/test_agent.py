@@ -614,7 +614,7 @@ def test_a_sell_does_not_arm_exits(monkeypatch):
     """An exit under a position being closed would try to sell shares twice."""
     called = []
     monkeypatch.setattr(agent.sandbox_broker, "place_exit_bracket", lambda *a: called.append(a))
-    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 0)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: [])
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent, "is_enabled", lambda: True)
@@ -766,7 +766,7 @@ def _reset_world(monkeypatch, held, held_after=None, sell_fails=False, open_mark
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: open_market)
-    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: [{"kind": "stop", "price": 9.0, "quantity": 1}, {"kind": "target", "price": 12.0, "quantity": 1}])
     monkeypatch.setattr(agent.db, "get_pending_agent_trades", lambda: [])
 
     positions = iter([held, held_after if held_after is not None else {}])
@@ -812,7 +812,7 @@ def test_a_reset_refuses_before_touching_anything_when_the_market_is_shut(monkey
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: False)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
-    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: touched.append("cancel") or 1)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: touched.append("cancel") or [{"kind": "stop", "price": 9.0, "quantity": 1}])
     monkeypatch.setattr(agent.sandbox_broker, "place_market_order", lambda *a: touched.append("sell"))
     monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: touched.append("clear") or 0)
 
@@ -870,7 +870,7 @@ def test_a_failed_sell_leaves_the_other_positions_protected(monkeypatch):
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0, "BBB": 1.0})
-    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: cancelled.append(t) or 1)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: cancelled.append(t) or [{"kind": "stop", "price": 9.0, "quantity": 1}])
 
     def sell(*a):
         raise RuntimeError("rejected")
@@ -910,7 +910,7 @@ def test_a_reset_ahead_of_a_site_flatten_disables_the_agent(monkeypatch):
     monkeypatch.setattr(agent.quotes, "is_sandbox", lambda: True)
     monkeypatch.setattr(agent.watchdog, "is_us_market_hours", lambda: True)
     monkeypatch.setattr(agent.sandbox_broker, "get_positions", lambda: {"AAA": 1.0})
-    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: 2)
+    monkeypatch.setattr(agent, "_cancel_resting_exits", lambda t: [{"kind": "stop", "price": 9.0, "quantity": 1}, {"kind": "target", "price": 12.0, "quantity": 1}])
     monkeypatch.setattr(agent.db, "clear_agent_trades", lambda: 5)
     disabled = []
     monkeypatch.setattr(agent, "set_enabled", lambda on: disabled.append(on))

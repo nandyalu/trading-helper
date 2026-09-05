@@ -34,6 +34,20 @@ ALSO_COMPLETE = ("2026-08-05", 104.0, 108.0, 103.0, 107.0, 1_100_000)
 IN_PROGRESS = ("2026-08-06", float("nan"), float("nan"), float("nan"), float("nan"), 156_378_175)
 
 
+def _recent(offset_days: int) -> str:
+    """A date close to today, as YYYY-MM-DD.
+
+    **Two tests below read through code that filters bars by age**, so a fixed
+    date passes for a few weeks and then fails for good. Both did: they were
+    written with August dates and started failing in September, and the failure
+    said "the history is empty" rather than "your fixture expired".
+
+    The tests that call ``drop_incomplete_bars`` directly keep the fixed dates.
+    That function has no clock in it, so a real date is clearer there.
+    """
+    return (datetime.date.today() - datetime.timedelta(days=offset_days)).isoformat()
+
+
 def test_drops_the_incomplete_row():
     result = drop_incomplete_bars(_frame([COMPLETE, ALSO_COMPLETE, IN_PROGRESS]))
     assert len(result) == 2
@@ -80,18 +94,28 @@ def test_price_window_never_grades_on_a_nan_close(monkeypatch, fake_bar_cache):
 
 
 def test_price_history_drops_the_unchartable_bar(monkeypatch, fake_bar_cache):
-    frame = _frame([COMPLETE, ALSO_COMPLETE, IN_PROGRESS])
+    older, newer, today = _recent(3), _recent(2), _recent(1)
+    frame = _frame([
+        (older, *COMPLETE[1:]),
+        (newer, *ALSO_COMPLETE[1:]),
+        (today, *IN_PROGRESS[1:]),
+    ])
     monkeypatch.setattr(bars, "yf_retry", lambda fn: frame)
     monkeypatch.setattr(bars.yf, "Ticker", lambda ticker: None)
 
     history = positions.get_price_history("NVDA", days=30)
-    assert [bar.date for bar in history] == ["2026-08-04", "2026-08-05"]
+    assert [bar.date for bar in history] == [older, newer]
 
 
 def test_watchdog_skips_rather_than_alerting_on_a_nan_price(monkeypatch, fake_bar_cache):
     """Dropping the row leaves last_bar_date on the previous session, which the
     caller's freshness check treats as "no fresh bar" — quiet, not wrong."""
-    frame = _frame([COMPLETE, ALSO_COMPLETE, IN_PROGRESS])
+    older, newer, today = _recent(3), _recent(2), _recent(1)
+    frame = _frame([
+        (older, *COMPLETE[1:]),
+        (newer, *ALSO_COMPLETE[1:]),
+        (today, *IN_PROGRESS[1:]),
+    ])
     monkeypatch.setattr(bars, "yf_retry", lambda fn: frame)
     monkeypatch.setattr(bars.yf, "Ticker", lambda ticker: None)
     monkeypatch.setattr(watchdog.db, "set_cached_price", lambda *a, **k: None)
@@ -99,7 +123,7 @@ def test_watchdog_skips_rather_than_alerting_on_a_nan_price(monkeypatch, fake_ba
     snapshot = watchdog.get_daily_snapshot("NVDA")
     assert snapshot is not None
     assert snapshot.price == pytest.approx(107.0)
-    assert snapshot.last_bar_date == datetime.date(2026, 8, 5)
+    assert snapshot.last_bar_date == datetime.date.fromisoformat(newer)
 
 
 def test_the_in_progress_bar_is_never_cached(monkeypatch, fake_bar_cache):

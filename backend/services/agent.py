@@ -297,6 +297,13 @@ def describe_history(closed: list) -> list[str]:
 # What each trigger means, in the agent's own reading. Plain words rather than
 # the stored key: "move" tells it nothing, "run because the stock moved
 # unusually" tells it the analyst was reacting to something already priced in.
+# Webull wants buying power 2% above the estimated cost of a market order
+# during regular hours. Learned from a live refusal on 2026-09-04
+# (OPENAPI_DAY_BUYING_POWER_INSUFFICIENT_M_NEW), not from the docs. Without it
+# the top share of every affordable count is an order that can only fail.
+_BUYING_POWER_MARGIN = 1.02
+
+
 _TRIGGER_PHRASE = {
     "sweep": " Run on the normal morning schedule.",
     "commissioned": " Run today because you asked to see it today.",
@@ -443,7 +450,7 @@ def build_prompt(
                 # afford -1 share(s)" on every signal line. Clamped, and the
                 # branch now tests for a positive count rather than a non-zero
                 # one, because those differ only when the answer is nonsense.
-                affordable = max(0, int(book.cash // live))
+                affordable = max(0, int(book.cash // (live * _BUYING_POWER_MARGIN)))
                 afford_text = (
                     f" With your ${book.cash:,.2f} cash you can afford {affordable} share(s)."
                     if affordable > 0
@@ -1492,7 +1499,9 @@ def _place(
     """
     ticker = order["ticker"]
     if order["side"] != "buy":
-        return sandbox_broker.place_market_order(ticker, order["side"].upper(), order["quantity"])
+        # Not a plain market order: the resting exits have to be cleared before
+        # the broker will accept the sell, and put back if it fails.
+        return _sell_and_restore_on_failure(order)
 
     stop, target = usable_levels(ticker, stops.get(ticker), targets.get(ticker), price)
     if stop is None and price:
@@ -1600,23 +1609,94 @@ def _record_exits(ticker: str, exits: list[dict]) -> None:
     )
 
 
-def _cancel_resting_exits(ticker: str) -> int:
-    """Cancel every resting exit on a ticker the agent is selling.
+def _cancel_resting_exits(ticker: str) -> list[dict]:
+    """Cancel every resting exit on a ticker, and report what was cancelled.
 
-    An exit left behind after the position closes is not merely untidy: it is a
-    live order to sell shares that are no longer owned, which the broker would
-    either reject later or fill into a short.
+    Two reasons to cancel. An exit left behind after a position closes is a
+    live order to sell shares nobody owns, which the broker rejects later or
+    fills into a short. And the broker will not accept the closing sell at all
+    while those exits rest — see ``_sell_and_restore_on_failure``.
+
+    **Returns the levels, not a count.** A sell that fails has to put the exits
+    back exactly as they were, and the resting orders are the only record of
+    where they were: the agent moves its stops and targets during the day, so
+    the original signal's levels are stale.
     """
-    cancelled = 0
+    cancelled: list[dict] = []
     for trade in db.get_pending_agent_trades():
         if not trade.is_stop or trade.ticker != ticker:
             continue
         if sandbox_broker.cancel_order(trade.client_order_id):
             db.settle_agent_trade(trade.client_order_id, status="rejected")
-            cancelled += 1
+            cancelled.append({
+                "kind": trade.exit_kind,
+                "price": trade.limit_price,
+                "quantity": trade.quantity,
+            })
     if cancelled:
-        log.info("Cancelled %d resting exit(s) on %s", cancelled, ticker)
+        log.info("Cancelled %d resting exit(s) on %s", len(cancelled), ticker)
     return cancelled
+
+
+def _sell_and_restore_on_failure(order: dict) -> dict:
+    """Sell a position, clearing its resting exits first.
+
+    **The broker refuses a sell while exits rest on the position.** A bracketed
+    buy leaves a stop and a target, each for the full quantity, so a position of
+    four shares already has eight shares of sells against it. A third sell reads
+    as going short and returns
+    ``OPENAPI_ORDER_NOT_SUPPORT_REVERSE_OPTION``.
+
+    Until 2026-09-05 the cancel ran *after* the sell, so it never ran at all —
+    the sell raised first and the loop skipped past it. A bracketed position
+    could only close through its own stop or target, and the agent could not
+    choose to leave one.
+
+    **If the sell fails, the exits go back.** Between the cancel and the fill
+    the shares have nothing under them, and leaving them that way would replace
+    one defect with a worse one: a naked position that nothing reports.
+    """
+    cancelled = _cancel_resting_exits(order["ticker"])
+    try:
+        return sandbox_broker.place_market_order(
+            order["ticker"], order["side"].upper(), order["quantity"]
+        )
+    except Exception:
+        if cancelled:
+            _restore_resting_exits(order["ticker"], cancelled)
+        raise
+
+
+def _restore_resting_exits(ticker: str, cancelled: list[dict]) -> None:
+    """Put back the exits a failed sell had cleared.
+
+    Best-effort, and loud when it fails. The shares are held either way, so
+    raising here would only replace a reported failure with an unreported one.
+    """
+    stop = next((c["price"] for c in cancelled if c["kind"] == "stop"), None)
+    target = next((c["price"] for c in cancelled if c["kind"] == "target"), None)
+    quantity = max(c["quantity"] for c in cancelled)
+    try:
+        legs = sandbox_broker.place_exit_bracket(ticker, quantity, stop, target)
+    except Exception as exc:
+        log.exception("Could not restore the exits on %s after a failed sell", ticker)
+        _record_unguarded(ticker, quantity, f"a failed sell cleared them and they would not go back: {exc}")
+        return
+    for leg in legs:
+        label = "stop-loss" if leg["kind"] == "stop" else "take-profit"
+        db.record_agent_trade(
+            ticker=ticker,
+            side="sell",
+            quantity=quantity,
+            client_order_id=leg["client_order_id"],
+            placed_at=leg["placed_at"],
+            reason=f"{label} restored at ${leg['price']:,.2f} after a failed sell",
+            signal_id=None,
+            is_stop=True,
+            limit_price=leg["price"],
+            exit_kind="stop" if leg["kind"] == "stop" else "target",
+        )
+    log.info("Restored %d exit(s) on %s after a failed sell", len(legs), ticker)
 
 
 def usable_levels(
@@ -1936,10 +2016,8 @@ def run_once() -> AgentRun:
                     targets.get(order["ticker"]),
                     client_order_id=result["client_order_id"],
                 )
-        else:
-            # The position is being exited, so any resting exit on it would
-            # try to sell shares that are no longer held.
-            _cancel_resting_exits(order["ticker"])
+        # A sell has already cleared its own resting exits, before the order
+        # went out — the broker refuses it otherwise. See _place.
 
     # Settle again on the way out, and re-read the book. A market order placed
     # in session hours fills in well under a second, but nothing would notice
@@ -2196,7 +2274,7 @@ def reset_book(pending_external_flatten: bool = False) -> ResetResult:
         # the agent is switched off as part of this, and only turning it back
         # on resumes trading.
         for ticker in sorted(held):
-            result.cancelled += _cancel_resting_exits(ticker)
+            result.cancelled += len(_cancel_resting_exits(ticker))
         set_enabled(False)
         result.cleared = db.clear_agent_trades()
         result.refused = (
@@ -2224,7 +2302,7 @@ def reset_book(pending_external_flatten: bool = False) -> ResetResult:
         # means a failure on the first sell leaves every other position
         # unprotected too, rather than only the one being closed.
         for ticker, quantity in sorted(held.items()):
-            result.cancelled += _cancel_resting_exits(ticker)
+            result.cancelled += len(_cancel_resting_exits(ticker))
             try:
                 sandbox_broker.place_market_order(ticker, "SELL", quantity)
                 result.closed.append(f"{quantity:g} {ticker}")
