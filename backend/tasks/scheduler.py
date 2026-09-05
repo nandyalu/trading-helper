@@ -240,9 +240,27 @@ async def _run_agent_pass(label: str) -> None:
 async def _agent_wakeup_job() -> None:
     """Wake the agent when it asked to be woken, and once before the close.
 
-    **Polled rather than scheduled.** quiv's tasks are fixed intervals, so a
-    per-run alarm has nowhere to live; a five-minute tick against a five-minute
-    minimum wakeup gives the agent the granularity it was promised.
+    **Polled rather than scheduled, and the reason is durability.**
+
+    An earlier version of this comment said quiv cannot schedule a one-off
+    task. That is wrong: ``add_task(..., run_once=True, delay=n)`` fires once,
+    at a time of your choosing, to the second.
+
+    The real objection is that quiv keeps its tasks in a temporary SQLite file
+    that is deleted on shutdown, so nothing it holds survives a restart. A
+    one-off alarm set on Friday for Monday's open disappears the moment the
+    container is rebuilt — which happens most days here. Nothing else would
+    wake the agent, and that is the silent stop ``agent.wakeup_due`` exists to
+    prevent.
+
+    The wakeup lives in the database instead, on the run that asked for it,
+    and this tick re-reads it. A restart loses nothing.
+
+    The cost is being up to a minute late. A pass takes about a minute of GPU
+    to think, and the agent asks for gaps of fifteen minutes and up, so the
+    error is smaller than the thing it is scheduling. Restoring a one-off on
+    startup and replacing it after every pass would buy those sixty seconds
+    back for three more moving parts, each of which fails silently.
 
     The final pass is decided against the real Eastern close rather than a
     fixed UTC time, so it does not drift by an hour twice a year the way the

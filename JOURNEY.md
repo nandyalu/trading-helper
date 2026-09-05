@@ -37,6 +37,16 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — a correction: quiv can schedule a one-off task, and the wakeup still should not use one.** The comment on the wakeup tick said quiv only does fixed intervals, so a per-run alarm had nowhere to live. That is wrong. `add_task(..., run_once=True, delay=n)` fires once, at a chosen time, to the second.
+
+**The real reason to poll is durability.** quiv keeps its tasks in a temporary SQLite file that is deleted on shutdown, and its own documentation says to re-add every task on startup. An alarm set on Friday for Monday's open disappears when the container is rebuilt, which happens most days here. Nothing else would wake the agent — the same silent stop the fallback in `wakeup_due` exists to prevent.
+
+The wakeup lives in the database, on the run that asked for it, and the tick re-reads it every minute. A restart loses nothing.
+
+**The cost is being up to a minute late, and it is smaller than it sounds.** A pass takes about a minute of GPU to think, and the agent asks for gaps of fifteen minutes and up. The scheduling error is already smaller than the thing being scheduled.
+
+A one-off could be restored on startup and replaced after every pass. That buys back sixty seconds for three more moving parts — the restore, the replace, and the cancel — and each of them fails by doing nothing, which is the failure that is hardest to see.
+
 **2026-09-05 — the agent owns its own schedule, day and night.** The fixed decision pass at 13:35 UTC is gone. The agent is woken when it asked to be woken, and at no other time.
 
 Friday earned this. Across eight self-chosen wakeups it asked for gaps of 15 to 83 minutes and never once asked for the 5-minute minimum. It also asked for the next open when there was nothing left in the day. A schedule chosen by a person was doing no work that the agent was not already doing better.
