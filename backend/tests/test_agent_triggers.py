@@ -32,6 +32,7 @@ def agent_stub(monkeypatch):
         rejected = []
         failed = []
         notes = []
+        next_wakeup = None
         skipped = None
 
     def run_once():
@@ -40,6 +41,15 @@ def agent_stub(monkeypatch):
 
     monkeypatch.setattr(scheduler.agent, "run_once", run_once)
     monkeypatch.setattr(scheduler.agent, "is_enabled", lambda: True)
+    # The alarm is quiv's job and quiv is not running here. Stubbing it keeps
+    # these tests about which paths decide to run a pass.
+    #
+    # The reset matters as much as the stub: ``_wakeup_task_id`` is module
+    # state, so an id left by one test made the next one pull a non-existent
+    # alarm forward instead of running the pass, and the failure read as a
+    # missing run rather than as pollution.
+    monkeypatch.setattr(scheduler, "_replace_wakeup_alarm", lambda when: None)
+    monkeypatch.setattr(scheduler, "_wakeup_task_id", None)
     return runs
 
 

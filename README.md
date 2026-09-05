@@ -25,7 +25,7 @@ When something needs correcting, the route is deliberate: write down what change
 | 11:00 | The morning sweep analyses every ticker on the watchlist and charges the agent for each one |
 | 12:45 | The market regime line — VIX, SPY against its 200-day average, the yield curve |
 | 13:00 | Earnings check, which analyses anything reporting soon |
-| **whenever it asked** | **The agent sets every one of its own passes.** It reads its book, answers with orders, and names the next time. Minimum 5 minutes, maximum 4 days, any hour |
+| **whenever it asked** | **The agent sets every one of its own passes.** It names the next time, and that time becomes a real alarm. Minimum 5 minutes, maximum 4 days, any hour |
 | 20:55 | A last pass before the close, if it has not just had one |
 | every 15 min | The watchdog: big moves, volume spikes, breached stops, reached targets |
 | 21:30 | Grading, then the journal is rewritten |

@@ -180,7 +180,11 @@ async def _maybe_run_agent() -> None:
         log.info("Agent ran %s ago — inside the cooldown, skipping", now - _last_agent_run)
         return
     _last_agent_run = now
-    await _run_agent_pass("Event-driven")
+    # Pull the pending alarm forward rather than running beside it. Firing a
+    # one-off also deletes it, so the time the agent is about to supersede
+    # cannot arrive later and ask a question it has already answered.
+    if not wake_agent_now():
+        await _run_agent_pass("Event-driven")
 
 
 async def _dispatch_immediate_research(run) -> None:
@@ -217,19 +221,144 @@ async def _dispatch_immediate_research(run) -> None:
 # only to guard against that.
 _last_final_pass: datetime.date | None = None
 
+# The pending alarm for the agent's next chosen time, if one is set.
+#
+# In memory because quiv's own task table is in memory: a restart deletes both,
+# and _restore_wakeup_alarm rebuilds them together from the database.
+_wakeup_task_id: str | None = None
+
+# Two paths can decide a pass is due at the same moment. The alarm fires, and a
+# second later the tick reads a next_wakeup the running pass has not replaced
+# yet. Without this the agent answers the same question twice and the second
+# answer overwrites the first.
+_pass_lock = asyncio.Lock()
+
+WAKEUP_TASK_NAME = "agent_wakeup_alarm"
+
+
+def _replace_wakeup_alarm(when: datetime.datetime | None) -> None:
+    """Set the alarm for the agent's next chosen time, replacing any pending one.
+
+    **Replacing, not merely adding.** A ``run_once`` task deletes itself when it
+    fires, so an alarm that has done its job needs no cleanup. But not every
+    pass consumes an alarm — the last pass before the close does not, and nor
+    does the first pass after a restore. One of those would set a second alarm
+    while the first was still pending, and both would fire. Removing first makes
+    "at most one alarm" true without having to know which path ran.
+
+    A time already past fires at once. That is the container having been down
+    when the wakeup came due, and the answer is to ask the agent now, not to
+    drop the wakeup it chose.
+    """
+    global _wakeup_task_id
+    if _wakeup_task_id is not None:
+        try:
+            scheduler.remove_task(_wakeup_task_id)
+        except Exception:
+            # Already fired and deleted itself, which is the ordinary case.
+            log.debug("No pending wakeup alarm to remove")
+        _wakeup_task_id = None
+    if when is None:
+        return
+    delay = max(0.0, (when - market_clock.now_et()).total_seconds())
+    _wakeup_task_id = scheduler.add_task(
+        task_name=WAKEUP_TASK_NAME,
+        func=agent_wakeup_alarm,
+        # Ignored for a one-off, which deletes itself after it fires, but quiv
+        # rejects a non-positive interval whatever run_once says.
+        interval=1,
+        delay=delay,
+        run_once=True,
+    )
+    log.info(
+        "Wakeup alarm set for %s (in %.0f min)", when.strftime("%a %-I:%M %p"), delay / 60
+    )
+
+
+def restore_wakeup_alarm() -> None:
+    """Rebuild the alarm from the database when the app starts.
+
+    **This is the one step that can end the experiment.** quiv keeps its tasks
+    in a temporary file that a restart deletes, so without this the agent has no
+    alarm and nothing else schedules it.
+
+    ``agent.wakeup_due`` supplies the fallback when the stored wakeup is missing
+    or unreadable, so an agent with no usable time still gets asked at the next
+    open. The one-minute tick is the second guard: if this ever fails silently,
+    it notices within a minute.
+    """
+    runs = agent.db.get_agent_runs(limit=1)
+    wanted = runs[0].next_wakeup if runs else None
+    if wanted is not None and wanted.tzinfo is None:
+        wanted = wanted.replace(tzinfo=datetime.timezone.utc)
+    if wanted is None:
+        wanted = market_clock.next_open()
+        log.info("No stored wakeup; the agent will be asked at the next open")
+    _replace_wakeup_alarm(wanted.astimezone(market_clock.US_MARKET_TZ))
+
+
+def wake_agent_now() -> bool:
+    """Pull the pending alarm forward instead of letting it fire stale.
+
+    Used when something else makes a pass worth running early — an analysis the
+    agent asked to see today, or a watchdog trigger. Because the alarm is a
+    one-off, firing it now also deletes it, so the time the agent has just
+    superseded cannot arrive later and ask a question it has already answered.
+
+    Returns False when there is no alarm to pull, which leaves the caller to run
+    the pass itself.
+    """
+    global _wakeup_task_id
+    if _wakeup_task_id is None:
+        return False
+    try:
+        scheduler.run_task_immediately(_wakeup_task_id)
+    except Exception:
+        # Already running or already fired. Either way a pass is happening.
+        log.debug("Could not pull the wakeup alarm forward")
+        return False
+    _wakeup_task_id = None
+    return True
+
+
+def agent_wakeup_alarm() -> None:
+    """quiv's entry point for the alarm. Runs on a worker thread."""
+    run_on_main(_alarm_job)
+
+
+async def _alarm_job() -> None:
+    global _wakeup_task_id
+    _wakeup_task_id = None  # it has fired; quiv has deleted its row
+    if not agent.is_enabled():
+        return
+    await _run_agent_pass("Alarm")
+
 
 async def _run_agent_pass(label: str) -> None:
     """One decision pass, and everything that follows from it.
 
     Shared by every path that wakes the agent, so a pass behaves the same
     however it was triggered — the notification, the immediate research
-    dispatch, and the failure handling are one implementation.
+    dispatch, the next alarm, and the failure handling are one implementation.
     """
+    if _pass_lock.locked():
+        log.info("%s pass skipped — one is already running", label)
+        return
+    async with _pass_lock:
+        await _run_agent_pass_locked(label)
+
+
+async def _run_agent_pass_locked(label: str) -> None:
     try:
         run = await asyncio.to_thread(agent.run_once)
     except Exception:
         log.exception("%s agent run failed", label)
+        # Without an alarm the agent never runs again, so a failed pass still
+        # has to leave one behind. The next open is the honest fallback: the
+        # pass produced no answer, so the agent chose nothing.
+        _replace_wakeup_alarm(market_clock.next_open())
         return
+    _replace_wakeup_alarm(run.next_wakeup or market_clock.next_open())
     # A note is worth posting even on a day it did nothing else: it is the
     # agent saying it is short of something, which is the point of having it.
     if run.acted or run.rejected or run.failed or run.notes:
@@ -238,7 +367,17 @@ async def _run_agent_pass(label: str) -> None:
 
 
 async def _agent_wakeup_job() -> None:
-    """Wake the agent when it asked to be woken, and once before the close.
+    """The backstop, and the last pass before the close.
+
+    **The alarm is the mechanism now.** The agent's chosen time goes to quiv as
+    a one-off task, which fires to the second. This tick exists because that
+    alarm lives in a temporary file a restart deletes, and it is rebuilt at
+    startup by ``restore_wakeup_alarm``. If that restore ever fails silently the
+    agent would never wake again, so this notices within a minute and runs the
+    pass itself.
+
+    In normal operation it finds nothing: the alarm has already run the pass and
+    written the next wakeup, so ``wakeup_due`` returns None.
 
     **Polled rather than scheduled, and the reason is durability.**
 
@@ -544,24 +683,24 @@ def weekly_digest() -> None:
 
 
 def register_jobs() -> None:
-    """Registers all 7 scheduled jobs on the shared `scheduler`. Called once
+    """Registers the scheduled jobs on the shared `scheduler`. Called once
     from backend/app.py's lifespan on every startup — quiv's task state is an
     in-memory/temp-file affair (see quiv's own docs), nothing persists
-    across restarts."""
+    across restarts.
+
+    **That last sentence is why `restore_wakeup_alarm` is here.** The agent's
+    next wakeup is a one-off quiv task, so a restart deletes it. Rebuilding it
+    from the database is what keeps the agent running across a redeploy, and
+    skipping it would leave an agent that never wakes and reports nothing
+    wrong."""
     scheduler.add_task(task_name="alert_watchdog", func=alert_watchdog, interval=900)
     scheduler.add_task(task_name="daily_signals", func=daily_signals, interval=86400, delay=_seconds_until(21, 30))
     scheduler.add_task(task_name="morning_sweep", func=morning_sweep, interval=86400, delay=_seconds_until(11, 0))
     scheduler.add_task(task_name="earnings_check", func=earnings_check, interval=86400, delay=_seconds_until(13, 0))
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
-    # Every minute, so a chosen time is honoured to within a minute.
-    #
-    # **This was five minutes and that was wrong.** The reasoning was that the
-    # agent cannot ask for a gap under five minutes, so a finer tick would only
-    # add empty checks. The minimum *gap* says nothing about the *alignment*: a
-    # request for 16:02 on a grid of 16:01 and 16:06 waits four minutes. On
-    # 2026-09-04 four of eight wakeups waited more than four minutes.
-    #
-    # An empty check is one indexed read of the newest run. Five times more of
-    # them costs nothing measurable next to a pass that takes a minute of GPU.
+    # The backstop for the alarm, not the alarm itself. See _agent_wakeup_job.
     scheduler.add_task(task_name="agent_wakeup", func=agent_wakeup, interval=60)
+    # Last, so the agent's alarm is rebuilt only once everything it may need is
+    # registered — a restored wakeup can be due immediately.
+    restore_wakeup_alarm()

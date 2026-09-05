@@ -37,6 +37,20 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the wakeup is a real alarm now, not a search for one.** The agent's chosen time goes to quiv as a `run_once` task, so a pass starts at the second it asked for instead of up to a minute later.
+
+**quiv can do this and an earlier note here said it could not.** `add_task(..., run_once=True, delay=n)` fires once and deletes its own row. Nothing needs cancelling after it fires, and tasks are independent, so a second alarm does not disturb a first.
+
+**A pass that runs early pulls its alarm forward instead of leaving it to fire stale.** Friday has the case: an analysis landed at 17:00 and the event path ran a pass, twelve minutes before the alarm the previous pass had set for 17:12. `run_task_immediately` fires that alarm now, and because it is a one-off, quiv deletes it. The superseded time cannot arrive later and ask the agent a question it has already answered.
+
+**One alarm is replaced rather than added to, and the reason is narrow.** Not every pass consumes an alarm: the last pass before the close does not, and neither does the first pass after a restore. A pass like that would answer with a new time while the old alarm was still pending, and both would fire. So the alarm is removed before a new one is set — one call, and it makes the invariant "at most one alarm" true without having to reason about which path ran.
+
+**The startup restore is the price, and it is the one thing that can end the experiment.** quiv keeps its tasks in a temporary file that a restart deletes, so the alarm has to be rebuilt from `agentrun.next_wakeup` when the app starts. A restore that silently does nothing means an agent that never wakes.
+
+Two things guard it. A wakeup already in the past — the container was down when it came due — fires immediately rather than being dropped. And the one-minute tick stays, no longer as the mechanism but as a backstop: if an alarm is ever missing, the tick notices within a minute and runs the pass. A bug in the restore now costs a minute instead of the experiment.
+
+**Two passes can no longer overlap.** The alarm and the tick can both decide a pass is due — the tick reads a `next_wakeup` the running pass has not yet replaced. A lock makes the second one a no-op.
+
 **2026-09-05 — a correction: quiv can schedule a one-off task, and the wakeup still should not use one.** The comment on the wakeup tick said quiv only does fixed intervals, so a per-run alarm had nowhere to live. That is wrong. `add_task(..., run_once=True, delay=n)` fires once, at a chosen time, to the second.
 
 **The real reason to poll is durability.** quiv keeps its tasks in a temporary SQLite file that is deleted on shutdown, and its own documentation says to re-add every task on startup. An alarm set on Friday for Monday's open disappears when the container is rebuilt, which happens most days here. Nothing else would wake the agent — the same silent stop the fallback in `wakeup_due` exists to prevent.
