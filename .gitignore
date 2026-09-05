@@ -44,3 +44,15 @@ dockge/
 # anywhere else. What the benchmarks *found*, and the method traps that apply
 # to any rig, are in ollama/README.md, which is tracked.
 ollama-stack/
+
+# Working notes, kept locally and out of the published repo. Each was
+# superseded by JOURNEY.md, which records what changed and why rather than
+# what somebody intended to do next.
+#   ROADMAP.md                 — describes the app before the 2026-09-01 reset
+#   plan.md                    — the website rebuild, finished
+#   PLAN-autonomous-analyst.md — built and running since 2026-09-01
+#   helpful-prs.md             — all eight PRs merged; the record is in CLAUDE.md
+ROADMAP.md
+plan.md
+PLAN-*.md
+helpful-prs.md

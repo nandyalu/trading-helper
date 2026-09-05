@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — four working notes left the repository; three GPU write-ups joined the docs site.**
+
+**Removed, and each said so itself.** `ROADMAP.md` opens by admitting its phases describe an app that no longer exists. `plan.md` was a website rebuild that finished. `PLAN-autonomous-analyst.md` says "nothing here is built yet" about something that has been running since 2026-09-01. `helpful-prs.md` tracked eight upstream pull requests, all merged and cherry-picked, with the record now in [CLAUDE.md](CLAUDE.md).
+
+This journal replaced all four. A plan says what somebody intended; this says what changed and why. When the two disagree the plan is the one that is wrong, and leaving it published invites a reader to trust it.
+
+They stay on disk and are in `.gitignore`. The history keeps them, and there is nothing in them worth rewriting 184 commits to remove.
+
+**Three moved to the docs site instead**, because they are measurements rather than intentions and the audience for this experiment includes people who would use them:
+
+| Now at | What it found |
+|---|---|
+| `docs/gpu-bigger-models.md` | Pairing two cards behind a PCIe switch chip corrupts the output. No crash and no error — wrong answers, on both llama.cpp and ollama, on both switch chips, every attempt. "Multi-GPU splitting does not work" is a thing people conclude and abandon; this is why, and that it fails silently. |
+| `docs/gpu-concurrency.md` | Seven concurrent analyses and fourteen finish in the same wall clock, and seven halves the per-analysis latency. The host CPU sits at 99.8% while the cards idle a third of the time. |
+| `docs/gpu-pool.md` | Seven RX 6600s under ROCm, which does not officially support gfx1032, and the `HSA_OVERRIDE_GFX_VERSION=10.3.0` that makes them work. |
+
+One of them still described the cards as split four and three between two deployments. The second deployment ended on 2026-09-01. Corrected while moving it, rather than published stale.
+
 **2026-09-05 — the repository is `the-allowance`, and the real account number is out of the source.**
 
 **Renamed rather than restarted.** A fresh repository was considered and rejected. This site's central claim is that nobody can nudge the book and that every change is written down first with a reason, and this journal is the evidence for it. Cut the 184 commits that implement these entries and the journal becomes a story instead of a record — the code before and after each decision, and the tests that pin it, are what make it checkable.
@@ -576,7 +594,7 @@ It is deliberately *not* a passthrough of cost. Local electricity for the same a
 
 A single earlier sample had looked like evidence. It was noise, and we had already written it into the plan as a finding before the nine-ticker run corrected it.
 
-Three problems appeared on the first deploy. None was obvious, and all three are now recorded in `PLAN-autonomous-analyst.md`:
+Three problems appeared on the first deploy. None was obvious:
 
 - **Dockge pulls a local-only image** and fails.
 - **Dockge turns a named volume into a root-owned bind mount** that a container running as `appuser` cannot write.

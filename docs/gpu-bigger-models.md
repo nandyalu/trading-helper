@@ -1,12 +1,12 @@
 # Running a bigger model on the GPU pool
 
-Started 2026-08-29, continuing the day's GPU work in [gpu-speedup-plan.md](gpu-speedup-plan.md). Goal: find out whether a 9B-class model can run on this hardware, on one card or split across two, and get to the bottom of why splitting a model across two cards "wasn't working" — the question this whole day of GPU investigation started from.
+Started 2026-08-29, continuing the day's GPU work in [gpu-speedup-plan.md](gpu-pool.md). Goal: find out whether a 9B-class model can run on this hardware, on one card or split across two, and get to the bottom of why splitting a model across two cards "wasn't working" — the question this whole day of GPU investigation started from.
 
 ## Bottom line
 
 **A 9B model runs correctly on one 8 GiB card, no splitting needed.** Tested Gemma 2 9B (Q4_K_M quantization): loads fully on the GPU, uses about 81% of one card's 8 GiB, and answers correctly at roughly 70 tokens/second reading a prompt and 24-26 tokens/second writing a reply.
 
-**Splitting a model across two cards does work — but only with the right pair of cards, and this pool has exactly one such pair: hellhound and `ollama-pool-e`.** Every other card sits behind a PCIe switch chip on a riser board (see [gpu-speedup-plan.md](gpu-speedup-plan.md) for the wiring diagram). Pairing any two switch-connected cards together corrupts the output — not a crash, not an error, just wrong answers, confirmed on **both** raw llama.cpp and ollama itself, on both switch chips, every time it was tried. This is very likely the exact reason multi-GPU splitting looked broken before: it silently produces garbage instead of failing loudly.
+**Splitting a model across two cards does work — but only with the right pair of cards, and this pool has exactly one such pair: hellhound and `ollama-pool-e`.** Every other card sits behind a PCIe switch chip on a riser board (see [gpu-speedup-plan.md](gpu-pool.md) for the wiring diagram). Pairing any two switch-connected cards together corrupts the output — not a crash, not an error, just wrong answers, confirmed on **both** raw llama.cpp and ollama itself, on both switch chips, every time it was tried. This is very likely the exact reason multi-GPU splitting looked broken before: it silently produces garbage instead of failing loudly.
 
 **A model that needs more than one card's 8 GiB works well split across hellhound + `ollama-pool-e`.** A 14B model (9 GiB of weights, too big for any single card here) ran correctly at its full native 32,768-token context, using only 65-68% of each card's memory — real headroom to spare. A 24B model (14.3 GiB) was tried too and did not fit — it crashed once VRAM filled past what the KV cache and compute buffers needed on top of the weights.
 
@@ -14,7 +14,7 @@ Started 2026-08-29, continuing the day's GPU work in [gpu-speedup-plan.md](gpu-s
 
 ## What was tested and how
 
-All tests used the patched llama.cpp build from [gpu-speedup-plan.md](gpu-speedup-plan.md) (`/home/kr/tools/llama.cpp`) and, for the final confirmation, a separately downloaded, unmodified `ollama` v0.33.2 binary run as a standalone process (`/home/kr/tools/ollama-portable`) — not the pool's own containers, so none of this touched production. Models used, all downloaded fresh from Hugging Face (except where noted) and kept at `/home/kr/tools/models/`:
+All tests used the patched llama.cpp build from [gpu-speedup-plan.md](gpu-pool.md) (`/home/kr/tools/llama.cpp`) and, for the final confirmation, a separately downloaded, unmodified `ollama` v0.33.2 binary run as a standalone process (`/home/kr/tools/ollama-portable`) — not the pool's own containers, so none of this touched production. Models used, all downloaded fresh from Hugging Face (except where noted) and kept at `/home/kr/tools/models/`:
 
 - **Gemma 2 9B**, `bartowski/gemma-2-9b-it-GGUF:Q4_K_M`, 5.76 GB. Chosen because it is a mature, text-only, long-stable architecture — the newer `gemma4` family already in this pool's own model set turned out to be incompatible with current llama.cpp (see below), and `qwen3.5:9b`, also already present, hit a similar wall.
 - **Qwen2.5-14B-Instruct**, `bartowski/Qwen2.5-14B-Instruct-GGUF:Q4_K_M`, 8.99 GB.
@@ -27,7 +27,7 @@ Every generation was checked for a **correct** answer (a real factual question w
 Before downloading anything, the plan was to test with a model already on disk. Two attempts failed, both for reasons unrelated to hardware:
 
 - **`qwen3.5:9b`** (already in the pool's model store) — its GGUF file uses a metadata layout (`qwen35.rope.dimension_sections`) that current llama.cpp's parser rejects (expects 4 values, the file has 3). Likely a version-skew issue: this is a very new architecture, and ollama's export and llama.cpp's parser have each moved since this particular GGUF was built.
-- **`gemma4:12b`** — shares the same multimodal `gemma4` architecture already found incompatible with mainline llama.cpp earlier the same day (see [gpu-speedup-plan.md](gpu-speedup-plan.md)); not retested, since the failure mode (file bundles vision/audio tensors llama.cpp's loader won't skip) applies to the whole family, not just the one variant already tried.
+- **`gemma4:12b`** — shares the same multimodal `gemma4` architecture already found incompatible with mainline llama.cpp earlier the same day (see [gpu-speedup-plan.md](gpu-pool.md)); not retested, since the failure mode (file bundles vision/audio tensors llama.cpp's loader won't skip) applies to the whole family, not just the one variant already tried.
 
 Neither of these is a hardware limitation — both are model-format compatibility gaps in this specific, freshly-built copy of llama.cpp. A model with a more mature, stable architecture (like the Gemma 2 and Qwen2.5 used below) does not hit this.
 
@@ -230,5 +230,5 @@ Two other things changed along with the physical layout:
 
 - Downloaded model files live at `/home/kr/tools/models/` (28 GB) and the ollama-imported copy at `/home/kr/tools/ollama-portable/models/` (17 GB) — 45 GB total, on a disk with 473 GB free, so no urgency to remove them, but worth knowing they're there if disk space ever gets tight.
 - The standalone `ollama` binary at `/home/kr/tools/ollama-portable/` is untouched from its official release — useful for any future test that needs to isolate ollama's own behavior from the pool's deployed containers.
-- HIP device indices used throughout: hellhound (`ollama-pool-b`) = index 0, `ollama-pool-a` = 1, `ollama-pool-c` = 2, `ollama-pool-d` = 3, `ollama-pool-e` = 4, `ollama-pool-f` = 5, `ollama-pool-g` = 6. These numbers happened to stay the same across the card move described in Finding 7, but which of them are direct vs. riser did not — see that section's table for the current, correct classification. [gpu-speedup-plan.md](gpu-speedup-plan.md)'s wiring notes predate the move and are now out of date on this point.
+- HIP device indices used throughout: hellhound (`ollama-pool-b`) = index 0, `ollama-pool-a` = 1, `ollama-pool-c` = 2, `ollama-pool-d` = 3, `ollama-pool-e` = 4, `ollama-pool-f` = 5, `ollama-pool-g` = 6. These numbers happened to stay the same across the card move described in Finding 7, but which of them are direct vs. riser did not — see that section's table for the current, correct classification. [gpu-speedup-plan.md](gpu-pool.md)'s wiring notes predate the move and are now out of date on this point.
 - The production pool (all 7 `ollama-pool-*` containers) was checked healthy before and after every test in this investigation and was not modified.
