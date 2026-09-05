@@ -37,6 +37,16 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the wakeup checker ran every five minutes, so a chosen time could be four minutes late.** Friday's passes show it: the agent asked for 16:02:04 and was woken at 16:06:12. Four of the eight self-scheduled wakeups waited more than four minutes.
+
+There is no alarm clock behind `next_wakeup`. A job asks "has the requested time passed?" on a fixed grid, so a request that misses one tick waits for the next.
+
+**The five-minute interval was reasoned wrongly when it was written.** The comment said the agent cannot ask for a gap under five minutes, so a finer tick would only add empty checks. The minimum gap says nothing about the alignment. A grid of 16:01 and 16:06 cannot serve a request for 16:02 on time however long the gaps are.
+
+It runs every minute now. An empty check is one indexed read of the newest run, and five times more of them costs nothing measurable next to a pass that takes a minute of GPU.
+
+**About a minute of the observed lateness is not the checker at all.** `ran_at` records when a pass finished, and Friday's passes took 46 to 83 seconds. So a wakeup reported as five minutes late was four minutes of waiting and one of the model thinking. Left as it is: the field means "when this run happened", and a minute either way does not change how any of it reads.
+
 **2026-09-05 — the agent could not sell anything it had bought.** On Friday it judged MARA a bad holding, asked to sell all four shares, and the broker refused: `OPENAPI_ORDER_NOT_SUPPORT_REVERSE_OPTION` — "This order cannot be entered because it will reverse an existing position. You may need to close an open position, or cancel an open order, before you can submit this order."
 
 The cause is the order of two steps. A buy goes out as a bracket, so a filled position carries two resting sell orders: a stop and a target, each for the whole quantity. Four shares held therefore have eight shares of sells resting against them. To the broker a third sell reads as going short, so it refuses.

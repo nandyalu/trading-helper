@@ -524,6 +524,14 @@ def register_jobs() -> None:
     scheduler.add_task(task_name="morning_regime", func=morning_regime, interval=86400, delay=_seconds_until(12, 45))
     scheduler.add_task(task_name="weekly_digest", func=weekly_digest, interval=86400, delay=_seconds_until(23, 0))
     scheduler.add_task(task_name="agent_run", func=agent_run, interval=86400, delay=_seconds_until(13, 35))
-    # Five minutes, matching market_clock.MIN_WAKEUP: the agent cannot ask for
-    # a shorter gap, so a finer tick would only add empty checks.
-    scheduler.add_task(task_name="agent_wakeup", func=agent_wakeup, interval=300)
+    # Every minute, so a chosen time is honoured to within a minute.
+    #
+    # **This was five minutes and that was wrong.** The reasoning was that the
+    # agent cannot ask for a gap under five minutes, so a finer tick would only
+    # add empty checks. The minimum *gap* says nothing about the *alignment*: a
+    # request for 16:02 on a grid of 16:01 and 16:06 waits four minutes. On
+    # 2026-09-04 four of eight wakeups waited more than four minutes.
+    #
+    # An empty check is one indexed read of the newest run. Five times more of
+    # them costs nothing measurable next to a pass that takes a minute of GPU.
+    scheduler.add_task(task_name="agent_wakeup", func=agent_wakeup, interval=60)
