@@ -37,6 +37,24 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — two plan files deleted, and one paragraph rescued from them first.**
+
+`plan.md` and `PLAN-autonomous-analyst.md` are gone from disk. Both are readable from history — `git show 201d9ee~1:plan.md` — so nothing is lost, only tidied.
+
+**`plan.md` held nothing that was not already elsewhere.** Its four standing rules are all in [CLAUDE.md](CLAUDE.md), and both its open questions have answers: the budget is $10,000 and the watchlist cap is 30.
+
+**`PLAN-autonomous-analyst.md` held one paragraph that existed nowhere else**, and it was the most important sentence in the file:
+
+> The prompt may lie to the model. The code must never lie to itself.
+
+It guards three live checks — `_assert_sandbox()`, the `DE` account-number prefix, and the account-class check — against being relaxed on the reasoning that the agent believes the money is real anyway. Deleting the file would have removed the only note explaining why not, two days after one of those three was widened.
+
+It is now a section of its own in [CLAUDE.md](CLAUDE.md), beside the rest of the trading contract, which is where a reader about to change one of those checks would actually look.
+
+**Checking that turned up a stale claim.** The Webull table said Order Management is "not used, deliberately" and that access is read-only. The agent places orders on every buy. What is true is narrower and worth stating exactly: orders go to the sandbox only, and every call passes `_assert_sandbox()` first. A safety note that overstates the safety is worse than none.
+
+**The rest of the file was intention, not record.** It proposed dropping "You manage a small paper-trading account" from the prompt so the agent is not told the stakes are fake. That was never built — the prompt still opens with those words — so it is noted in the new section as a standing idea rather than carried as a plan nobody is following.
+
 **2026-09-05 — four working notes left the repository; three GPU write-ups joined the docs site.**
 
 **Removed, and each said so itself.** `ROADMAP.md` opens by admitting its phases describe an app that no longer exists. `plan.md` was a website rebuild that finished. `PLAN-autonomous-analyst.md` says "nothing here is built yet" about something that has been running since 2026-09-01. `helpful-prs.md` tracked eight upstream pull requests, all merged and cherry-picked, with the record now in [CLAUDE.md](CLAUDE.md).

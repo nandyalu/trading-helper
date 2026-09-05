@@ -688,6 +688,20 @@ record would be of a strategy nobody chose.
   a failure says it formed the order correctly and the world would not take it.
   Those are different facts and it needs the difference.
 
+### Three guards keep this a simulation, and none of them may be relaxed
+
+**The prompt may lie to the model. The code must never lie to itself.**
+
+There is a standing intention to stop telling the agent it is trading paper, on the grounds that an agent that knows the stakes are fake is not being asked the real question. It is not built — the prompt still opens "You manage a small paper-trading account" — but if it ever is, nothing below changes.
+
+Three checks stand between this experiment and a machine spending real money:
+
+- **`_assert_sandbox()`** runs immediately before every order, not once at import, so flipping the environment mid-process cannot leave a live client armed.
+- **The `DE` account-number prefix check.** Every simulated account on the sandbox host is DE-prefixed, in both the DEM and DEL series. Widening it from `DEM` to `DE` on 2026-09-03 corrected a wrong observation — the check had been written from two accounts out of five — and was not a relaxation.
+- **The account-class check.** The target is resolved by `account_class == INDIVIDUAL_CASH`, never hardcoded.
+
+**The day someone relaxes one of them *because the agent thinks it is real anyway* is the day this becomes dangerous.** A prompt is a story told to a model. These are the code's own knowledge of what it is connected to, and the two must never be traded against each other.
+
 ### How a position is opened and protected
 
 A buy goes out as a **bracket**: a `MASTER` entry with `STOP_PROFIT` and
@@ -885,7 +899,7 @@ What the index covers, and where each maps here:
 | Account Management — Account List, Account Balance, Account Positions | `backend/services/broker.py` (`fetch_broker_positions`) |
 | Market Data — snapshot, tick, depth, bars, fundamentals | `backend/services/quotes.py` (`get_realtime_price`) |
 | Authentication — HMAC-SHA1 signature, client token lifecycle | `quotes.get_api_client`, token cached under `WEBULL_OPENAPI_TOKEN_DIR` |
-| Order Management — preview/place/replace/cancel | **not used, deliberately.** Real order execution is a standing non-goal; access here is read-only |
+| Order Management — preview/place/replace/cancel | `backend/services/sandbox_broker.py`, **against the sandbox only**. Every call passes `_assert_sandbox()` first. Real order execution on a production account is a standing non-goal |
 
 ### Combo orders: what the docs and `preview_order` both get wrong
 
