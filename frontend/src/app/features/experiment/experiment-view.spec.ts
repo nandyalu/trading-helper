@@ -1,0 +1,144 @@
+import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+
+import { AgentEvent } from '../../core/models/api.models';
+import { AgentService } from '../../core/services/agent.service';
+import { RegimeService } from '../../core/services/regime.service';
+import { ScorecardService } from '../../core/services/scorecard.service';
+import { ExperimentView } from './experiment-view';
+
+/**
+ * The timeline reads the agent's real passes.
+ *
+ * **It used to be entirely hardcoded**, and advertised a decision pass at
+ * 13:35 that was removed on 2026-09-05. The agent names every one of its own
+ * times now, so the rows have to come from the record.
+ */
+function event(over: Partial<AgentEvent> = {}): AgentEvent {
+  return {
+    id: 1,
+    // With the offset, as the API sends it. Without one a browser reads the
+    // instant as local time and files the pass under the wrong day.
+    ran_at: '2026-09-04T14:37:00Z',
+    next_wakeup: null,
+    reasoning: '',
+    skipped: null,
+    equity: 10_000,
+    cash: 100,
+    research_spent: 0,
+    prompt: '',
+    response: '',
+    orders: [],
+    refused: [],
+    failed: [],
+    ...over,
+  };
+}
+
+class AgentServiceStub {
+  readonly events = signal<AgentEvent[]>([]);
+  readonly book = signal(null);
+  readonly curve = signal([]);
+  async load(): Promise<void> {}
+  async loadEvents(): Promise<void> {}
+  async loadCurve(): Promise<void> {}
+}
+
+class RegimeServiceStub {
+  readonly regime = signal(null);
+  async load(): Promise<void> {}
+}
+
+class ScorecardServiceStub {
+  readonly scorecard = signal(null);
+  async load(): Promise<void> {}
+}
+
+describe('ExperimentView timeline', () => {
+  let agent: AgentServiceStub;
+
+  beforeEach(async () => {
+    agent = new AgentServiceStub();
+    await TestBed.configureTestingModule({
+      imports: [ExperimentView],
+      providers: [
+        { provide: AgentService, useValue: agent },
+        { provide: RegimeService, useValue: new RegimeServiceStub() },
+        { provide: ScorecardService, useValue: new ScorecardServiceStub() },
+      ],
+    }).compileComponents();
+  });
+
+  /** Reaches the protected members the way the template does. */
+  function view(): any {
+    return TestBed.createComponent(ExperimentView).componentInstance as any;
+  }
+
+  it('no longer advertises the decision pass that was removed', () => {
+    const rows = [...view().today(), ...view().previous()];
+
+    expect(rows.some((r: any) => r.text === 'It decides')).toBe(false);
+  });
+
+  it('still lists the jobs that do run on a clock', () => {
+    const texts = view().today().map((r: any) => r.text);
+
+    expect(texts).toContain('The morning sweep analyses the watchlist');
+    expect(texts).toContain('Signals are graded, then the journal is written');
+  });
+
+  it('marks a clock-driven job as not the agent’s own choice', () => {
+    const sweep = view()
+      .today()
+      .find((r: any) => r.text.startsWith('The morning sweep'));
+
+    expect(sweep.agent).toBe(false);
+  });
+
+  it('gives every row a key that survives a repeated summary', () => {
+    // Two passes that both did nothing carry identical text. Tracking by text
+    // collapsed them into one row.
+    agent.events.set([
+      event({ id: 1, ran_at: '2026-09-04T14:00:00Z' }),
+      event({ id: 2, ran_at: '2026-09-04T15:00:00Z' }),
+    ]);
+    const keys = view()
+      .previous()
+      .map((r: any) => r.key);
+
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('summarises what a pass did', () => {
+    const summary = view().summarise(
+      event({
+        orders: [
+          { side: 'buy', ticker: 'MARA', quantity: 4, reason: '' },
+          { side: 'research', ticker: 'INTC', quantity: 0, reason: '' },
+        ],
+      }),
+    );
+
+    expect(summary).toBe('Bought MARA. Commissioned INTC');
+  });
+
+  it('says plainly when a pass did nothing', () => {
+    expect(view().summarise(event({ orders: [] }))).toBe('It looked, and did nothing');
+  });
+
+  it('does not count a note as having acted', () => {
+    // A note is the agent talking, not the agent trading. Counting it would
+    // mark an idle pass as a moment something happened.
+    const summary = view().summarise(
+      event({ orders: [{ side: 'note', ticker: '', quantity: 0, reason: 'I need X' }] }),
+    );
+
+    expect(summary).toBe('It looked, and did nothing');
+  });
+
+  it('reports why a pass was skipped, rather than calling it idle', () => {
+    expect(view().summarise(event({ skipped: 'the market was closed' }))).toBe(
+      'the market was closed',
+    );
+  });
+});

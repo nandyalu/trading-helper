@@ -2234,8 +2234,12 @@ def _orders_json(run: "AgentRun") -> str | None:
           "quantity": o.get("quantity") or 0,
           "reason": str(o.get("reason") or "")[:300]}
          for o in run.placed]
-        + [{"side": "adjust", "ticker": a.split()[0] if a else "", "quantity": 0,
-            "reason": a} for a in run.adjusted]
+        # The ticker is cut from the front of the message, which reads
+        # "AVGO: moved stop to $333.84." — so the first word carries the colon
+        # that separates it from the rest. Left in, every reader of this field
+        # showed "AVGO:" as the ticker.
+        + [{"side": "adjust", "ticker": a.split()[0].rstrip(":") if a else "",
+            "quantity": 0, "reason": a} for a in run.adjusted]
         + [{"side": "research", "ticker": t, "quantity": 0, "reason": ""}
            for t in run.researched]
         + [{"side": "untrack", "ticker": t, "quantity": 0, "reason": ""}

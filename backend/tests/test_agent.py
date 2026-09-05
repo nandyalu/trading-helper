@@ -8,6 +8,7 @@ running balance instead of the opening one.
 Pure — no LLM, no broker, no DB.
 """
 import datetime
+import json
 
 import pytest
 
@@ -1901,3 +1902,16 @@ def test_unserialisable_refusals_do_not_break_the_run(monkeypatch):
     run.rejected = [agent_book.Rejection(ticker="A", side="buy", quantity=object(), why="x")]
 
     assert agent._refusals_json(run) is None  # must not raise
+
+
+def test_an_adjust_records_the_ticker_without_its_separator():
+    """The message reads "AVGO: moved stop to $333.84." and the ticker is cut
+    from the front of it, so the first word carries the colon. Left in, the
+    Events page, the decisions feed and the home timeline all showed "AVGO:"."""
+    run = agent.AgentRun(adjusted=["AVGO: moved stop to $345.00."])
+
+    orders = json.loads(agent._orders_json(run))
+
+    assert orders[0]["ticker"] == "AVGO"
+    # The message itself is the record and keeps its original wording.
+    assert orders[0]["reason"] == "AVGO: moved stop to $345.00."

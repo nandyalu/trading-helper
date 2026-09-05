@@ -7,15 +7,20 @@ import { RegimeService } from '../../core/services/regime.service';
 import { ScorecardService } from '../../core/services/scorecard.service';
 import { EquityChart, EquityPoint } from '../../shared/equity-chart';
 import { Logo } from '../../shared/logo';
-import { ClockTime, marketTime } from '../../shared/market-time';
+import { ClockTime, marketTime, readerTime } from '../../shared/market-time';
 import { dayNumber, startedOn } from '../../shared/experiment';
 
 /** One row of the two-day timeline. */
 interface Beat {
+  /** Stable across renders. Two passes can carry the same words — "nothing"
+   * twice in a morning — and tracking by text collapses them into one row. */
+  key: string;
   t: ClockTime;
   text: string;
   done: boolean;
   act: boolean;
+  /** The agent chose this moment. The fixed jobs did not. */
+  agent: boolean;
 }
 
 /**
@@ -92,62 +97,142 @@ export class ExperimentView {
     };
   });
 
-  /**
-   * The day's schedule, with what has already run marked.
+  private readonly now = new Date();
+
+  /** The trading day an instant falls in, as YYYY-MM-DD in New York.
    *
-   * The times are fixed and the app knows them; what varies is how far through
-   * the day it is. `done` is decided against the wall clock in UTC, not the
-   * reader's — a reader in Tokyo must not see tomorrow's pass marked complete
-   * because it is already the next day where they are.
+   * Grouped by the market's day rather than UTC, because the agent picks its
+   * own times now and may wake in the evening. A pass at 8pm in New York is
+   * past midnight UTC, and a UTC grouping would file it under the next
+   * trading day — beside a morning sweep that had not happened when it ran.
    */
-  private beats(on: Date, now: Date): Beat[] {
-    const rows: [number, number, string, boolean][] = [
-      [11, 0, 'The morning sweep analyses the watchlist', false],
-      [12, 45, 'The market regime is read', false],
-      [13, 0, 'Anything reporting earnings gets a fresh look', false],
-      [13, 35, 'It decides', true],
-      [21, 30, 'Signals are graded, then the journal is written', false],
+  private marketDay(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(d);
+  }
+
+  /** The jobs the app runs on a clock, whatever the agent decides.
+   *
+   * **"It decides" used to sit here at 13:35 and no longer does.** That pass
+   * was removed on 2026-09-05: the agent names every one of its own times now,
+   * so its passes are read from the record below rather than predicted here.
+   */
+  private fixedBeats(on: Date): Beat[] {
+    const rows: [number, number, string][] = [
+      [11, 0, 'The morning sweep analyses the watchlist'],
+      [12, 45, 'The market regime is read'],
+      [13, 0, 'Anything reporting earnings gets a fresh look'],
+      [21, 30, 'Signals are graded, then the journal is written'],
     ];
-    return rows.map(([h, m, text, act]) => {
+    return rows.map(([h, m, text]) => {
       const t = marketTime(h, m, on);
-      return { t, text, act, done: t.instant.getTime() <= now.getTime() };
+      return {
+        key: `fixed-${h}-${m}`,
+        t,
+        text,
+        act: false,
+        agent: false,
+        done: t.instant.getTime() <= this.now.getTime(),
+      };
     });
   }
 
-  private readonly now = new Date();
+  /** What one pass did, in a few words. */
+  private summarise(event: AgentEvent): string {
+    if (event.skipped) return event.skipped;
+    const orders = (event.orders ?? []).filter((o) => o.side !== 'note');
+    if (!orders.length) return 'It looked, and did nothing';
+    const seen = new Map<string, string[]>();
+    for (const o of orders) {
+      const list = seen.get(o.side) ?? [];
+      if (o.ticker && !list.includes(o.ticker)) list.push(o.ticker);
+      seen.set(o.side, list);
+    }
+    const verb: Record<string, string> = {
+      buy: 'Bought',
+      sell: 'Sold',
+      adjust: 'Moved the exits on',
+      research: 'Commissioned',
+      untrack: 'Dropped',
+    };
+    return [...seen]
+      .map(([side, tickers]) => `${verb[side] ?? side} ${tickers.join(', ')}`)
+      .join('. ');
+  }
 
-  protected readonly today = computed(() => this.beats(this.now, this.now));
+  /** Every pass the agent ran on this trading day, at the times it chose. */
+  private agentBeats(day: string): Beat[] {
+    return (this.events() ?? [])
+      .filter((e) => e.ran_at && this.marketDay(new Date(e.ran_at)) === day)
+      .map((e) => ({
+        key: `run-${e.id}`,
+        t: readerTime(e.ran_at),
+        text: this.summarise(e),
+        act: !e.skipped && (e.orders ?? []).some((o) => o.side !== 'note'),
+        agent: true,
+        done: true,
+      }));
+  }
+
+  /** The one wakeup the agent has asked for and not yet had.
+   *
+   * **The most interesting row on the page**, because it is the only one that
+   * is a stated intention rather than a record. Nothing schedules the agent
+   * but this, so it is also what says the experiment is still running.
+   */
+  private pendingBeat(day: string): Beat[] {
+    const newest = (this.events() ?? [])[0];
+    if (!newest?.next_wakeup) return [];
+    const when = new Date(newest.next_wakeup);
+    if (when.getTime() <= this.now.getTime()) return [];
+    if (this.marketDay(when) !== day) return [];
+    return [
+      {
+        key: 'pending',
+        t: readerTime(when),
+        text: 'It asked to be woken',
+        act: false,
+        agent: true,
+        done: false,
+      },
+    ];
+  }
+
+  private beats(on: Date): Beat[] {
+    const day = this.marketDay(on);
+    return [...this.fixedBeats(on), ...this.agentBeats(day), ...this.pendingBeat(day)].sort(
+      (a, b) => a.t.instant.getTime() - b.t.instant.getTime(),
+    );
+  }
+
+  protected readonly today = computed(() => this.beats(this.now));
 
   /** The previous weekday. Monday looks back to Friday: a timeline whose first
    * half is a closed market says nothing about the experiment. */
-  protected readonly previous = computed(() => {
-    const d = new Date(this.now);
-    do {
-      d.setUTCDate(d.getUTCDate() - 1);
-    } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
-    // Everything on a past day has happened, whatever the clock says now.
-    return this.beats(d, new Date(8.64e15)).map((b) => ({ ...b, done: true }));
-  });
+  protected readonly previous = computed(() => this.beats(this.previousWeekday()));
 
-  protected readonly previousLabel = computed(() => {
+  private previousWeekday(): Date {
     const d = new Date(this.now);
     do {
       d.setUTCDate(d.getUTCDate() - 1);
     } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+    return d;
+  }
+
+  /** Named in New York, matching the day the rows are grouped by. Labelling a
+   * day in one zone and filling it from another puts a row under the wrong
+   * heading for anyone far enough east or west. */
+  private dayLabel(d: Date): string {
     return new Intl.DateTimeFormat('en-US', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
-      timeZone: 'UTC',
+      timeZone: 'America/New_York',
     }).format(d);
-  });
+  }
 
-  protected readonly todayLabel = new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(this.now);
+  protected readonly previousLabel = computed(() => this.dayLabel(this.previousWeekday()));
+
+  protected readonly todayLabel = this.dayLabel(this.now);
 
   constructor() {
     void this.load();

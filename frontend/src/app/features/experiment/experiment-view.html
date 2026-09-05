@@ -256,8 +256,9 @@
 
         <p class="timeline-day">{{ previousLabel() }} · last trading day</p>
         <ol class="timeline-list">
-          @for (e of previous(); track e.text) {
-            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+          @for (e of previous(); track e.key) {
+            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act"
+                [class.tl--agent]="e.agent">
               <span class="tl-time">{{ clock(e.t) }}</span>
               <span class="tl-text">{{ e.text }}</span>
             </li>
@@ -266,8 +267,9 @@
 
         <p class="timeline-day">{{ todayLabel }} · today</p>
         <ol class="timeline-list">
-          @for (e of today(); track e.text) {
-            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act">
+          @for (e of today(); track e.key) {
+            <li class="tl" [class.tl--done]="e.done" [class.tl--act]="e.act"
+                [class.tl--agent]="e.agent">
               <span class="tl-time">{{ clock(e.t) }}</span>
               <span class="tl-text">{{ e.text }}</span>
             </li>
@@ -275,8 +277,9 @@
         </ol>
 
         <p class="timeline-foot">
-          Times are yours. The agent decides five minutes after the US market opens; the filled line
-          is what has already happened today.
+          Times are yours. <strong>The agent picks its own moments</strong> — the marked rows are
+          the ones it chose. Everything else runs on a clock. The filled line is what has already
+          happened.
         </p>
       </aside>
     </section>

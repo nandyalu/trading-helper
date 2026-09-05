@@ -37,6 +37,22 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the home page timeline shows the agent's own passes.** It was entirely hardcoded, and it still advertised a decision pass at 13:35 that had been removed that morning. The front page was telling visitors about a job that no longer exists.
+
+The fixed jobs stay, because they are still fixed: the sweep at 11:00, the regime read at 12:45, the earnings check at 13:00, grading at 21:30. What was wrong was predicting the agent alongside them.
+
+**Every pass the agent ran is now a row, at the time it chose, with what it did.** Friday reads as eleven rows between 9:36 AM and 3:57 PM — a bought, a dropped, three exits moved, and several honest "it looked, and did nothing". That is the experiment's actual shape and no schedule could have described it.
+
+**The wakeup it has asked for and not yet had is a row too.** It is the only line on the page that is an intention rather than a record, and since nothing else schedules the agent, it is also what says the experiment is still running.
+
+**Rows are grouped by the New York day, not by UTC.** The agent picks its own times now and may wake in the evening, and a pass at 8pm in New York is past midnight UTC. Grouping by UTC would file it under the next trading day, beside a morning sweep that had not happened when it ran. The day headings moved to New York with them, because labelling a day in one zone and filling it from another puts rows under the wrong heading.
+
+**Two smaller things this turned up.**
+
+The rows were tracked by their text. Two passes that both did nothing carry identical words, and Angular collapsed them into one row. They are tracked by the run id now.
+
+And an adjust recorded its ticker as `AVGO:`. The ticker is cut from the front of a message that reads "AVGO: moved stop to $333.84.", so the first word carries the separator. Every reader of that field showed the colon — the Events page, the decisions feed, and this timeline. Fixed at the writer, and the three stored rows were corrected: the ticker is derived from the message, and the message itself is untouched.
+
 **2026-09-05 — quiv upgraded from 0.6.0 to 0.8.0.** The pin said `>=0.5.0` and the lock held 0.6.0, so two releases of fixes had been sitting unused.
 
 **One of them is a bug this app was exposed to.** Before 0.8.0, fixed-interval scheduling could set the next run to a time that was not in the future, when a job finished within clock resolution of its start. The task then dispatched again at once. The wakeup tick is exactly that shape — it reads one row and usually returns immediately — so it was the task most likely to hit it.

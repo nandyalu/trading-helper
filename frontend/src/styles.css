@@ -2018,9 +2018,25 @@ table {
   background: var(--accent);
 }
 
-/* The one moment a day when the agent actually decides. Ringed rather than
+/* A pass where the agent actually did something. Ringed rather than
    recoloured, so it reads as important whether or not it has happened yet. */
 .tl--act::before {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* A moment the agent chose for itself, as against a job that runs on a clock.
+   This is the distinction the page exists to show, so the time is marked
+   rather than the text — the words already say what happened, and colouring
+   them too would leave the fixed rows looking switched off. */
+.tl--agent .tl-time {
+  color: var(--accent);
+}
+
+/* The wakeup it has asked for and not yet had. The only row that is a stated
+   intention rather than a record, so the ring says "coming" while the hollow
+   dot says "not yet". */
+.tl--agent:not(.tl--done)::before {
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
