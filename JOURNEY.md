@@ -37,6 +37,14 @@ The entries below record what changed in the agent's behaviour and the reason fo
 
 Newest first.
 
+**2026-09-05 — the home page is one column of content beside one column of timeline.** "Is it any good?" and "What the agent is told about the market" sat side by side in a row of their own under the main section. They are now stacked in the first column with the rest, and the second column carries nothing but the timeline.
+
+The timeline grew from five fixed rows a day to every pass the agent chose to make, which on Friday was eleven. It needs the height, and the content beside it needs the width.
+
+**A sticky element taller than the window hides its own bottom.** The timeline is sticky, and it always fit while it held five rows. At twenty it does not, and a pinned element's overflow cannot be reached by scrolling the page. It is now capped to the window height and scrolls inside itself, which keeps the last row reachable.
+
+That cap is lifted below 62rem, where the two columns already become one and the timeline has the whole page to run down. A capped height there would add a second scrollbar to a column that needs none.
+
 **2026-09-05 — the home page timeline shows the agent's own passes.** It was entirely hardcoded, and it still advertised a decision pass at 13:35 that had been removed that morning. The front page was telling visitors about a job that no longer exists.
 
 The fixed jobs stay, because they are still fixed: the sweep at 11:00, the regime read at 12:45, the earnings check at 13:00, grading at 21:30. What was wrong was predicting the agent alongside them.

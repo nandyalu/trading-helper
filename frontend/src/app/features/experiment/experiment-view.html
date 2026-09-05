@@ -248,6 +248,74 @@
             </div>
           }
         </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Is it any good?</h2>
+            <a class="btn btn-ghost btn-sm" routerLink="/scorecard">Scorecard</a>
+          </div>
+          <div class="card-body stack">
+            @if (graded(); as g) {
+              @if (g.enough) {
+                <p class="big-fact">
+                  <strong>{{ g.passes }}/{{ g.resolved }}</strong> analyses were right, and
+                  <strong>{{ g.vsBenchmark }}/{{ g.vsBenchmarkTotal }}</strong> beat SPY.
+                </p>
+                <p class="hint">
+                  The second number is the one that matters. A 70% win rate in a rising market can be
+                  worse than useless — holding SPY and doing nothing would have beaten it.
+                </p>
+              } @else {
+                <p class="big-fact">
+                  <strong>{{ g.resolved }}</strong>
+                  {{ g.resolved === 1 ? 'analysis has' : 'analyses have' }} been graded so far.
+                </p>
+                <p class="hint">
+                  Not enough to say anything yet. Below about twenty resolved signals a win rate is
+                  noise — three wins in four reads as 75% and means nothing. The count is shown
+                  instead of a percentage on purpose.
+                </p>
+              }
+            } @else {
+              <p class="muted">
+                Nothing has been graded yet. Each analysis is judged when its time horizon arrives —
+                14 days for a swing call.
+              </p>
+            }
+          </div>
+        </section>
+
+        @if (regime(); as r) {
+          <section class="card">
+            <div class="card-head"><h2>What the agent is told about the market</h2></div>
+            <div class="card-body stack">
+              <p class="big-fact">
+                <span aria-hidden="true">{{ r.emoji }}</span> {{ r.label }}
+              </p>
+              <dl class="scoreboard-facts">
+                @if (r.vix !== null) {
+                  <div>
+                    <dt>VIX</dt>
+                    <dd class="money">{{ r.vix.toFixed(1) }}</dd>
+                  </div>
+                }
+                @if (r.spy_vs_ma_pct !== null) {
+                  <div>
+                    <dt>SPY vs 200-day</dt>
+                    <dd class="money">{{ signed(r.spy_vs_ma_pct) }}%</dd>
+                  </div>
+                }
+                @if (r.curve_spread_pct !== null) {
+                  <div>
+                    <dt>10Y–3M</dt>
+                    <dd class="money">{{ signed(r.curve_spread_pct, 2) }}%</dd>
+                  </div>
+                }
+              </dl>
+              <p class="hint">This same sentence is the first line of every prompt the agent sees.</p>
+            </div>
+          </section>
+        }
       </div>
 
       <!-- The rhythm: the last trading day, then this one. -->
@@ -283,75 +351,5 @@
         </p>
       </aside>
     </section>
-
-    <div class="grid-2">
-      <section class="card">
-        <div class="card-head">
-          <h2>Is it any good?</h2>
-          <a class="btn btn-ghost btn-sm" routerLink="/scorecard">Scorecard</a>
-        </div>
-        <div class="card-body stack">
-          @if (graded(); as g) {
-            @if (g.enough) {
-              <p class="big-fact">
-                <strong>{{ g.passes }}/{{ g.resolved }}</strong> analyses were right, and
-                <strong>{{ g.vsBenchmark }}/{{ g.vsBenchmarkTotal }}</strong> beat SPY.
-              </p>
-              <p class="hint">
-                The second number is the one that matters. A 70% win rate in a rising market can be
-                worse than useless — holding SPY and doing nothing would have beaten it.
-              </p>
-            } @else {
-              <p class="big-fact">
-                <strong>{{ g.resolved }}</strong>
-                {{ g.resolved === 1 ? 'analysis has' : 'analyses have' }} been graded so far.
-              </p>
-              <p class="hint">
-                Not enough to say anything yet. Below about twenty resolved signals a win rate is
-                noise — three wins in four reads as 75% and means nothing. The count is shown
-                instead of a percentage on purpose.
-              </p>
-            }
-          } @else {
-            <p class="muted">
-              Nothing has been graded yet. Each analysis is judged when its time horizon arrives —
-              14 days for a swing call.
-            </p>
-          }
-        </div>
-      </section>
-
-      @if (regime(); as r) {
-        <section class="card">
-          <div class="card-head"><h2>What the agent is told about the market</h2></div>
-          <div class="card-body stack">
-            <p class="big-fact">
-              <span aria-hidden="true">{{ r.emoji }}</span> {{ r.label }}
-            </p>
-            <dl class="scoreboard-facts">
-              @if (r.vix !== null) {
-                <div>
-                  <dt>VIX</dt>
-                  <dd class="money">{{ r.vix.toFixed(1) }}</dd>
-                </div>
-              }
-              @if (r.spy_vs_ma_pct !== null) {
-                <div>
-                  <dt>SPY vs 200-day</dt>
-                  <dd class="money">{{ signed(r.spy_vs_ma_pct) }}%</dd>
-                </div>
-              }
-              @if (r.curve_spread_pct !== null) {
-                <div>
-                  <dt>10Y–3M</dt>
-                  <dd class="money">{{ signed(r.curve_spread_pct, 2) }}%</dd>
-                </div>
-              }
-            </dl>
-            <p class="hint">This same sentence is the first line of every prompt the agent sees.</p>
-          </div>
-        </section>
-      }
-    </div>
   }
 </section>

@@ -1947,7 +1947,16 @@ table {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  /* A sticky element taller than the window pins its top and hides its
+     bottom, and no amount of page scrolling reaches it. The timeline was
+     five fixed rows a day and always fit; it now carries every pass the
+     agent chose to make, which on a busy day is fifteen. Capping it to the
+     window and letting it scroll inside keeps the last row reachable. */
+  max-height: calc(100vh - var(--topbar-h) - var(--sp-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
 
 .timeline-title {
   margin: 0 0 var(--sp-4);
@@ -2098,8 +2107,13 @@ table {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Below this the timeline sits under the content rather than beside it, so
+     it has the whole page to run down. A capped height here would put a second
+     scrollbar inside a column that needs none. */
   .timeline {
     position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
