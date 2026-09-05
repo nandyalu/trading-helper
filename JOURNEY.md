@@ -45,7 +45,11 @@ The wakeup lives in the database, on the run that asked for it, and the tick re-
 
 **The cost is being up to a minute late, and it is smaller than it sounds.** A pass takes about a minute of GPU to think, and the agent asks for gaps of fifteen minutes and up. The scheduling error is already smaller than the thing being scheduled.
 
-A one-off could be restored on startup and replaced after every pass. That buys back sixty seconds for three more moving parts — the restore, the replace, and the cancel — and each of them fails by doing nothing, which is the failure that is hardest to see.
+**A one-off needs less machinery than first written here.** quiv deletes a `run_once` task after it fires, so nothing needs cancelling, and tasks are independent, so nothing needs replacing. Two additions would do it: restore a pending alarm at startup, and add one after each pass.
+
+The one real complication is that a pass can run before its own alarm. Friday has an example: an event-driven pass at 17:00 superseded an alarm set for 17:12, which would still have fired. The task would have to check whether it is still the newest run's wakeup — and that check is the tick itself, asked once instead of every minute.
+
+So the trade is sixty seconds against one new way to never wake up, which is the startup restore. Nothing here needs sub-minute timing: the agent trades on a one-to-two week horizon and asks for fifteen-minute gaps at the shortest. If exactness ever matters, keep the tick as the backstop and add the one-offs on top, so a missed restore costs a minute rather than the experiment.
 
 **2026-09-05 — the agent owns its own schedule, day and night.** The fixed decision pass at 13:35 UTC is gone. The agent is woken when it asked to be woken, and at no other time.
 

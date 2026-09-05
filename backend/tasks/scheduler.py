@@ -258,9 +258,24 @@ async def _agent_wakeup_job() -> None:
 
     The cost is being up to a minute late. A pass takes about a minute of GPU
     to think, and the agent asks for gaps of fifteen minutes and up, so the
-    error is smaller than the thing it is scheduling. Restoring a one-off on
-    startup and replacing it after every pass would buy those sixty seconds
-    back for three more moving parts, each of which fails silently.
+    error is smaller than the thing it is scheduling.
+
+    **A one-off would be exact, and it needs less machinery than an earlier
+    version of this comment claimed.** quiv deletes a ``run_once`` task after it
+    fires, so there is nothing to cancel, and tasks are independent, so there is
+    nothing to replace. Two additions would do it: restore a pending alarm at
+    startup, and add one after each pass.
+
+    The one real complication is that a pass can run before its own alarm — an
+    event-driven run, or a watchdog trigger. Friday has an example: the pass at
+    17:00 superseded an alarm set for 17:12, which would still have fired. The
+    fix is for the task to check whether it is still the newest run's wakeup,
+    and that check is this function.
+
+    So the choice is sixty seconds against one new way to never wake up: the
+    startup restore. Nothing here needs sub-minute timing. If it ever does,
+    keep this tick as the backstop and add the one-offs on top, so a missed
+    restore costs a minute rather than the experiment.
 
     The final pass is decided against the real Eastern close rather than a
     fixed UTC time, so it does not drift by an hour twice a year the way the
